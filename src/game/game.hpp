@@ -44,6 +44,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -327,8 +328,9 @@ private:
     MouseCursor cursor_;
     std::filesystem::path data_;
     std::string port_version_;
-    std::string data_version_;  // "1.08"
+    std::string data_version_;  // "1.08", "1.23", "1.01"
     std::string data_language_;
+    std::span<const std::uint16_t> intrinsic_numbering_;  // of the usecode (intrinsic_numbering.hpp)
     std::filesystem::path save_dir_;  // data_/SAVEGAME unless set_save_dir
     GameConfig config_;
     std::filesystem::path config_file_;

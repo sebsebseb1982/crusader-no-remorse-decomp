@@ -1,7 +1,7 @@
 // crusader: runs the game from a saved game (milestone 1: the world runs, the
 // camera moves with the arrow keys).
 //
-//   crusader [data | game.iso] [--save N | --new-game]  (neither: the start-up movies, then the menu) [--movie NAME | --movie-overlay NAME] [--frames N [--scroll DX DY] [--walk] [--fire] [--use ID] [--menu | --menu-load | --menu-credits | --menu-options | --menu-gamepad | --menu-new] --png out.png [--wav out.wav]]
+//   crusader [data | game.iso | GAME.GOG] [--save N | --new-game]  (neither: the start-up movies, then the menu) [--movie NAME | --movie-overlay NAME] [--frames N [--scroll DX DY] [--walk] [--fire] [--use ID] [--menu | --menu-load | --menu-credits | --menu-options | --menu-gamepad | --menu-new] --png out.png [--wav out.wav]]
 //
 // With --png, runs N frames of 1/60 s without a window, moving the camera by
 // (DX, DY) usecode units per frame or making the player walk, and writes the
@@ -141,7 +141,7 @@ int main(int argc, char** argv) {
             scroll_x = std::stoi(argv[++i]);
             scroll_y = std::stoi(argv[++i]);
         }
-        else if (std::filesystem::path p = argv[i]; p.extension() == ".iso" || p.extension() == ".ISO") iso = p;
+        else if (std::filesystem::path p = argv[i]; is_disc_image(p)) iso = p;
         else data = argv[i];
     }
 
@@ -151,7 +151,7 @@ int main(int argc, char** argv) {
         prepare_game_data(data, iso);
         if (!std::filesystem::exists(data / "STATIC")) {
             throw std::runtime_error("no game data in '" + data.string() +
-                                     "': copy the files of an install of the game (French 1.08 or US 1.23) there, or its .iso image");
+                                     "': copy the files of an install of the game (French 1.08, US 1.23 or English 1.01) there, or its .iso image (GAME.GOG in the GOG release)");
         }
         Game game(data);
         game.set_port_version(CRUSADER_VERSION);

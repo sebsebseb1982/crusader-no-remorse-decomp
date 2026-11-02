@@ -177,8 +177,15 @@ Game::Game(const std::filesystem::path& data, const std::filesystem::path& saves
         audio_ = std::make_unique<Audio>(SoundFlex::open(data / "SOUND/SOUND.FLX"), data / "SOUND");
     }
     const DataInfo info = detect_data_info(data);
+    // Without a known version, the usecode's intrinsics cannot be numbered:
+    // played with the French numbers, other data calls the wrong routines.
+    if (!info.known()) {
+        throw std::runtime_error("unrecognised game data in '" + data.string() +
+                                 "': supported versions are French 1.08, US 1.23 and English 1.01");
+    }
     data_version_ = info.version;
     data_language_ = info.language;
+    intrinsic_numbering_ = intrinsic_numbering(info);
     set_text_language(info.text_language());
     set_config(config_);
     reset_world();
@@ -208,7 +215,7 @@ void Game::reset_world() {
     world_.reset();
     kernel_ = std::make_unique<Kernel>();
     machine_ = std::make_unique<UCMachine>(*kernel_, usecode_);
-    if (data_language_ == "US") machine_->set_intrinsic_numbering(us_intrinsic_numbering());
+    machine_->set_intrinsic_numbering(intrinsic_numbering_);
     world_ = std::make_unique<World>(typeflags_);
     world_->state.target_designation = target_designation;
     world_->set_damage_table(damage_);
@@ -365,6 +372,10 @@ void Game::load_save_file(const std::filesystem::path& path) {
     // Entry 91: Weasel's introduction played (DS:5ECF). Entry 90, the alert
     // (DS:135C), is read too but cleared when the game starts again.
     if (const auto weasel = save.entry(91); !weasel.empty()) weasel_intro_played_ = weasel[0] != 0;
+    // The stasis of the player (entry 20 +2) is held by a process (a charger,
+    // a teleport, a script) that ends it; the processes are not loaded (see
+    // below), so none would: the player could never move again.
+    world_->state.avatar_in_stasis = false;
 
     // The kernel's processes (entries 100+) are not loaded yet, so the
     // scripts running at save time cannot resume. Instead the fast area is

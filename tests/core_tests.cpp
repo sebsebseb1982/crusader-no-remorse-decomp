@@ -1,5 +1,6 @@
-// Game configuration parsing and writing (no game data).
+// Game configuration parsing and writing, data detection (no game data).
 
+#include "core/data_info.hpp"
 #include "core/game_config.hpp"
 #include "core/iso_image.hpp"
 
@@ -137,8 +138,54 @@ void check_iso() {
     fs::copy_file(dir / "t.iso", dir / "data/game.iso");
     prepare_game_data(dir / "data");
     check(fs::exists(dir / "data/D/B.BIN"), "prepare_game_data extracts the ISO of data/");
+    // The GOG release's image is GAME.GOG: an ISO under another extension.
+    fs::create_directories(dir / "gog");
+    fs::copy_file(dir / "t.iso", dir / "gog/GAME.GOG");
+    check(is_disc_image("GAME.GOG") && is_disc_image("x.Iso") && !is_disc_image("x.bin"), "disc images by extension");
+    prepare_game_data(dir / "gog");
+    check(fs::exists(dir / "gog/D/B.BIN"), "prepare_game_data extracts the GAME.GOG of data/");
     prepare_game_data(dir / "fresh");
     check(fs::exists(dir / "fresh/PUT_GAME_DATA_HERE.txt"), "prepare_game_data creates data/ with its note");
+    std::error_code ignored;
+    fs::remove_all(dir, ignored);
+}
+
+// detect_data_info on stand-ins: an executable with the banner and a text,
+// or only the usecode's intrinsic table, whose size tells the version.
+void check_data_info() {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "crusader_data_info_test";
+    std::error_code ignored0;
+    fs::remove_all(dir, ignored0);
+    fs::create_directories(dir / "USECODE");
+    const auto exe = [&](const std::string& text) {
+        std::ofstream(dir / "CRUSADER.EXE", std::ios::binary) << text;
+        return detect_data_info(dir);
+    };
+    DataInfo info = exe(std::string("CRUSADER:  No Remorse V1.01\0", 28) + "SPIDER BOMB");
+    check(info.version == "1.01" && info.us() && info.v101() && info.known(), "1.01 told by its banner and item names");
+    info = exe(std::string("CRUSADER:  No Remorse V1.23\0", 28) + "Press any key to continue.");
+    check(info.version == "1.23" && info.us() && !info.v101(), "US 1.23 told by its banner and message");
+    info = exe("CRUSADER:  No Remorse V1.08 Appuyer sur une touche pour continuer.");
+    check(info.version == "1.08" && info.language == "FR", "French 1.08 told by its banner and message");
+    info = exe("CRUSADER:  No Remorse V2.00");
+    check(info.version == "2.00" && !info.known(), "an executable without a known text is unknown");
+
+    fs::remove(dir / "CRUSADER.EXE");
+    const auto table = [&](std::size_t entries) {
+        std::ofstream(dir / "USECODE/UNKCOFF.DAT", std::ios::binary) << std::string(entries * 4, '\0');
+        return detect_data_info(dir);
+    };
+    info = table(308);
+    check(info.v101(), "without the executable, 308 intrinsics: 1.01");
+    info = table(311);
+    check(info.us() && !info.v101() && info.version.empty(), "without the executable, 311 intrinsics: US");
+    info = table(309);
+    check(info.language == "FR" && info.version.empty(), "without the executable, 309 intrinsics: French");
+    info = table(300);
+    check(!info.known(), "without the executable, another table size is unknown");
+    fs::remove(dir / "USECODE/UNKCOFF.DAT");
+    check(!detect_data_info(dir).known(), "no executable and no usecode: unknown");
     std::error_code ignored;
     fs::remove_all(dir, ignored);
 }
@@ -148,6 +195,7 @@ void check_iso() {
 int main() {
     check_config();
     check_iso();
+    check_data_info();
     std::printf(failures ? "%d failure(s)\n" : "all checks passed\n", failures);
     return failures ? 1 : 0;
 }
