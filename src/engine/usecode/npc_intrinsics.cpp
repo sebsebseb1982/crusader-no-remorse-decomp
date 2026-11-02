@@ -107,8 +107,8 @@ std::vector<std::uint16_t> register_npc_intrinsics(UCMachine& m, World& w, const
     bound.push_back(0x0C7);
     // MainActor::I_getMaxEnergy (10F0:348B).
     bind({0x082}, [&w](ObjId id, Args) -> std::uint32_t { return static_cast<std::uint32_t>(max_energy(w, id)); });
-    // BatteryChargerProcess::I_create, CruHealerProcess::I_create (1130:20C5,
-    // 20E5): the pid.
+    // BatteryChargerProcess::I_create (1130:20C5), CruHealerProcess::I_create
+    // (1130:20E5): the pid.
     m.set_intrinsic(0x0EE, [&w](UCMachine& machine, UCProcess&, Args) -> std::uint32_t {
         return start_battery_charger(machine.kernel(), w);
     });
@@ -150,7 +150,7 @@ std::vector<std::uint16_t> register_npc_intrinsics(UCMachine& m, World& w, const
         if (machine.dereference(ptr, id)) set_quality_and_combine(w, static_cast<ObjId>(id[0] | id[1] << 8), arg16(a, 4));
         return 0;
     });
-    // MainActor::I_clrKeycards (10F0:3D4B), I_hasKeycard(n) (10F0:3CE8).
+    // MainActor::I_clrKeycards (10F0:3D4B), MainActor::I_hasKeycard(n) (10F0:3CE8).
     m.set_intrinsic(0x079, [&w](UCMachine&, UCProcess&, Args) -> std::uint32_t {
         w.state.keycards = 0;
         return 0;

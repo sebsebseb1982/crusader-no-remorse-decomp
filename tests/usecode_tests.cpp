@@ -1,11 +1,13 @@
 // Usecode interpreter semantics on hand-assembled bytecode (no game data).
 
 #include "engine/kernel.hpp"
+#include "engine/usecode/intrinsic_numbering.hpp"
 #include "engine/usecode/uc_machine.hpp"
 #include "engine/usecode/uc_process.hpp"
 
 #include <cstdio>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -196,6 +198,21 @@ void test_intrinsic_numbering() {
     CHECK(got == 21 && m.unbound_intrinsic_calls().empty() && m.faults().empty());
 }
 
+// The 1.01 table: one French number (or 0xFFFF, unbound) per entry of its
+// UNKCOFF.DAT (308); the routines named by their address in the sources.
+void test_v101_numbering() {
+    const auto n = v101_intrinsic_numbering();
+    CHECK(n.size() == 308);
+    for (const std::uint16_t f : n) CHECK(f < 309 || f == 0xFFFF);
+    // setDead (10F0:2010) at its eight numbers, rndRange (12E0:0293).
+    const std::set<std::uint16_t> set_dead = {0x021, 0x062, 0x074, 0x0A1, 0x0A9, 0x0D8, 0x0E7, 0x12E};
+    for (const std::uint16_t i : {0x021, 0x05D, 0x06F, 0x099, 0x0A1, 0x0D0, 0x0DF, 0x132}) CHECK(set_dead.count(n[i]));
+    CHECK(n[0x018] == 0x018);
+    CHECK(intrinsic_numbering(DataInfo{"1.01", "US"}).data() == n.data());
+    CHECK(intrinsic_numbering(DataInfo{"1.23", "US"}).data() == us_intrinsic_numbering().data());
+    CHECK(intrinsic_numbering(DataInfo{"1.08", "FR"}).empty());
+}
+
 void test_spawn_implies_result() {
     // parent: child = spawn fn 1; implies(self waits for child); suspend;
     //         return the child's result
@@ -277,6 +294,7 @@ int main() {
     test_list_foreach();
     test_intrinsic();
     test_intrinsic_numbering();
+    test_v101_numbering();
     test_spawn_implies_result();
     test_result_register_shared();
     test_implies_runs_on_until_suspend();

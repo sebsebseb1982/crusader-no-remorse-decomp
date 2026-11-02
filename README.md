@@ -8,6 +8,7 @@ This repository contains **no game files**: you need your own copy of the origin
 
 - The **French version 1.08** (dated 12 October 1995) — ISO SHA-256: `B370436F2BA380500E918262A83293FBB89600253CC3F4579895D45FDB63B802`
 - The **US version 1.23** (dated 13 February 1996) — ISO SHA-256: `C27D77D215253B8C1EF3C5B16CC33AFF63E759A843BBCD177A42F6A64DC063C7`
+- The **English version 1.01** (dated 14 September 1995), sold by GOG — ISO (`GAME.GOG`) SHA-256: `7C2FAA4140F5D7FDDD0F1E3191DED0D10FB3DCF8908BD8559866C253D7B6638B`
 
 ## Recent improvements
 
@@ -45,9 +46,9 @@ Checksums are in `SHA256SUMS`.
 
 ### 2. Provide the game data
 
-The archive contains the executable and an empty `data` folder with a `PUT_GAME_DATA_HERE.txt` note. Add the game data from your copy of either supported version (French 1.08 or US 1.23) in one of these ways:
+The archive contains the executable and an empty `data` folder with a `PUT_GAME_DATA_HERE.txt` note. Add the game data from your copy of a supported version (French 1.08, US 1.23 or English 1.01) in one of these ways:
 
-- **CD image:** Place the `.iso` file in `data/`, or pass its path to the game (for example, `./crusader game.iso`). On first launch, the game extracts the data to `data/` (about 550 MB; this takes a few seconds). You can delete the ISO afterward.
+- **CD image:** Place the `.iso` file in `data/`, or pass its path to the game (for example, `./crusader game.iso`). The GOG release's `GAME.GOG` is such an image and works the same way, under its own name. On first launch, the game extracts the data to `data/` (about 550 MB; this takes a few seconds). You can delete the ISO afterward.
 - **Installed game or CD files:** Copy the **entire contents** of the installation folder or CD into `data/`:
 
 ```

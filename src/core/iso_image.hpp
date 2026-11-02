@@ -45,7 +45,11 @@ private:
 // Returns the number of files written; prints its progress on stderr.
 std::size_t install_from_iso(const std::filesystem::path& iso, const std::filesystem::path& data);
 
-// The first *.iso found in `dir`, empty when there is none.
+// A CD image by its name: *.iso, or *.gog (GAME.GOG of the GOG release, an ISO
+// image under another extension), in any case.
+bool is_disc_image(const std::filesystem::path& path);
+
+// The first CD image (is_disc_image) found in `dir`, empty when there is none.
 std::filesystem::path find_iso(const std::filesystem::path& dir);
 
 // Makes `data` usable: when it holds no game data (no STATIC/) and an ISO is

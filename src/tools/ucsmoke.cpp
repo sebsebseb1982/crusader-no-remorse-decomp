@@ -107,7 +107,7 @@ int main(int argc, char** argv) {
     if (positional.size() > 1) slices = std::stoi(positional[1]);
 
     try {
-        if (detect_data_info(data).us()) g_numbering = us_intrinsic_numbering();
+        g_numbering = intrinsic_numbering(detect_data_info(data));
         const auto flex = FlexArchive::open(data / "USECODE/EUSECODE.FLX");
         const auto usecode = UsecodeFile::from_flex(flex);
         Stats st;

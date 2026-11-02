@@ -135,11 +135,17 @@ std::size_t install_from_iso(const fs::path& iso_path, const fs::path& data) {
     return iso.files().size();
 }
 
+// @orig none: the GOG release's GAME.GOG is an ISO image, port addition
+bool is_disc_image(const fs::path& path) {
+    const std::string ext = upper(path.extension().string());
+    return ext == ".ISO" || ext == ".GOG";
+}
+
 // @orig none: reading the game CD image (ISO 9660), port addition
 fs::path find_iso(const fs::path& dir) {
     std::error_code error;
     for (const auto& entry : fs::directory_iterator(dir, error)) {
-        if (entry.is_regular_file(error) && upper(entry.path().extension().string()) == ".ISO") return entry.path();
+        if (entry.is_regular_file(error) && is_disc_image(entry.path())) return entry.path();
     }
     return {};
 }
@@ -151,8 +157,8 @@ void prepare_game_data(const fs::path& data, const fs::path& iso) {
         fs::create_directories(data, error);
         if (std::ofstream note(data / "PUT_GAME_DATA_HERE.txt"); note) {
             note << "Put the game data here: either the files of the install folder of Crusader: No Remorse\n"
-                    "(French 1.08 or US 1.23: STATIC, USECODE, SOUND, FLICS, CRUSADER.EXE...), or the .iso image of\n"
-                    "the CD, which the game extracts on its first launch.\n";
+                    "(French 1.08, US 1.23 or English 1.01: STATIC, USECODE, SOUND, FLICS, CRUSADER.EXE...), or the .iso image of\n"
+                    "the CD (GAME.GOG in the GOG release), which the game extracts on its first launch.\n";
         }
     }
     if (fs::exists(data / "STATIC", error)) return;
