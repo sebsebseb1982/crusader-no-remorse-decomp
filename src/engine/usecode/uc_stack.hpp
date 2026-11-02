@@ -25,11 +25,11 @@ public:
 
     void push(std::span<const std::uint8_t> bytes) {
         add_sp(-static_cast<int>(bytes.size()));
-        std::memcpy(&data_[sp_], bytes.data(), bytes.size());
+        std::memcpy(data_.data() + sp_, bytes.data(), bytes.size());
     }
     void push_zero(std::size_t n) {
         add_sp(-static_cast<int>(n));
-        std::memset(&data_[sp_], 0, n);
+        std::memset(data_.data() + sp_, 0, n);
     }
     void push1(std::uint8_t v) { push(std::span(&v, 1)); }
     void push2(std::uint16_t v) { write(static_cast<std::uint16_t>(sp_ - 2), v, 2), add_sp(-2); }
