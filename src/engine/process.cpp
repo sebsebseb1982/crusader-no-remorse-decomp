@@ -86,7 +86,7 @@ bool Process::evaluate_wait() const {
 }
 
 // @orig 11E8:06E0
-void Process::dependency_done(Pid pid, std::uint32_t result) {
+void Process::dependency_done(Pid pid, std::uint32_t result, bool failed) {
     bool changed = false;
     for (WaitToken& t : wait_expr_) {
         if (t.kind == WaitToken::Kind::Pending && t.pid == pid) {
@@ -98,6 +98,7 @@ void Process::dependency_done(Pid pid, std::uint32_t result) {
         return;
     }
     wake_result_ = result;
+    wake_failed_ = failed;
     if (evaluate_wait()) {
         // Unregister from the dependencies still pending (OR satisfied early).
         for (const WaitToken& t : wait_expr_) {

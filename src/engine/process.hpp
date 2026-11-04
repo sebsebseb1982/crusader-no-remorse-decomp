@@ -44,6 +44,9 @@ public:
     // when the script ends. One register: a script that ends without its
     // own pop_res returns what its last child left there.
     std::uint32_t wake_result() const { return wake_result_; }
+    // The process whose end woke this one failed (its flag 0x20, which the
+    // original reads on the process object, 1110:2259).
+    bool wake_failed() const { return wake_failed_; }
     void set_wake_result(std::uint32_t result) { wake_result_ = result; }
 
     bool suspended() const { return suspended_; }
@@ -89,7 +92,7 @@ private:
 
     void finish(std::uint32_t result, bool failed);
     bool add_wait_operand(Pid other, bool share_owner = true);
-    void dependency_done(Pid pid, std::uint32_t result);
+    void dependency_done(Pid pid, std::uint32_t result, bool failed = false);
     bool evaluate_wait() const;
 
     Kernel* kernel_ = nullptr;
@@ -106,6 +109,7 @@ private:
     std::uint32_t sleep_until_ = 0;
     std::uint32_t result_ = 0;
     std::uint32_t wake_result_ = 0;
+    bool wake_failed_ = false;
 
     std::vector<WaitToken> wait_expr_;  // RPN, evaluated when a dependency ends
     std::vector<Pid> waiters_;          // processes waiting for this one

@@ -434,7 +434,9 @@ void AttackProcess::next_burst_shot() {
     const ObjId id = owner();
     const auto r = world_.npc_record(id);
     const ObjId target = r.empty() ? 0 : word_at(r, npc::kTarget);
-    if (world_.is_dead(target)) {
+    // The burst ends with the target's death, or when the shot animation
+    // listened to failed (its flag 0x20).
+    if (world_.is_dead(target) || wake_failed()) {
         burst_left_ = 0;
         return;
     }

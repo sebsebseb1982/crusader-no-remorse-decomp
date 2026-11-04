@@ -165,7 +165,7 @@ void Kernel::on_terminated(Process& p) {
     p.waiters_.clear();
     for (Pid w : waiters) {
         if (Process* other = get(w); other && !other->terminated()) {
-            other->dependency_done(p.pid_, p.result_);
+            other->dependency_done(p.pid_, p.result_, p.failed_);
         }
     }
 }

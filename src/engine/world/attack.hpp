@@ -101,6 +101,8 @@ public:
     void set_cautious() { cautious_ = true; }            // +0x7C, activities 10 and 11
     void set_from_activity_8() { from_activity_8_ = true; }  // +0x97
     void force_sight() { forced_sight_ = true; }             // ATTACK_1110_252d
+    int burst_left() const { return burst_left_; }
+    Pid listening() const { return listening_; }
 
 protected:
     void run() override;

@@ -3903,6 +3903,53 @@ void test_combat_height(const std::filesystem::path& data) {
     CHECK(top > z0 && top <= z0 + 40);
 }
 
+// ATTACK_1110_2259 (the end of a shot of a burst): the burst ends when the
+// target is dead or when the shot animation listened to failed (its flag
+// 0x20). The port only looked at the target: a shot cut short (an animation
+// replacing it) was followed by the rest of the burst. Guard 4 of the save
+// attacks the player; its weapon is made a burst weapon (0x332), its shot is
+// failed in the middle of the burst.
+void test_burst_cut(const std::filesystem::path& data) {
+    constexpr ObjId kGuard = 4;
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "garde-mort-debout.sav");
+    World& w = game.world();
+    const Item* guard = w.get(kGuard);
+    CHECK(guard != nullptr);
+    if (!guard) return;
+    w.set_camera(guard->x, guard->y, guard->z);
+    // The player in front of the guard, on screen.
+    w.move_item(1, guard->x, guard->y + 160, guard->z);
+    w.npc_record(kGuard)[npc::kDirection] = 8;
+    Item* weapon = w.get(w.active_weapon(kGuard));
+    std::uint16_t burst_shape = 0;
+    for (std::uint16_t s = 0x320; s < 0x3A0 && burst_shape == 0; ++s) {
+        if (dtable::weapon(s).burst() >= 3) burst_shape = s;
+    }
+    std::printf("burst cut: weapon 0x%X burst %d, first burst weapon 0x%X\n", weapon ? weapon->shape : 0,
+                weapon ? dtable::weapon(weapon->shape).burst() : 0, burst_shape);
+    CHECK(weapon && burst_shape != 0);
+    if (!weapon || burst_shape == 0) return;
+    weapon->shape = burst_shape;
+    AttackProcess* attack = nullptr;
+    int frames = 0;
+    for (; frames < 1200; ++frames) {
+        game.update(kFrameUs);
+        attack = dynamic_cast<AttackProcess*>(game.kernel().find_process(kGuard, AttackProcess::kType));
+        if (attack && attack->listening() != 0 && attack->burst_left() > 1) break;
+    }
+    CHECK(attack && attack->listening() != 0);
+    if (!attack || attack->listening() == 0) return;
+    const int left = attack->burst_left();
+    game.kernel().fail_processes(kGuard, ActorAnimProcess::kType, 1);
+    game.update(kFrameUs);
+    attack = dynamic_cast<AttackProcess*>(game.kernel().find_process(kGuard, AttackProcess::kType));
+    const int after = attack ? attack->burst_left() : -1;
+    std::printf("burst cut: burst under way after %d frames, %d shots left, %d after the shot failed\n", frames, left,
+                after);
+    CHECK(after == 0);
+}
+
 void test_death_out_of_fast_area(const std::filesystem::path& data) {
     constexpr ObjId kGuard = 4;
     Game game(data, test_saves(data));
@@ -4514,6 +4561,7 @@ int main(int argc, char** argv) {
     test_anim_end(data);
     test_special_frames(data);
     test_combat_height(data);
+    test_burst_cut(data);
     test_stations(data);
     test_scenery_use(data);
     test_computer(data);
