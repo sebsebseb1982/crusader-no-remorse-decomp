@@ -61,10 +61,12 @@ std::size_t Kernel::fail_processes(ObjId owner, std::uint16_t type, std::uint8_t
 
 // @orig 11D8:11FE
 void Kernel::fail_all() {
+    failing_all_ = true;
     for (std::size_t pid = 1; pid < table_.size(); ++pid) {
         Process* p = table_[pid].get();
         if (p && !p->terminated() && !p->runs_at_any_level()) p->fail();
     }
+    failing_all_ = false;
 }
 
 // @orig 11D8:2A86

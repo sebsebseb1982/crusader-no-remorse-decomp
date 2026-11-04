@@ -7,6 +7,7 @@
 #include "engine/world/collision.hpp"
 #include "engine/world/gravity.hpp"
 #include "engine/world/item_selection.hpp"
+#include "engine/usecode/item_intrinsics.hpp"
 
 #include <algorithm>
 
@@ -72,11 +73,16 @@ void align_walk(Kernel& kernel, World& world, const AnimAction& a, ObjId actor, 
 
 }  // namespace
 
+// @orig 1158:0000
 ActorAnimProcess::ActorAnimProcess(World& world, const AnimDat& anims, ObjId actor, std::uint16_t action, int dir,
                                    Pid previous)
     : world_(world), anims_(anims), action_(action), dir_(dir), previous_(previous) {
     set_owner(actor);
     set_type(kType);
+    // ANIMPRIM.C 0000: the action's flags are read when the process is made.
+    const Item* item = world.get(actor);
+    const AnimAction* a = item ? anims.action(item->shape, action) : nullptr;
+    destroys_actor_ = a && a->destroys_actor();
 }
 
 void ActorAnimProcess::on_added() {
@@ -509,14 +515,27 @@ void ActorAnimProcess::mark_turning() {
     ++world_.state.aim.turns;
 }
 
-// @orig 1158:2E66
+// @orig 1158:2E66 1158:2D09 1158:2DC6
 void ActorAnimProcess::on_terminate() {
-    if (!turning_) return;
-    if (world_.state.aim.turns != 0) --world_.state.aim.turns;
+    // 2DC6: failed by the kernel's fail_all (new game, map switch), the
+    // animation does nothing more.
+    if (failed() && kernel().failing_all()) return;
+    // 2E66: the cleanup.
     const Item* item = world_.get(owner());
-    if (item && (item->z & 0xFF) != 254 && owner() == world_.state.controlled_npc) {
-        enter_aim_mode(kernel(), world_, anims_);
+    const bool placed = item && (item->z & 0xFF) != 254;
+    if (placed && (action_ == 0x22 || action_ == 0x23)) {
+        // The start of a run ends on a full stride: the next action starts
+        // from the middle of its cycle (record +0x59 bit 2 cleared).
+        if (auto r = world_.npc_record(owner()); !r.empty()) r[npc::kAnimFlags] &= static_cast<std::uint8_t>(~0x04);
     }
+    if (turning_) {
+        if (world_.state.aim.turns != 0) --world_.state.aim.turns;
+        if (placed && owner() == world_.state.controlled_npc) enter_aim_mode(kernel(), world_, anims_);
+    }
+    // 2D09 / 2DC6: an action flagged so (byte 3 bit 7 of ANIM.DAT) destroys
+    // the actor, done or failed.
+    item = world_.get(owner());
+    if (destroys_actor_ && item && (item->z & 0xFF) != 254) destroy_item(kernel(), world_, owner());
 }
 
 }  // namespace crusader

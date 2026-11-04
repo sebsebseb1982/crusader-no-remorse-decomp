@@ -12,11 +12,17 @@
 // (record +0x59 bit 2), so that a queued animation can start when a foot is
 // down.
 //
-// Not yet: what the original does after a refused step (sliding, contact
-// events), falling, sounds, weapon overlay and firing, frame events, frame
-// skipping off screen, combat height tracking, the special start cases of
-// 016F (falling, action 0x40...), the weapon-dependent action remapping of
-// doAnim (CRUSADER.C 2105).
+// At its end (2E66 cleanup, 2D09 / 2DC6), the start of a run (0x22, 0x23)
+// clears the half-stride bit, and an action flagged in ANIM.DAT (byte 3
+// bit 7) destroys the actor; failed by the kernel's fail_all, it does nothing.
+//
+// Not yet (compared with the byte-exact C, docs/audit-decomp.md): frame
+// skipping (1908: off-screen NPCs and the frameskip option play two frames
+// per step), combat height tracking (action flag 0x80), the special frames
+// (0x1000, WPNCACHE_1160_01f0), the start fallbacks of 016F for the
+// controlled NPC beyond the walk's sideways nudge (rolls, runs, a walk that
+// fits nowhere turned into standing), the restart of actions flagged 0x40
+// (none in ANIM.DAT), the target of a pathfinder walk passed to the sweep.
 
 #include "core/anim_dat.hpp"
 #include "engine/kernel.hpp"
@@ -101,6 +107,7 @@ private:
     bool blocked_ = false;
     bool in_place_ = false;  // +0x3B: an unstoppable action blocked, the rest plays in place
     bool turning_ = false;
+    bool destroys_actor_ = false;  // +0x4D bit 7: the action destroys the actor at its end
 };
 
 // CRUSADER_1130_2105, applied first by Actor::I_doAnim: the action an actor

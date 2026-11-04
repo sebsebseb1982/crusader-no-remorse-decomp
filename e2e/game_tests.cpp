@@ -3776,6 +3776,51 @@ void test_other_map_npc_hidden(const std::filesystem::path& data) {
 // plays once the camera brings it in. Before, it played at once with no
 // floor under the guard (glob items only exist in the fast area): the first
 // frame stumbled, the death was cut and the guard stayed standing.
+// ANIMPRIM.C 2E66: the start of a run (0x22) ends with the half-stride bit
+// of the record (+0x59 bit 2) cleared, so the run that follows starts from
+// the middle of its cycle. The port left it set, as at the end of any action.
+// ANIMPRIM.C 2D09: an action flagged in ANIM.DAT (byte 3 bit 7: shapes 1423
+// and 1436, standing and deaths) destroys the actor at its end.
+void test_anim_end(const std::filesystem::path& data) {
+    {
+        Game game(data, test_saves(data));
+        game.load_save(13);
+        World& w = game.world();
+        settle(game);
+        const Pid pid = do_anim(game.kernel(), w, game.animations(), 1, 0x22, kDirCurrent, 10000, true);
+        CHECK(pid != 0);
+        int frames = 0;
+        while (game.kernel().get(pid) && !game.kernel().get(pid)->terminated() && frames < 300) {
+            game.update(kFrameUs);
+            ++frames;
+        }
+        const bool half = w.npc_record(1)[npc::kAnimFlags] & 0x04;
+        std::printf("anim end: start of a run over after %d frames, half-stride bit %d\n", frames, half);
+        CHECK(frames < 300 && !half);
+    }
+    {
+        constexpr ObjId kGuard = 4;
+        Game game(data, test_saves(data));
+        game.load_save_file(test_saves(data) / "garde-mort-debout.sav");
+        World& w = game.world();
+        Item* guard = w.get(kGuard);
+        CHECK(guard != nullptr);
+        if (!guard) return;
+        w.set_camera(guard->x, guard->y, guard->z);
+        for (int f = 0; f < 10; ++f) game.update(kFrameUs);
+        guard = w.get(kGuard);
+        CHECK(guard && (guard->flags & kItemFastArea));
+        if (!guard) return;
+        w.set_shape(*guard, 1423);
+        const AnimAction* a = game.animations().action(1423, 0);
+        CHECK(a && a->destroys_actor());
+        CHECK(do_anim(game.kernel(), w, game.animations(), kGuard, 0, kDirCurrent, 10000, true) != 0);
+        for (int f = 0; f < 120; ++f) game.update(kFrameUs);
+        std::printf("anim end: shape 1423 after its action 0: %s\n", w.get(kGuard) ? "still there" : "destroyed");
+        CHECK(!w.get(kGuard));
+    }
+}
+
 void test_death_out_of_fast_area(const std::filesystem::path& data) {
     constexpr ObjId kGuard = 4;
     Game game(data, test_saves(data));
@@ -4380,6 +4425,7 @@ int main(int argc, char** argv) {
     test_options(data);
     test_firing(data);
     test_auto_firer(data);
+    test_anim_end(data);
     test_stations(data);
     test_scenery_use(data);
     test_computer(data);

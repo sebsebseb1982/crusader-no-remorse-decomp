@@ -62,6 +62,9 @@ public:
     // except those that run at any level. The original starts at table slot
     // 3; the port's first slots do not hold the same processes.
     void fail_all();
+    // DS:324D, set while fail_all runs: an animation failed then skips its
+    // cleanup (1158:2DC6).
+    bool failing_all() const { return failing_all_; }
 
     // Calls fn(Process&) for every live process, in table order.
     template <class Fn>
@@ -109,6 +112,7 @@ private:
     std::size_t live_ = 0;
     std::uint8_t level_ = 1;
     bool interrupted_ = false;
+    bool failing_all_ = false;
 
     std::uint32_t ticks_ = 0;
     std::uint32_t slice_start_ = 0, slice_ticks_ = 0;

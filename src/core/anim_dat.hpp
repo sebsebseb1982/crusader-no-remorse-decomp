@@ -65,6 +65,9 @@ struct AnimAction {
     std::uint8_t ticks_per_frame() const { return header[2] & 0x0F; }
     bool turned() const { return header[2] & 0x10; }
     bool sixteen_directions() const { return header[3] & 0x40; }
+    // The actor is destroyed when the action ends (ANIMPRIM.C 2D09 / 2DC6):
+    // the deaths of shapes 1423 and 1436.
+    bool destroys_actor() const { return header[3] & 0x80; }
     std::size_t directions() const { return sixteen_directions() ? 16 : 8; }
 
     // Frame `index` facing `dir16` (0..15). With 8 directions the direction
