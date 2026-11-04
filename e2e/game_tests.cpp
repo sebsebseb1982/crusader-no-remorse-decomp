@@ -1343,6 +1343,10 @@ void test_inventory_keys(const std::filesystem::path& data) {
     std::printf("inventory keys: Tab jump %d, moved %d\n", jumped, moved);
     CHECK(jumped && moved >= 64);
     // J while running (Shift + up): the run gives way to a running jump (0x38).
+    // Back the way the jump came: ahead of where it landed, the start of the
+    // run (0x23) is blocked and, as in the original (ANIMPRIM.C 016F), the
+    // player would stay standing.
+    w.npc_record(1)[npc::kDirection] = static_cast<std::uint8_t>((w.npc_direction(1) + 8) & 0xF);
     game.key(0x48, true, true, kLeftShift);
     for (int i = 0; i < 90; ++i) game.update(kFrameUs);  // 0x22 / 0x23, then the run
     const std::uint16_t before = last_action(game);
@@ -2310,8 +2314,9 @@ void test_hard_landing(const std::filesystem::path& data) {
 
 // Jalon 2: a step blocked by an obstacle (ANIMPRIM.C 1908). A box (0x81) is
 // put on the walkway of SAVEGAME.13, south of the player. Walking into it
-// ends the walk at the box; a roll (0x18, unstoppable: action flag 0x08)
-// plays its remaining frames in place.
+// ends the walk at the box. A roll (0x18) that does not fit is tried from
+// 16, 32, 48 units ahead and behind (ANIMPRIM.C 016F): the player moves
+// aside, rolls past the box and plays all its frames.
 void test_blocked_step(const std::filesystem::path& data) {
     for (const std::uint16_t action : {std::uint16_t{1}, std::uint16_t{0x18}}) {
         Game game(data, test_saves(data));
@@ -2333,11 +2338,16 @@ void test_blocked_step(const std::filesystem::path& data) {
             last_frame = w.npc_record(1)[npc::kAnimFrame];
         }
         const AnimAction* a = game.animations().action(player->shape, action);
-        std::printf("blocked step: action 0x%X from y %d to %d (box at %d), frame %d of %zu, %d frames\n", action, y0,
-                    player->y, w.get(box)->y, last_frame, a ? a->frame_count() : 0, frames);
-        CHECK(player->x == x0 && player->y > y0 && player->y < w.get(box)->y && (player->z & 0xFF) == z0);
-        if (action == 1) CHECK(last_frame < 8);
-        else CHECK(a && last_frame == static_cast<int>(a->frame_count()) - 1);
+        std::printf("blocked step: action 0x%X from %d %d to %d %d (box at y %d), frame %d of %zu, %d frames\n", action,
+                    x0, y0, player->x, player->y, w.get(box)->y, last_frame, a ? a->frame_count() : 0, frames);
+        CHECK(player->y > y0 && (player->z & 0xFF) == z0);
+        if (action == 1) {
+            CHECK(player->x == x0 && player->y < w.get(box)->y && last_frame < 8);
+        } else {
+            const int aside = std::abs(player->x - x0);
+            CHECK(aside >= 16 && aside <= 48 && player->y > w.get(box)->y);
+            CHECK(a && last_frame == static_cast<int>(a->frame_count()) - 1);
+        }
         CHECK(game.machine().faults().empty());
     }
 }
@@ -4433,6 +4443,10 @@ int main(int argc, char** argv) {
         test_death_out_of_fast_area(data);
         test_other_map_npc_hidden(data);
     test_other_map_npc_hidden(data);
+        return failures ? 1 : 0;
+    }
+    if (argc > 2 && std::string(argv[2]) == "--inventory-keys") {
+        test_inventory_keys(data);
         return failures ? 1 : 0;
     }
     if (argc > 2 && std::string(argv[2]) == "--keypad") {

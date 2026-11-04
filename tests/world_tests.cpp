@@ -570,8 +570,11 @@ void test_walk_alignment() {
         }
         CHECK(w.get(1));
         std::printf("walk alignment: closed %d, at %d %d\n", closed, w.get(1)->x, w.get(1)->y);
-        CHECK(w.get(1)->x == (closed ? 108 : 116));
+        // Closed: the walk fits nowhere, it becomes standing (action 0) and
+        // the player stays (ANIMPRIM.C 016F).
+        CHECK(w.get(1)->x == (closed ? 100 : 116));
         CHECK(w.get(1)->y == (closed ? 100 : 116));
+        if (closed) CHECK(w.npc_word(1, npc::kLastAnim) == 0);
         CHECK(position_free(w, 1, w.location(*w.get(1)), nullptr, 1));
     }
 }

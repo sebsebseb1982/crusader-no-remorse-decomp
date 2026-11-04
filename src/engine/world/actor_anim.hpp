@@ -18,11 +18,10 @@
 //
 // Not yet (compared with the byte-exact C, docs/audit-decomp.md): frame
 // skipping (1908: off-screen NPCs and the frameskip option play two frames
-// per step), combat height tracking (action flag 0x80), the start fallbacks
-// of 016F for the controlled NPC beyond the walk's sideways nudge (rolls,
-// runs, a walk that fits nowhere turned into standing), the restart of
+// per step), combat height tracking (action flag 0x80), the restart of
 // actions flagged 0x40 (none in ANIM.DAT), the target of a pathfinder walk
-// passed to the sweep. The special frames (0x1000): special_frame.
+// passed to the sweep. The special frames (0x1000): special_frame; the
+// start test of the controlled NPC's moves (016F): fit_start.
 
 #include "core/anim_dat.hpp"
 #include "engine/kernel.hpp"
@@ -93,7 +92,7 @@ protected:
     void on_terminate() override;
 
 private:
-    void start(const AnimAction& a);
+    const AnimAction* start();  // nullptr: nothing to play
     bool step();  // false when the animation is over
     bool fall_if_unsupported(const World::Point& from, const World::Point& to);
     const ActorAnimProcess* next_queued() const;
@@ -133,6 +132,13 @@ std::uint16_t remap_action(const World& world, ObjId actor, std::uint16_t action
 // (0x576, 0x596) scream: one of sounds 101-103 (record +0x5A bit 2 clear) or
 // 11, 10 (set), drawn by rand(), unless one of them plays for the actor.
 void special_frame(Kernel& kernel, World& world, const AnimDat& anims, ObjId actor);
+
+// ANIMPRIM.C 016F for the controlled NPC (actions 1, 2, 3, 0x17, 0x18, 0x22,
+// 0x23, 0x24, 0x26, 0x2C, 0x2D, 0x30, 0x31, 0x3D, 0x3E): the action played
+// from where the actor stands, or from a place nearby it moves to first, or
+// the action that replaces it (see actor_anim.cpp). 0x40: nothing.
+std::uint16_t fit_start(Kernel& kernel, World& world, const AnimDat& anims, ObjId actor, std::uint16_t action,
+                        int dir);
 
 // Actor::I_doAnim: queues `action` facing `dir` (0..15 or kDir*) for `actor`.
 // Refused (0) when the actor is parked (z 254), dead, has no such action, or
