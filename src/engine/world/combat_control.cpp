@@ -174,7 +174,7 @@ bool CombatControl::keypad_command(const GameKeyEvent& e) {
 bool CombatControl::fire(bool explicit_call) {
     const ObjId npc = world_.state.controlled_npc;
     const ObjId weapon_id = world_.active_weapon(npc);
-    world_.state.fire_held = explicit_call;  // DS:2875, read by the firing frame (AutoFirer)
+    world_.state.fire_held = explicit_call;  // DS:28CD, read by the firing frame (AutoFirer)
     if (burst_left_ != 0 && !single_) return false;
     if (actor_busy(kernel(), npc) && explicit_call) return false;
 

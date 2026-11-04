@@ -81,6 +81,10 @@ void leave_surface(Kernel& kernel, World& world, ObjId mover);
 // The same for the items resting on `item` only (1040:06D2, an item that
 // starts falling straight down).
 void drop_items_on_top(Kernel& kernel, World& world, ObjId item);
+// 1040:11FD, for each item of a cell leaving the fast area (10B0:0386):
+// a falling item drops straight down (a sweep to z 0, with its contact
+// events) and its gravity process ends.
+void drop_out_of_fast_area(Kernel& kernel, World& world, ObjId item);
 
 // Item::I_hurl: starts the item's gravity process, or adds the velocity to
 // the running one. A new process first waits 20 ticks. Returns its pid.

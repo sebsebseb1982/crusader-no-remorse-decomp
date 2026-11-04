@@ -11,6 +11,7 @@
 #include "engine/world/aim_mode.hpp"
 #include "engine/world/attack.hpp"
 #include "engine/world/auto_firer.hpp"
+#include "engine/world/gravity.hpp"
 #include "core/data_info.hpp"
 #include "core/dtable.hpp"
 #include "core/language.hpp"
@@ -343,6 +344,7 @@ void Game::reset_world() {
     hooks.npc_entered_fast_area = [this](ObjId npc) {
         if (npc != world_->state.controlled_npc) restart_activity(*kernel_, *world_, anims_, npc);
     };
+    hooks.drop_falling = [this](ObjId item) { drop_out_of_fast_area(*kernel_, *world_, item); };
     hooks.show_message = [this](const std::string& text) { show_message(text); };
     hooks.autosave = [this] { autosave(); };
     hooks.autosave_soon = [this] { request_autosave(); };

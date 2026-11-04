@@ -3950,6 +3950,183 @@ void test_burst_cut(const std::filesystem::path& data) {
     CHECK(after == 0);
 }
 
+// CRUSADER_1130_000e: DeathSilence, started by the player's death, is a 1 Hz
+// timer that plays sound 9 at its third period. The port waited 3 ticks.
+void test_death_silence(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save(13);
+    World& w = game.world();
+    settle(game);
+    for (int i = 0; i < 20 && !w.is_dead(1); ++i) apply_damage(game.kernel(), w, game.animations(), 1, 0, 0, 250, 1);
+    const auto alive = [&] { return game.kernel().find_process(0, 0x261) != nullptr; };
+    const bool started = alive();
+    int frames = 0;
+    while (alive() && frames < 600) {
+        game.update(kFrameUs);
+        ++frames;
+    }
+    std::printf("death silence: dead %d, started %d, over after %d frames\n", w.is_dead(1), started, frames);
+    CHECK(started && frames >= 170 && frames <= 200);
+}
+
+// A spot far enough for the player's cell to leave the fast area.
+World::Point far_from(const Item& p) {
+    return {p.x < 16384 ? p.x + 4096 : p.x - 4096, p.y < 16384 ? p.y + 4096 : p.y - 4096, p.z};
+}
+
+// CurrentMap::unsetChunkFast (10B0:0386, 1040:11FD): a falling item whose
+// cell leaves the fast area drops to the ground and its fall ends. The port
+// left it in the air, its fall waiting for the camera to come back.
+// Item::leaveFastArea (10A8:2DAD): a shape with the sound flag (TYPEFLAG
+// byte 6 bit 3) falls silent. The port let its sound play on.
+void test_leave_fast_area(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save(13);
+    World& w = game.world();
+    settle(game);
+    const Item* p = w.get(1);
+    CHECK(p != nullptr);
+    if (!p) return;
+    const World::Point at{p->x, p->y, p->z & 0xFF}, away = far_from(*p);
+    std::uint16_t shape = 0, noisy = 0;
+    for (std::uint16_t s = 0x100; s < 0x800 && (shape == 0 || noisy == 0); ++s) {
+        const ShapeInfo* info = w.shape_info(s);
+        if (!info) continue;
+        if (noisy == 0 && info->is(ShapeInfo::kSound)) noisy = s;
+        if (shape == 0 && !info->is(ShapeInfo::kFixed) && info->is(ShapeInfo::kSolid) && info->weight != 0 &&
+            info->family == 0 && info->footpad_x == 1 && info->footpad_y == 1 && info->footpad_z == 1) {
+            shape = s;
+        }
+    }
+    const World::Point high{at.x + 64, at.y, at.z + 120};
+    CHECK(shape != 0 && noisy != 0 && position_free(w, shape, high));
+    if (shape == 0 || noisy == 0) return;
+    const ObjId item = w.create(shape, 0);
+    w.pop_to_coords(high.x, high.y, high.z);
+    CHECK(fall(game.kernel(), w, item) != 0);
+    const ObjId sounding = w.create(noisy, 0);
+    w.pop_to_coords(at.x, at.y + 64, at.z);
+    game.audio()->sources.play(w, 9, sounding);
+    const bool played = game.audio()->sources.is_playing(9, sounding);
+    w.set_camera(away.x, away.y, away.z);
+    const Item* i = w.get(item);
+    const bool falling = game.kernel().find_process(item, GravityProcess::kType) != nullptr;
+    const bool still = game.audio()->sources.is_playing(9, sounding);
+    std::printf("leave fast area: item 0x%X from z %d to %d, still falling %d; shape 0x%X sound %d then %d\n", shape,
+                high.z, i ? i->z & 0xFF : -1, falling, noisy, played, still);
+    CHECK(i && !(i->flags & kItemFastArea) && (i->z & 0xFF) < high.z && !falling);
+    CHECK(played && !still);
+}
+
+// GLOB.C 039C: a glob egg near the drawn area places its items one by one,
+// and they enter the fast area (tracked, events 0x0F); far from it they are
+// loaded into the cell without entering it. The port never let them enter.
+void test_glob_fast_area(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save(13);
+    World& w = game.world();
+    int entered = 0, loaded = 0;
+    w.for_each([&](const Item& i) {
+        if ((i.flags & (kItemDisposable | 0x0002)) != (kItemDisposable | 0x0002) || i.parent != 0) return;
+        ++((i.flags & kItemFastArea) ? entered : loaded);
+    });
+    std::printf("glob fast area: %d glob items entered, %d loaded\n", entered, loaded);
+    CHECK(entered > 0);
+}
+
+// CRUSADER_1130_026b: a shot stopped by the player's shield shows its sprite,
+// 0x5A9 at the point hit for shields 1 and 2, 0x52B on the player for the
+// large one, which follows him (ITEMCACH.C 1D29) until it ends. The port
+// showed nothing.
+void test_shield_sprites(const std::filesystem::path& data) {
+    for (const int shield : {1, 3}) {
+        Game game(data, test_saves(data));
+        game.load_save(13);
+        World& w = game.world();
+        settle(game);
+        const int bit = shield == 3 ? 4 : shield;
+        int type = 0;
+        for (int t = 1; t < 16 && type == 0; ++t) {
+            const dtable::FireType* ft = dtable::fire_type(t);
+            if (ft && (ft->shield_mask() & bit)) type = t;
+        }
+        CHECK(type != 0);
+        if (type == 0) return;
+        w.set_npc_word(1, 0x66, static_cast<std::uint16_t>(shield));
+        w.set_npc_word(1, 0x57, 30000);
+        const Item* p = w.get(1);
+        const World::Point at{p->x - 16, p->y - 16, (p->z & 0xFF) + 20};
+        const std::uint16_t hp = w.npc_hp(1);
+        apply_damage(game.kernel(), w, game.animations(), 1, 0, 0, 10, type, &at);
+        const std::uint16_t shape = shield == 3 ? 0x52B : 0x5A9;
+        ObjId sprite = 0;
+        w.for_each([&](const Item& i) {
+            if (i.sprite_only && i.shape == shape) sprite = i.id;
+        });
+        CHECK(sprite != 0 && w.npc_hp(1) == hp);
+        if (shield != 3 || sprite == 0) {
+            std::printf("shield sprites: shield %d, fire type %d, sprite 0x%X %s\n", shield, type, shape,
+                        sprite ? "shown" : "missing");
+            continue;
+        }
+        CHECK(w.state.shield_sprite != 0 && w.state.shield_sprite_item == sprite);
+        const std::int32_t sx = w.get(sprite)->x;
+        p = w.get(1);
+        w.move_item(1, p->x + 32, p->y, p->z);
+        const std::int32_t moved = w.get(sprite) ? w.get(sprite)->x - sx : -1;
+        int frames = 0;
+        while (w.state.shield_sprite != 0 && frames < 600) {
+            game.update(kFrameUs);
+            ++frames;
+        }
+        std::printf("shield sprites: large shield, fire type %d, sprite moved by %d, gone after %d frames\n", type,
+                    moved, frames);
+        CHECK(moved == 32 && w.state.shield_sprite == 0 && frames < 600);
+    }
+}
+
+// Item::I_fireWeapon (1130:11DA) with the muzzle already inside an item: after
+// the hit, the fire type's splash around the muzzle (the controlled shooter
+// not spared) and its impact sprite. The port stopped at the hit.
+void test_muzzle_inside(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save(13);
+    World& w = game.world();
+    settle(game);
+    int type = 0;
+    for (int t = 1; t < 16 && type == 0; ++t) {
+        const dtable::FireType* ft = dtable::fire_type(t);
+        if (ft && ft->splash() > 0 && ft->impact_sprite()) type = t;
+    }
+    std::uint16_t shape = 0;
+    for (std::uint16_t s = 0x100; s < 0x800 && shape == 0; ++s) {
+        const ShapeInfo* info = w.shape_info(s);
+        if (info && info->is(ShapeInfo::kSolid) && info->family == 0 && info->footpad_x == 1 &&
+            info->footpad_y == 1 && info->footpad_z == 1) {
+            shape = s;
+        }
+    }
+    CHECK(type != 0 && shape != 0);
+    if (type == 0 || shape == 0) return;
+    w.npc_record(1)[npc::kFlags13] &= static_cast<std::uint8_t>(~0x02);
+    w.set_npc_word(1, 0x66, 0);
+    const Item* p = w.get(1);
+    const World::Point at{p->x + 48, p->y, p->z & 0xFF};
+    w.create(shape, 0);
+    w.pop_to_coords(at.x, at.y, at.z);
+    auto sprites = [&] {
+        int n = 0;
+        w.for_each([&](const Item& i) { n += i.sprite_only; });
+        return n;
+    };
+    const int before = sprites();
+    const std::uint16_t hp = w.npc_hp(1);
+    fire_weapon(game.kernel(), w, game.animations(), 1, 40, -8, 4, 0, type, false);
+    std::printf("muzzle inside: fire type %d, sprites %d -> %d, player hp %d -> %d\n", type, before, sprites(), hp,
+                w.npc_hp(1));
+    CHECK(sprites() > before && w.npc_hp(1) < hp);
+}
+
 void test_death_out_of_fast_area(const std::filesystem::path& data) {
     constexpr ObjId kGuard = 4;
     Game game(data, test_saves(data));
@@ -4562,6 +4739,11 @@ int main(int argc, char** argv) {
     test_special_frames(data);
     test_combat_height(data);
     test_burst_cut(data);
+    test_death_silence(data);
+    test_leave_fast_area(data);
+    test_glob_fast_area(data);
+    test_shield_sprites(data);
+    test_muzzle_inside(data);
     test_stations(data);
     test_scenery_use(data);
     test_computer(data);

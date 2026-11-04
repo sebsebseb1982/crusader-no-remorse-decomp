@@ -50,7 +50,9 @@ std::size_t World::expand_glob_egg(const FlexArchive& globs, ObjId egg_id) {
     if (!egg || family(*egg) != kFamilyGlobEgg || egg->quality == 0) return 0;
     const std::int32_t base_x = egg->x & ~0x1FF, base_y = egg->y & ~0x1FF, base_z = egg->z;
     std::size_t created = 0;
-    expanding_glob_ = true;
+    // Far from the drawn area the original loads the items straight into the
+    // cell (10B0:00A0), without Item::I_enterFastArea.
+    expanding_glob_ = !glob_near_view(base_x, base_y);
     for (const GlobItem& g : read_glob(globs, egg->quality)) {
         const ObjId id = create(g.shape, g.frame);
         if (!id) continue;
@@ -60,6 +62,17 @@ std::size_t World::expand_glob_egg(const FlexArchive& globs, ObjId egg_id) {
     }
     expanding_glob_ = false;
     return created;
+}
+
+// @orig 10A0:039C
+bool World::glob_near_view(std::int32_t base_x, std::int32_t base_y) const {
+    // The egg's chunk corner projected without z, widened by 376 / 250 / 255
+    // pixels, against the drawn area (768 x 640 for a 640 x 480 view).
+    const auto wx = static_cast<std::uint16_t>(base_x + 1), wy = static_cast<std::uint16_t>(base_y + 1);
+    const int sx = static_cast<std::int16_t>((wx >> 1) - (wy >> 1));
+    const int sy = static_cast<std::int16_t>((wx >> 2) + (wy >> 2));
+    const int right = drawn_left_ + state.screen_right + 128, bottom = drawn_top_ + state.screen_bottom + 160;
+    return sx - 376 <= right && sx + 375 >= drawn_left_ && sy - 250 <= bottom && sy + 255 >= drawn_top_;
 }
 
 // @orig 10B0:01E7
@@ -650,6 +663,12 @@ ObjId World::pop_to_coords(std::int32_t x, std::int32_t y, std::int32_t z) {
     const ObjId id = pending_.back();
     pending_.pop_back();
     Item& item = *get(id);
+    // ITEMCACH.C 1D29: the large shield's sprite moves with the player.
+    if (id == 1 && state.shield_sprite != 0) {
+        if (const Item* s = get(state.shield_sprite_item)) {
+            move_item(s->id, s->x + (x - item.x), s->y + (y - item.y), (s->z + (z - item.z)) & 0xFF);
+        }
+    }
     if (id == state.controlled_npc && id == state.camera_target) track_camera_target(x, y, z);
     item.x = x;
     item.y = y;
@@ -683,8 +702,8 @@ bool World::has_fast_area_events(const Item& item) const {
 // @orig 10A8:2B30
 std::uint16_t World::enter_fast_area(Item& item) {
     // Families 4/7/8 and the NPC reset are handled below through hooks. Not
-    // reproduced: the shape 0x4FE hook (CRUSYS_1060_021b) and the family 7
-    // branch taken when DAT_1478_0907 is set (never set in this version).
+    // reproduced: the shape 0x4FE hook (CRUSYS_1060_021b) and the EggHatcher
+    // a monster egg gets while DS:0907 is clear (only under the computer gump).
     item.flags |= kItemFastArea;
     if (item.sprite_only) return 0;  // port-only sprite items: no events, not tracked
     if (is_trackable(item.shape) && !(item.flags & kItemBroken)) track(item.id);
@@ -714,6 +733,9 @@ void World::leave_fast_area(Item& item) {
     if (is_trackable(item.shape) && !(item.flags & kItemBroken)) untrack(item.id);
     if (hooks_.fail_processes) hooks_.fail_processes(item.id);
     if (is_npc_id(item.id) && is_dead(item.id)) return;
+    // Shapes with the sound flag (TYPEFLAG byte 6 bit 3) fall silent.
+    const ShapeInfo* info = shape_info(item.shape);
+    if (audio_ && info && info->is(ShapeInfo::kSound)) audio_->sources.stop_item(item.id);
     if (has_fast_area_events(item) && hooks_.start_event) hooks_.start_event(item.id, 0x10);
 }
 
@@ -774,11 +796,23 @@ void World::set_camera(std::int32_t x, std::int32_t y, std::int32_t z) {
     // 16-bit arithmetic of ANIMCACH.C: halves and quarters are taken before
     // the sum or difference.
     const std::uint16_t ux = static_cast<std::uint16_t>(x), uy = static_cast<std::uint16_t>(y);
+    // ANIMCACH.C 0CBA moves the drawn area after the fast area.
+    if (!drawn_reset_) {
+        drawn_left_ = state.view_left & ~127;
+        drawn_top_ = state.view_top & ~127;
+    }
     state.camera_x = ux;
     state.camera_y = uy;
     state.camera_z = z & 0xFF;
     state.view_left = static_cast<std::int16_t>((ux >> 1) - (uy >> 1) - view_origin_x());
     state.view_top = static_cast<std::int16_t>((ux >> 2) + (uy >> 2) - state.camera_z - view_origin_y());
+    // A rebuilt fast area stands for the saved one, whose globs were placed
+    // around the view of the time.
+    if (drawn_reset_) {
+        drawn_left_ = state.view_left & ~127;
+        drawn_top_ = state.view_top & ~127;
+        drawn_reset_ = false;
+    }
     update_fast_area(ux, uy);
     if (audio_) audio_->sources.update_volumes(*this);
 }
@@ -1016,6 +1050,7 @@ void World::clear_fast_area() {
     for (ObjId id : globs) destroy(id);
     fast_area_ = {};
     clear_tracked();
+    drawn_reset_ = true;
 }
 
 // @orig 10B0:13BE
@@ -1026,11 +1061,16 @@ void World::update_fast_area(std::int32_t x, std::int32_t y) {
     auto on_map = [](const Item& i) { return i.parent == 0 && !(i.flags & (kItemContained | kItemEthereal)); };
     auto in = [](const FastArea& area, const Item& i) { return area.contains(i.x, i.y); };
 
-    // Cells left behind (the original also kills type 0x203 processes there).
+    // Cells left behind: falling items drop first, then the items leave.
     std::vector<ObjId> leaving;
     for_each([&](const Item& i) {
         if (on_map(i) && in(before, i) && !in(after, i)) leaving.push_back(i.id);
     });
+    if (hooks_.drop_falling) {
+        for (ObjId id : leaving) {
+            if (get(id)) hooks_.drop_falling(id);
+        }
+    }
     for (ObjId id : leaving) {
         Item* item = get(id);
         if (!item) continue;

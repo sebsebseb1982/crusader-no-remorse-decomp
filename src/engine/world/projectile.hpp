@@ -87,9 +87,10 @@ Pid fire_weapon(Kernel& kernel, World& world, const AnimDat& anims, ObjId shoote
                 int dir, int fire_type, bool aim);
 
 // CRUSADER_1130_026b (reproduced part, see above). `dir` is the direction the
-// projectile travelled in.
+// projectile travelled in, `at` the point hit (null from I_receiveHit, where
+// the original reads a null pointer).
 void apply_damage(Kernel& kernel, World& world, const AnimDat& anims, ObjId target, ObjId attacker, int dir,
-                  int damage, int fire_type);
+                  int damage, int fire_type, const World::Point* at = nullptr);
 
 class ProjectileProcess : public Process {
 public:

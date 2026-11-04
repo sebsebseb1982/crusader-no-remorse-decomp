@@ -90,6 +90,10 @@ void SpriteProcess::on_terminate() {
         slot_ = -1;
     }
     if (pid() == aim.marker_pid) aim.marker_pid = 0;
+    if (pid() == world_.state.shield_sprite) {
+        world_.state.shield_sprite = 0;
+        world_.state.shield_sprite_item = 0;
+    }
 }
 
 Pid create_sprite(Kernel& kernel, World& world, std::uint16_t shape, int first, int last, int delay,

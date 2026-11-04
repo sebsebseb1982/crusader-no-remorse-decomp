@@ -320,6 +320,17 @@ void drop_items_on_top(Kernel& kernel, World& world, ObjId item) {
     for (ObjId id : world.surface_search(item, 1, kAll)) fall(kernel, world, id);
 }
 
+// @orig 1040:11FD
+void drop_out_of_fast_area(Kernel& kernel, World& world, ObjId item) {
+    Process* p = kernel.find_process(item, GravityProcess::kType);
+    if (!p) return;
+    if (const Item* i = world.get(item)) {
+        const SweepResult r = sweep(world, i->shape, item, {i->x, i->y, i->z}, {i->x, i->y, 0}, kSweepNoGround);
+        finish_move(world, item, r);
+    }
+    if (!p->terminated()) p->terminate();
+}
+
 // @orig 1040:12A6
 Pid hurl(Kernel& kernel, World& world, ObjId item, int vx, int vy, int vz, int gravity) {
     GravityProcess* existing = nullptr;

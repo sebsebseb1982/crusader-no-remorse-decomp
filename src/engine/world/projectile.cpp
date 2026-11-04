@@ -40,28 +40,29 @@ int rnd_between(World& w, int lo, int hi) {
 int crt_rnd(World& w, int n) { return crt_rand_below(w.state.crt_rand_state, n); }
 
 // DeathSilence (CRUSADER_1130_000e, type 0x261): started by the player's
-// death, plays sound 9 three ticks later (1130:00D6 counts the ticks, then
-// 1130:00B1 plays it and ends).
+// death, a 1 Hz timer held back (flag 1) until its third period (1130:00D6),
+// then plays sound 9 and ends (1130:00B1): three seconds after the death.
 // @orig 1130:000E 1130:00D6 1130:00B1
-class DeathSilence : public Process {
+class DeathSilence : public TimedProcess {
 public:
     static constexpr std::uint16_t kType = 0x261;
-    explicit DeathSilence(World& world) : world_(world) { set_type(kType); }
+    explicit DeathSilence(World& world) : world_(world) {
+        set_type(kType);
+        set_rate(1);
+    }
+    bool runs_in_slice() const override { return true; }
 
 protected:
+    void tick() override { ++periods_; }
     void run() override {
-        if (!waited_) {
-            waited_ = true;
-            sleep(3);
-            return;
-        }
+        if (periods_ < 3) return;
         if (Audio* audio = world_.audio()) audio->play_sfx(9);
         terminate();
     }
 
 private:
     World& world_;
-    bool waited_ = false;
+    int periods_ = 0;
 };
 
 // A sound at the NPC unless it already plays there (I_isSFXPlayingForObject
@@ -199,12 +200,18 @@ Pid fire_weapon(Kernel& kernel, World& world, const AnimDat& anims, ObjId shoote
     };
 
     // Muzzle already inside an item (ITEMFIND.C 1874): immediate hit on the
-    // first solid item there, with the damage of the fire type.
+    // first solid item there, with the damage of the fire type, then its
+    // splash around the muzzle and its impact sprite (1130:11DA).
     ObjId inside = 0;
     if (!position_free(world, kProjectileShape, origin, &inside)) {
         if (const Item* hit = world.get(inside)) {
             const int dir8 = direction_8(origin.x, origin.y, hit->x, hit->y);
-            apply_damage(kernel, world, anims, inside, shooter, dir8, random_damage(fire_type), fire_type);
+            apply_damage(kernel, world, anims, inside, shooter, dir8, random_damage(fire_type), fire_type, &origin);
+            if (ft->splash() != 0) {
+                splash_damage(kernel, world, anims, origin, ft->splash(), random_damage(fire_type), fire_type, inside,
+                              shooter);
+            }
+            if (ft->impact_sprite()) impact_sprite(kernel, world, fire_type, origin);
         }
         return 0;
     }
@@ -273,7 +280,7 @@ Pid fire_weapon(Kernel& kernel, World& world, const AnimDat& anims, ObjId shoote
 
 // @orig 1130:026B
 void apply_damage(Kernel& kernel, World& world, const AnimDat& anims, ObjId target, ObjId attacker, int dir,
-                  int damage, int fire_type) {
+                  int damage, int fire_type, const World::Point* at) {
     Item* item = world.get(target);
     if (!item) return;
     const std::uint16_t difficulty = world.state.difficulty;
@@ -356,7 +363,10 @@ void apply_damage(Kernel& kernel, World& world, const AnimDat& anims, ObjId targ
     // Shields of the player (record +0x66: 1, 2 or 3, taken as 4): when the
     // fire type's mask (+0xA) has the shield's bit and the energy covers its
     // cost (+8), the energy pays, sound 0x48 plays and the shot does nothing.
-    // Not reproduced: the status bar flash, the shield sprite (0x5A9 / 0x52B).
+    // Unless the large shield's sprite is up: shields 1 and 2 flash at the
+    // point hit (0x5A9, frames 7..13 or 0..6), the large one shows 0x52B
+    // (frames 0..8) on the player, which follows him. Not reproduced: the
+    // status bar flash.
     if (target == 1) {
         int shield = world.npc_word(1, 0x66);
         if (shield == 3) shield = 4;
@@ -367,6 +377,20 @@ void apply_damage(Kernel& kernel, World& world, const AnimDat& anims, ObjId targ
             record[0x58] = static_cast<std::uint8_t>(energy >> 8);
             if (Audio* audio = world.audio()) audio->sources.retrigger(world, 0x48, 1);
             damage = 0;
+            if (world.state.shield_sprite == 0) {
+                if (shield == 4) {
+                    const World::Point on{item->x + 16, item->y + 24, item->z & 0xFF};
+                    const Pid pid = create_sprite(kernel, world, 0x52B, 0, 8, 4, on);
+                    if (auto* sprite = dynamic_cast<SpriteProcess*>(kernel.get(pid))) {
+                        world.state.shield_sprite = pid;
+                        world.state.shield_sprite_item = sprite->sprite();
+                    }
+                } else if (at) {
+                    create_sprite(kernel, world, 0x5A9, shield == 1 ? 7 : 0, shield == 1 ? 13 : 6, 4, *at);
+                }
+                item = world.get(target);
+                if (!item) return;
+            }
         }
     }
     if (record[npc::kFlags13] & 0x02) damage = 0;  // immortal (NPC_10f0_214b)
@@ -534,7 +558,7 @@ void ProjectileProcess::impact(ObjId hit) {
         const int dir = !is_npc_id(hit) ? crt_rnd(world_, 8)
                         : item          ? direction_8(pos_.x, pos_.y, item->x, item->y)
                                         : 0x10;
-        apply_damage(kernel(), world_, anims_, hit, shooter_, dir, damage_, fire_type_);
+        apply_damage(kernel(), world_, anims_, hit, shooter_, dir, damage_, fire_type_, &pos_);
     }
     // SPRITE_1140_1e09: splash damage of the fire type around the impact,
     // sparing the item hit and the shooter (unless it is the controlled NPC).

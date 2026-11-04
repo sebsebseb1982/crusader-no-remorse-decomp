@@ -147,10 +147,14 @@ struct GameState {
     std::uint16_t controlled_npc = 1; // World::I_getControlledNPCNum (1 = the player)
     // The AutoFirer (1138:2FFB): the process that fires weapon 909 (fire type 6) at 6 Hz while
     // the player holds the fire key (DS:2871, 0 when there is none); the fire key flag of the
-    // last Controller_fire call (DS:2875); a shot of the AutoFirer under way (DS:2876).
+    // last Controller_fire call (DS:28CD); a shot of the AutoFirer under way (DS:2876).
     Pid auto_firer = 0;
     bool fire_held = false;
     bool auto_firing = false;
+    // The large shield's sprite (0x52B), which follows the player (FR DS:2875,
+    // US g_281d; cleared at its end through the avatar mover, event 1), and its item.
+    Pid shield_sprite = 0;
+    ObjId shield_sprite_item = 0;
     // DS:7E10 (Ultima8Engine::I_setAvatarInStasis / I_getAvatarInStasis):
     // the player is busy (a healer or charger serving him, a teleport with
     // wait, the scripts); the keys of World_on_key that act on the player do
@@ -304,6 +308,9 @@ struct WorldHooks {
     std::function<void(ObjId egg)> egg_hatcher;
     // The player landed after a long fall (GravityProcess end, 1040:04BC).
     std::function<void(ObjId npc)> hard_landing;
+    // An item of a cell leaving the fast area, before any of them leaves:
+    // its fall ends on the ground (10B0:0386, 1040:11FD).
+    std::function<void(ObjId item)> drop_falling;
     // The engine's message box (GUMPSHAP_1358_0046 then Gump_run_modal):
     // the game freezes until it is closed.
     std::function<void(const std::string& text)> show_message;
@@ -680,7 +687,12 @@ private:
     bool follow_player_ = false;
     bool follow_active_ = false;  // follow_goal_ is set
     std::int32_t follow_goal_[3] = {0, 0, 0};
-    bool expanding_glob_ = false;  // DAT_10FC: no fast area entry while set
+    bool expanding_glob_ = false;  // no fast area entry while set (glob far from the drawn area)
+    // GLOB.C 039C: the drawn area's corner (DS:2CF1, 2CF3) as the last move
+    // left it, 128-pixel aligned; reset to the new view after clear_fast_area.
+    int drawn_left_ = 0, drawn_top_ = 0;
+    bool drawn_reset_ = true;
+    bool glob_near_view(std::int32_t base_x, std::int32_t base_y) const;
     std::array<ObjId, kTrackedSlots> tracked_{};
     std::size_t tracked_count_ = 0;
     std::unordered_map<ObjId, Item> items_;

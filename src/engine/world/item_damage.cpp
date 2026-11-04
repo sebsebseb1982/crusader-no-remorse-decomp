@@ -166,7 +166,7 @@ void splash_damage(Kernel& kernel, World& world, const AnimDat& anims, const Wor
             dealt = damage / steps;
         }
         const int dir = direction_16(at.x, at.y, item->x, item->y);
-        apply_damage(kernel, world, anims, id, 0, dir, dealt, fire_type);
+        apply_damage(kernel, world, anims, id, 0, dir, dealt, fire_type, &at);
     }
 }
 
