@@ -16,6 +16,7 @@
 #include "engine/usecode/world_intrinsics.hpp"
 #include "engine/world/activity.hpp"
 #include "engine/world/attack.hpp"
+#include "engine/world/auto_firer.hpp"
 #include "engine/world/chargers.hpp"
 #include "engine/world/collision.hpp"
 #include "engine/world/gravity.hpp"
@@ -1013,6 +1014,51 @@ std::uint16_t last_action(Game& game) {
     return static_cast<std::uint16_t>(r[npc::kLastAnim] | r[npc::kLastAnim + 1] << 8);
 }
 
+// The AutoFirer (1138:2FFB): weapon 909 (fire type 6) fires at 6 Hz while the
+// fire key is held, through the firing frame of the shot action; the first
+// firing frame seen once the key is released ends it.
+void test_auto_firer(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save(13);
+    World& w = game.world();
+    Item* weapon = w.get(w.active_weapon(1));
+    CHECK(weapon != nullptr);
+    if (!weapon) return;
+    weapon->shape = AutoFirer::kWeapon;
+    weapon->quality = 200;
+    w.set_npc_word(1, 0x57, 1000);  // energy
+    CHECK(dtable::weapon(weapon->shape).fire_type() == 6);
+    settle(game);
+    std::set<Pid> alive;
+    int launched = 0;
+    const auto count = [&] {
+        std::set<Pid> now;
+        game.kernel().for_each_process([&](const Process& p) {
+            if (dynamic_cast<const ProjectileProcess*>(&p)) now.insert(p.pid());
+        });
+        for (const Pid pid : now) launched += !alive.count(pid);
+        alive = std::move(now);
+    };
+    game.key(0x39, false, true, 0, ' ');
+    bool started = false;
+    for (int i = 0; i < 180; ++i) {
+        game.update(kFrameUs);
+        count();
+        started |= w.state.auto_firer != 0;
+    }
+    const int held = launched;
+    game.key(0x39, false, false, 0, 0);
+    for (int i = 0; i < 180; ++i) {
+        game.update(kFrameUs);
+        count();
+    }
+    std::printf("auto firer: started %d, %d shots in 3 s held, %d after the release, running at the end %d\n", started,
+                held, launched - held, w.state.auto_firer != 0);
+    CHECK(started && w.state.auto_firer == 0);
+    CHECK(held >= 14 && held <= 22);  // 6 Hz for 3 s, with the first shot of the action
+    CHECK(launched - held <= 2);
+}
+
 void test_firing(const std::filesystem::path& data) {
     // Action remapping for the shotgun (record +0xC = 0, overlay 0x33B).
     Game game(data, test_saves(data));
@@ -1190,6 +1236,9 @@ void test_floor_pad(const std::filesystem::path& data) {
 void test_inventory_keys(const std::filesystem::path& data) {
     Game game(data, test_saves(data));
     game.load_save(13);
+    // The running jump below holds Shift: the original behaviour, whatever
+    // the player chose in CRUSADER.CFG ("togglerun", a port addition).
+    game.config().toggle_run = false;
     World& w = game.world();
     settle(game);
     auto slot_shape = [&](int slot) {
@@ -4330,6 +4379,7 @@ int main(int argc, char** argv) {
     test_credits(data);
     test_options(data);
     test_firing(data);
+    test_auto_firer(data);
     test_stations(data);
     test_scenery_use(data);
     test_computer(data);

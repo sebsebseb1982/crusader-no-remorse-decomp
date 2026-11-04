@@ -10,6 +10,7 @@
 #include "engine/world/actor_create.hpp"
 #include "engine/world/aim_mode.hpp"
 #include "engine/world/attack.hpp"
+#include "engine/world/auto_firer.hpp"
 #include "core/data_info.hpp"
 #include "core/dtable.hpp"
 #include "core/language.hpp"
@@ -185,6 +186,41 @@ Game::Game(const std::filesystem::path& data, const std::filesystem::path& saves
 }
 
 // @orig 12E0:06BF
+
+// WPNCACHE_1160_005f: a firing frame of an actor's animation. The object that
+// fires is the active inventory item when the actor's last action is 13 and
+// it has one, else its active weapon. The player's weapon of fire type 6 (909)
+// fires through the AutoFirer while the fire key is held: the frame starts it
+// when none runs; while it runs, only its own shots fire, and a frame seen
+// with the key released ends it. Then Item::I_fireWeapon with the object's
+// fire type, the muzzle offset (x, y * 16, z * 8), the actor's direction
+// (record +0xC) and aiming, and the object's sound (DTABLE +2) on the actor's
+// voice.
+// @orig 1160:005F
+void Game::fire_frame(ObjId actor, int a, int b, int z) {
+    ++shots_fired_;
+    const auto r = world_->npc_record(actor);
+    const std::uint16_t last = r.empty() ? 0 : static_cast<std::uint16_t>(r[npc::kLastAnim] | r[npc::kLastAnim + 1] << 8);
+    const ObjId item = world_->active_inventory_item(actor);
+    const Item* source = world_->get(item != 0 && last == 13 ? item : world_->active_weapon(actor));
+    if (!source) return;
+    const int type = dtable::weapon(source->shape).fire_type();
+    if (actor == 1 && type == 6) {
+        if (world_->state.auto_firer != 0) {
+            if (!world_->state.fire_held) stop_auto_firer(*kernel_, *world_);
+            if (!world_->state.auto_firing) return;
+        } else if (world_->state.fire_held) {
+            world_->state.auto_firer = kernel_->add(std::make_unique<AutoFirer>(
+                *world_, anims_, [this](ObjId npc, int ma, int mb, int mz) { fire_frame(npc, ma, mb, mz); }));
+        }
+    }
+    const int dir = r.empty() ? 0 : r[npc::kDirection];
+    fire_weapon(*kernel_, *world_, anims_, actor, a * 16, b * 16, z * 8, dir, type, true);
+    const std::uint16_t sound = dtable::weapon(source->shape).sound();
+    if (sound != 0 && audio_) audio_->sources.retrigger(*world_, sound, actor);
+}
+
+// @orig none: applying the port's settings
 void Game::set_config(GameConfig config) {
     config_ = std::move(config);
     // ass_init: the volumes and the filter of the configuration.
@@ -283,18 +319,7 @@ void Game::reset_world() {
     kernel_->spawn<MouseDaemon>(mouse_queue_);
     kernel_->spawn<DumbTimer>(*world_, anims_);
     WorldHooks hooks = world_->hooks();
-    // WPNCACHE_1160_005f: the firing frame calls Item::I_fireWeapon with the
-    // weapon's fire type, the muzzle offset (x, y * 16, z * 8) and aiming.
-    hooks.fire_weapon = [this](ObjId actor, int a, int b, int z, int dir) {
-        ++shots_fired_;
-        const Item* weapon = world_->get(world_->active_weapon(actor));
-        if (!weapon) return;
-        fire_weapon(*kernel_, *world_, anims_, actor, a * 16, b * 16, z * 8, dir,
-                    dtable::weapon(weapon->shape).fire_type(), true);
-        // Then the weapon's sound (DTABLE +2), restarted on the actor's voice.
-        const std::uint16_t sound = dtable::weapon(weapon->shape).sound();
-        if (sound != 0 && audio_) audio_->sources.retrigger(*world_, sound, actor);
-    };
+    hooks.fire_weapon = [this](ObjId actor, int a, int b, int z, int) { fire_frame(actor, a, b, z); };
     // NPCs entering the fast area start their activity again. The controlled
     // NPC is left alone: the port rebuilds the fast area when loading a game
     // where the original restores the saved state, and the reset would undo

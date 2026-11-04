@@ -12,6 +12,7 @@ namespace {
 
 // The files are "M01.AMF" on the CD: look the name up without the case, for
 // case-sensitive file systems (Linux).
+// @orig none: file lookup without the case, port addition
 std::filesystem::path find_module(const std::filesystem::path& dir, const std::string& name) {
     const auto lower = [](std::string s) {
         std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });

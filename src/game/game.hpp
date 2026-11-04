@@ -235,6 +235,7 @@ public:
     // options screen writes it to `path` (config_save); nothing is written
     // until a path is given.
     const GameConfig& config() const { return config_; }
+    GameConfig& config() { return config_; }
     // Replaces it, the sound settings applied (tests).
     void set_config(GameConfig config);
     // Port addition: the biggest pixel size the window allows (the enhancements window stops there).
@@ -253,6 +254,7 @@ public:
     int shots_fired() const { return shots_fired_; }
 
 private:
+    void fire_frame(ObjId actor, int muzzle_a, int muzzle_b, int muzzle_z);
     void reset_world();
     // The usecode globals (0x42 bytes in this version), the rest cleared.
     void set_globals(std::span<const std::uint8_t> bytes);

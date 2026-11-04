@@ -1,11 +1,14 @@
 #include "engine/world/combat_control.hpp"
 
+#include "engine/world/auto_firer.hpp"
+
 #include "core/dtable.hpp"
 #include "engine/audio/audio.hpp"
 #include "engine/world/activity.hpp"
 #include "engine/world/aim_mode.hpp"
 #include "engine/world/actor_anim.hpp"
 #include "engine/world/attack.hpp"
+#include "engine/world/auto_firer.hpp"
 #include "engine/world/player_commands.hpp"
 
 namespace crusader {
@@ -171,6 +174,7 @@ bool CombatControl::keypad_command(const GameKeyEvent& e) {
 bool CombatControl::fire(bool explicit_call) {
     const ObjId npc = world_.state.controlled_npc;
     const ObjId weapon_id = world_.active_weapon(npc);
+    world_.state.fire_held = explicit_call;  // DS:2875, read by the firing frame (AutoFirer)
     if (burst_left_ != 0 && !single_) return false;
     if (actor_busy(kernel(), npc) && explicit_call) return false;
 
@@ -234,10 +238,12 @@ bool CombatControl::fire(bool explicit_call) {
     return fired;
 }
 
+// @orig 1138:2F9F
 void CombatControl::reset_fire() {
     wanted_ = firing_ = single_ = false;
     burst_left_ = 0;
     timer_on_ = false;
+    stop_auto_firer(kernel(), world_);
 }
 
 void CombatControl::run() {

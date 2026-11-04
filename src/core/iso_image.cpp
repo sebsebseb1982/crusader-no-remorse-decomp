@@ -39,6 +39,7 @@ void IsoImage::read(std::uint32_t lba, std::uint64_t bytes, std::vector<std::uin
     }
 }
 
+// @orig none: reading the game CD image (ISO 9660), port addition
 void IsoImage::walk(std::uint32_t lba, std::uint32_t size, const std::string& prefix) {
     std::vector<std::uint8_t> dir;
     read(lba, size, dir);
@@ -64,6 +65,7 @@ void IsoImage::walk(std::uint32_t lba, std::uint32_t size, const std::string& pr
     }
 }
 
+// @orig none: reading the game CD image (ISO 9660), port addition
 IsoImage IsoImage::open(const fs::path& path) {
     IsoImage iso;
     iso.in_.open(path, std::ios::binary);
@@ -90,6 +92,7 @@ IsoImage IsoImage::open(const fs::path& path) {
     throw std::runtime_error(path.string() + " is not an ISO 9660 image");
 }
 
+// @orig none: reading the game CD image (ISO 9660), port addition
 void IsoImage::extract(const fs::path& dest, const std::vector<std::string>& skip,
                        const std::function<void(std::uint64_t, std::uint64_t)>& progress) const {
     auto skipped = [&](const Entry& e) {
@@ -132,6 +135,7 @@ std::size_t install_from_iso(const fs::path& iso_path, const fs::path& data) {
     return iso.files().size();
 }
 
+// @orig none: reading the game CD image (ISO 9660), port addition
 fs::path find_iso(const fs::path& dir) {
     std::error_code error;
     for (const auto& entry : fs::directory_iterator(dir, error)) {
@@ -140,6 +144,7 @@ fs::path find_iso(const fs::path& dir) {
     return {};
 }
 
+// @orig none: installing the game data from the CD image, port addition
 void prepare_game_data(const fs::path& data, const fs::path& iso) {
     std::error_code error;
     if (!fs::exists(data, error)) {

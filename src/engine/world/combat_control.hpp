@@ -56,8 +56,8 @@
 // also reset the fire state (reset_fire, 1138:2F9F).
 //
 // Not reproduced: whether the controller's sleep also delays its timer
-// messages (assumed: no timer message while asleep); the AutoFirer
-// (type 0x260, 1138:2FFB) that 2F9F ends.
+// messages (assumed: no timer message while asleep). The AutoFirer that
+// 2F9F ends is in auto_firer.hpp.
 
 #include "core/anim_dat.hpp"
 #include "engine/input/keyboard.hpp"

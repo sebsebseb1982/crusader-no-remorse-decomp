@@ -78,6 +78,7 @@ void KeypadGump::button(int index) {
     }
 }
 
+// @orig none: keypad selection moved by the gamepad, port addition
 void KeypadGump::move_selection(int dx, int dy) {
     int column = selected_ % 3;
     int row = selected_ / 3;

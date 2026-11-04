@@ -16,6 +16,7 @@ constexpr int kTextDrop = 17, kRowPad = 18;  // glyphs hang from their baseline
 constexpr std::uint8_t kFrameColour = 0x57, kGreen = 0x0C, kDimGreen = 0x75;
 
 // Text in one colour: drawn on a scratch surface, copied in `tint`.
+// @orig none: screen of the port's enhancements
 void print_tinted(Surface8& screen, const FontSet& fonts, int x, int y, const std::string& text, int tint) {
     TextWriter writer(fonts, EnhancementsScreen::kFont);
     constexpr int kPad = 4, kAbove = 32, kHeight = 48;

@@ -116,6 +116,7 @@ add_library(crusader_engine
   src/engine/ui/gamepad_screen.cpp
   src/engine/ui/enhancements_screen.cpp
   src/engine/ui/movie_player.cpp
+  src/engine/world/auto_firer.cpp
   src/engine/world/render.cpp)
 target_link_libraries(crusader_engine PUBLIC crusader_core)
 

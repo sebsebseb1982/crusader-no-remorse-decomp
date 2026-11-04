@@ -193,26 +193,34 @@ Pid fire_weapon(Kernel& kernel, World& world, const AnimDat& anims, ObjId shoote
     origin.z += dz;
     dir &= 0xF;
 
-    // Damage of the shot: the shooter's weapon for NPCs (NPC_10f0_3106),
-    // the fire type otherwise.
-    int damage_type = fire_type;
-    if (is_npc_id(shooter)) {
-        if (const Item* weapon = world.get(world.active_weapon(shooter))) {
-            damage_type = dtable::weapon(weapon->shape).fire_type();
-        }
-    }
-    const dtable::FireType* dft = dtable::fire_type(damage_type);
-    const int damage = dft ? rnd_between(world, dft->min_damage(), dft->max_damage()) : 0;
+    const auto random_damage = [&world](int type) {  // FireType::getRandomDamage
+        const dtable::FireType* t = dtable::fire_type(type);
+        return t ? rnd_between(world, t->min_damage(), t->max_damage()) : 0;
+    };
 
     // Muzzle already inside an item (ITEMFIND.C 1874): immediate hit on the
-    // first solid item there.
+    // first solid item there, with the damage of the fire type.
     ObjId inside = 0;
     if (!position_free(world, kProjectileShape, origin, &inside)) {
         if (const Item* hit = world.get(inside)) {
-            apply_damage(kernel, world, anims, inside, shooter, direction_8(origin.x, origin.y, hit->x, hit->y), damage,
-                         fire_type);
+            const int dir8 = direction_8(origin.x, origin.y, hit->x, hit->y);
+            apply_damage(kernel, world, anims, inside, shooter, dir8, random_damage(fire_type), fire_type);
         }
         return 0;
+    }
+
+    // Damage of the shot: for NPCs (NPC_10f0_3106), the active inventory item
+    // when it fires this type, else the active weapon, 0 without one; the fire
+    // type otherwise.
+    int damage = 0;
+    if (is_npc_id(shooter)) {
+        const Item* inv = world.get(world.active_inventory_item(shooter));
+        const bool from_item = inv && dtable::weapon(inv->shape).fire_type() == fire_type;
+        if (const Item* source = from_item ? inv : world.get(world.active_weapon(shooter))) {
+            damage = random_damage(dtable::weapon(source->shape).fire_type());
+        }
+    } else {
+        damage = random_damage(fire_type);
     }
 
     // Target: for the controlled NPC, the tracked item in the direction of

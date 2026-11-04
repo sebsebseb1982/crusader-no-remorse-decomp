@@ -145,6 +145,12 @@ struct GameState {
     std::array<std::uint8_t, 0x15> player_block{};
 
     std::uint16_t controlled_npc = 1; // World::I_getControlledNPCNum (1 = the player)
+    // The AutoFirer (1138:2FFB): the process that fires weapon 909 (fire type 6) at 6 Hz while
+    // the player holds the fire key (DS:2871, 0 when there is none); the fire key flag of the
+    // last Controller_fire call (DS:2875); a shot of the AutoFirer under way (DS:2876).
+    Pid auto_firer = 0;
+    bool fire_held = false;
+    bool auto_firing = false;
     // DS:7E10 (Ultima8Engine::I_setAvatarInStasis / I_getAvatarInStasis):
     // the player is busy (a healer or charger serving him, a teleport with
     // wait, the scripts); the keys of World_on_key that act on the player do
@@ -599,6 +605,12 @@ public:
     // (NPC_10f0_33b8).
     ObjId active_weapon(ObjId npc) const {
         const int slot = npc_word(npc, 0x15);
+        return slot == 0 ? 0 : npc_equip(npc, slot);
+    }
+    // The NPC's active inventory item: equipment slot at record +0x17, 0 = none
+    // (MainActor::getActiveInvItem, 10F0:33EC).
+    ObjId active_inventory_item(ObjId npc) const {
+        const int slot = npc_word(npc, 0x17);
         return slot == 0 ? 0 : npc_equip(npc, slot);
     }
     // Shape family (TYPEFLAG.DAT), Item::I_getFamily.
