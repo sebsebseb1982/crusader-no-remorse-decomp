@@ -43,16 +43,29 @@ bool spot_controlled(Kernel& kernel, World& world, const AnimDat& anims, ObjId n
     return true;
 }
 
-// TYPE_1108_0000: the common start of activity processes.
+// TYPE_1108_0000: the common start of activity processes. They are timer
+// processes (TimerProcess, 11E8:1814); only the loiter one starts its timer.
 // @orig 1108:0000
-class ActivityProcess : public Process {
+class ActivityProcess : public TimedProcess {
 public:
     ActivityProcess(World& world, const AnimDat& anims, ObjId npc, std::uint16_t type) : world_(world), anims_(anims) {
         set_owner(npc);
         set_type(type);
     }
 
+    bool runs_in_slice() const override { return true; }
+
 protected:
+    // TYPE_1108_0d3e, event 2 (a timer period): a placed, living NPC that
+    // sees the controlled NPC takes its default activity 1 (spot_controlled).
+    // Event 1 (idle actions 0x33 / 0x34) is sent by nothing in this version.
+    // @orig 1108:0D3E
+    void tick() override {
+        const Item* self = world_.get(owner());
+        if (!self || (self->z & 0xFF) == 0xFE || world_.is_dead(owner()) || kernel().failing_all()) return;
+        spot_controlled(kernel(), world_, anims_, owner());
+    }
+
     void on_added() override {
         const Item* self = world_.get(owner());
         if (!self || !anims_.action(self->shape, 0)) return;
@@ -83,6 +96,8 @@ public:
     LoiterProcess(World& w, const AnimDat& a, ObjId npc, std::uint16_t count)
         : ActivityProcess(w, a, npc, 0x257), count_(count) {
         if (const Item* self = w.get(npc)) home_ = w.location(*self);
+        // 1108:0AFB: a 1 Hz timer, also while it waits for its walks.
+        set_rate(1);
     }
 
 protected:

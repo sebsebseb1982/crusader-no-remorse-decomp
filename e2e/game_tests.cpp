@@ -3013,7 +3013,11 @@ void test_enemies(const std::filesystem::path& data) {
         CHECK(g && g->vx >= 20 && g->vx <= 50 && g->vy == 0 && g->vz == 0);
     }
     // 11. Activities outside combat: NPC 8 loiters (activity 2), NPC 5 walks
-    // straight on (activity 3, facing east), both east of the player.
+    // straight on (activity 3, facing east), both east of the player. The
+    // loiter process checks each second (its 1 Hz timer, TYPE_1108_0d3e
+    // event 2, also while it walks) whether it sees the player: NPC 8 does
+    // and takes its default activity 1. The port never looked while
+    // loitering.
     for (const auto [id, facing] : {std::pair{ObjId{8}, -1}, std::pair{ObjId{5}, 4}}) {
         Game game(data, test_saves(data));
         game.load_save(13);
@@ -3032,7 +3036,8 @@ void test_enemies(const std::filesystem::path& data) {
             moved = std::max(moved, std::max(std::abs(npc->x - x0), std::abs(npc->y - y0)));
         }
         std::printf("activity: NPC %u moved up to %d units, now activity %u\n", id, moved, w.npc_word(id, npc::kActivity));
-        CHECK(moved > 64);
+        if (id == 8) CHECK(w.npc_word(id, npc::kActivity) == w.npc_word(id, npc::kDefaultActivity + 2) && moved > 0);
+        else CHECK(moved > 64);
         CHECK(game.machine().faults().empty());
     }
     // 12. A guard (activity 8) facing the player sees it and attacks (5).

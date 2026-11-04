@@ -119,6 +119,10 @@ public:
     void set_rate(std::uint32_t hz);
     std::uint32_t rate() const { return rate_hz_; }
 
+    // The original runs every process in the slice, timers included; the
+    // port's timers only tick, unless they also have a run (the activities).
+    virtual bool runs_in_slice() const { return false; }
+
 protected:
     TimedProcess() = default;
     virtual void tick() = 0;

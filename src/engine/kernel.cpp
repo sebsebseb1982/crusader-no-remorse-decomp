@@ -75,9 +75,13 @@ void Kernel::advance_time(std::uint32_t elapsed_us) {
     ticks_ += static_cast<std::uint32_t>(tick_remainder_ / 1'000'000);
     tick_remainder_ %= 1'000'000;
 
+    // KERNEL.C (11D8, the timer list DS:3A5C): a timer runs at its level
+    // whether its process sleeps or waits; only a suspended one stops.
     for (std::size_t pid = 1; pid < table_.size(); ++pid) {
         if (auto* timed = dynamic_cast<TimedProcess*>(table_[pid].get())) {
-            if (runnable(*timed)) {
+            const bool level = timed->level() == level_ || timed->runs_at_any_level() ||
+                               timed->level() >= kFirstSystemLevel;
+            if (!timed->terminated() && !timed->suspended() && level) {
                 timed->accumulate(elapsed_us);
             }
         }
@@ -110,7 +114,8 @@ void Kernel::run_slice() {
         if (p->sleeping_ && ticks_ >= p->sleep_until_) {
             p->sleeping_ = false;
         }
-        if (runnable(*p) && !dynamic_cast<TimedProcess*>(p)) {
+        const auto* timed = dynamic_cast<const TimedProcess*>(p);
+        if (runnable(*p) && (!timed || timed->runs_in_slice())) {
             p->run();
         }
         reap();
