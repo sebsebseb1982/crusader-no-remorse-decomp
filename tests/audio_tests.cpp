@@ -4,6 +4,7 @@
 #include "core/amf_module.hpp"
 #include "core/sound_flex.hpp"
 #include "engine/audio/audio.hpp"
+#include "engine/world/teleport.hpp"
 #include "engine/world/world.hpp"
 
 #include <cstdio>
@@ -188,6 +189,30 @@ void test_sources() {
     w.set_audio(nullptr);
 }
 
+// A teleport to an egg on a given map stops the sounds (SHAPHAND 1098:011F);
+// the current-map form (1098:019C) leaves them playing.
+void test_teleport_sounds() {
+    Audio audio(SoundFlex::open(make_flex(3)));
+    World w;
+    w.set_audio(&audio);
+    Item player;
+    player.id = 1;
+    player.x = 1000;
+    player.y = 1000;
+    w.add_with_id(player);
+    w.set_camera(1000, 1000, 0);
+    Kernel kernel;
+
+    audio.sources.play_ambient(w, 3, 1);
+    CHECK(audio.sources.is_playing(3, 1));
+    start_teleport_to_egg(kernel, w, w.current_map(), 0x1E, false, false);
+    CHECK(audio.sources.is_playing(3, 1));
+
+    start_teleport_to_egg(kernel, w, 1, 0x1E, false, true);
+    CHECK(!audio.sources.is_playing(3, 1));
+    w.set_audio(nullptr);
+}
+
 // A module of speed 2: one pattern played twice, a sample of 1000 samples.
 //   row 0: channel 0 plays note 36 (period 3424) with sample 1;
 //   row 1: channel 0 slides the period down by 8 a tick (1 02), channel 1
@@ -263,6 +288,7 @@ int main() {
     test_mixer();
     test_voices();
     test_sources();
+    test_teleport_sounds();
     test_music_player();
     if (failures) {
         std::fprintf(stderr, "%d failure(s)\n", failures);

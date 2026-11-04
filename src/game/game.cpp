@@ -269,7 +269,7 @@ void Game::reset_world() {
         return FrameBox{f.width, f.height, f.xoff, f.yoff};
     });
     register_item_intrinsics(*machine_, *world_);
-    register_world_intrinsics(*machine_, *world_);
+    register_world_intrinsics(*machine_, *world_, &anims_);
     register_audio_intrinsics(*machine_, *world_);
     register_npc_intrinsics(*machine_, *world_, anims_, &npc_types_);
     register_movie_intrinsics(*machine_, [this](const std::string& name, MovieKind kind) { play_movie(name, kind); });
@@ -666,7 +666,7 @@ void Game::new_game(int difficulty) {
 
     // CameraProcess::I_setCenterOn(1), then the first mission.
     s.camera_target = 1;
-    start_teleport_to_egg(*kernel_, *world_, 1, kTeleportStartEgg, true);
+    start_teleport_to_egg(*kernel_, *world_, 1, kTeleportStartEgg, true, true);
     s.status_bar_visible = true;
     apply_status_bar_mouse_range();
 }

@@ -64,7 +64,7 @@ void run_event(const UsecodeFile& usecode, std::uint16_t cid, std::uint32_t ev, 
     machine.set_instruction_budget(20'000);
     if (world) {
         register_item_intrinsics(machine, *world);
-        register_world_intrinsics(machine, *world);
+        register_world_intrinsics(machine, *world, anims);
         register_audio_intrinsics(machine, *world);
         if (anims) register_npc_intrinsics(machine, *world, *anims, types);
         // Camera on the item, as when the player stands next to it: the item

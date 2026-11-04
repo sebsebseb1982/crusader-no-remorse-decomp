@@ -1,0 +1,969 @@
+cpp_function	location	fr	fr_name	status	us	decomp	kind
+crt_rand	src/core/random.cpp:37	1000:3775	FUN_1000_3775	same	1000:3775	module001.c fn_3775	absent
+LoadScreen::LoadScreen	src/engine/ui/load_screen.cpp:44	1008:0088	LoadSaveScreen_ctor	changed	13D8:000E	module124.c fn_000e	C
+LoadScreen::key	src/engine/ui/load_screen.cpp:76	1008:0312	LoadSaveScreen_on_key	same	13D8:02CB	module124.c fn_02cb	C
+Game::save_named	src/game/game.cpp:594	1008:041A	LoadSaveScreen_on_child_activated	changed	13D8:03DD	module124.c fn_03dd	C
+LoadScreen::edit_key	src/engine/ui/load_screen.cpp:126	1008:041A	LoadSaveScreen_on_child_activated	changed	13D8:03DD	module124.c fn_03dd	C
+LoadScreen::draw	src/engine/ui/load_screen.cpp:57	1008:05A6	LoadSaveScreen_draw_background	changed	13D8:058C	module124.c fn_058c	C
+LoadScreen::edit_key	src/engine/ui/load_screen.cpp:126	1008:089C	SaveSlot_on_key	changed	13D8:08A8	module124.c fn_08a8	C
+LoadScreen::mouse_down	src/engine/ui/load_screen.cpp:104	1008:0AEA	SaveSlot_on_mouse	same	13D8:0B0A	module124.c fn_0b0a	C
+LoadScreen::choose	src/engine/ui/load_screen.cpp:116	1008:0B63	SaveSlot_choose	changed	13D8:0B89	module124.c fn_0b89	C
+LoadScreen::mouse_down	src/engine/ui/load_screen.cpp:104	1008:0B63	SaveSlot_choose	changed	13D8:0B89	module124.c fn_0b89	C
+LoadScreen::draw	src/engine/ui/load_screen.cpp:57	1008:0C9A	SaveSlot_draw	same	13D8:0CD5	module124.c fn_0cd5	C
+read_bmp8	src/engine/ui/credits.cpp:18	1010:0098	Bmp_open	same	1008:0098	module002.c fn_0098	C
+read_bmp8	src/engine/ui/credits.cpp:18	1010:0167	Bmp_draw	same	1008:0167	module002.c fn_0167	C
+read_bmp_palette	src/engine/ui/credits.cpp:36	1010:01EB	Bmp_palette	same	1008:01EB	module002.c fn_01eb	C
+collision_mask	src/engine/world/collision.cpp:154	1018:0000	collision_mask	same	1010:0000	module003.c fn_0000	C
+box_free	src/engine/world/collision.cpp:258	1018:00FD	box_collision_query	same	1010:00FD	module003.c fn_00fd	C
+GameConfig::load	src/core/game_config.cpp:24	1020:0000	config_load	changed	1018:0000	module004.c fn_0000	absent
+GameConfig::parse	src/core/game_config.cpp:33	1020:0000	config_load	changed	1018:0000	module004.c fn_0000	absent
+Game::save_config	src/game/game.cpp:855	1020:0C7F	config_save	changed	1018:0D52	module004.c fn_0d52	absent
+GameConfig::save	src/core/game_config.cpp:128	1020:0C7F	config_save	changed	1018:0D52	module004.c fn_0d52	absent
+GameConfig::text	src/core/game_config.cpp:76	1020:0C7F	config_save	changed	1018:0D52	module004.c fn_0d52	absent
+Game::load_save_file	src/game/game.cpp:391	1028:0000	Game_start	same	1028:0000	module006.c fn_0000	C
+Game::new_game	src/game/game.cpp:630	1028:0000	Game_start	same	1028:0000	module006.c fn_0000	C
+Game::next_start_up_movie	src/game/game.cpp:837	1028:0000	Game_start	same	1028:0000	module006.c fn_0000	C
+Game::play_end_credits	src/game/game.cpp:911	1028:0000	Game_start	same	1028:0000	module006.c fn_0000	C
+Game::start_up	src/game/game.cpp:900	1028:0000	Game_start	same	1028:0000	module006.c fn_0000	C
+Game::reset_world	src/game/game.cpp:243	1028:03F6	Game_end_processes	changed	1028:0792	module006.c fn_0792	C
+SwitchMap::SwitchMap	src/engine/world/teleport.cpp:154	1028:0436	SwitchMapProcess_ctor	same	1028:07DF	module006.c fn_07df	C
+SwitchMap::run	src/engine/world/teleport.cpp:157	1028:0436	SwitchMapProcess_ctor	same	1028:07DF	module006.c fn_07df	C
+SwitchMap::SwitchMap	src/engine/world/teleport.cpp:154	1028:0477	SwitchMapProcess_run	changed	1028:0820	module006.c fn_0820	C
+SwitchMap::run	src/engine/world/teleport.cpp:157	1028:0477	SwitchMapProcess_run	changed	1028:0820	module006.c fn_0820	C
+intrinsic 0x0cc	src/engine/usecode/npc_intrinsics.cpp:135	1028:049C	MainActor_I_switchMap	same	1028:0861	module006.c fn_0861	C
+XformTable::parse	src/core/xform.cpp:16	1030:0250	XformPal_load	same	1030:0250	module007.c fn_0250	absent
+XformTable::parse	src/core/xform.cpp:16	1030:0348	XformPal_read	same	1030:0348	module007.c fn_0348	absent
+intrinsic 0x098	src/engine/usecode/world_intrinsics.cpp:222	1030:0605	PaletteFaderProcess_I_jumpToGreyScale	same	1030:0605	module007.c fn_0605	absent
+Game::animate_scenery	src/game/game.cpp:735	1038:0183	GAMEPAL_1038_0183	same	1038:0183	module008.c fn_0183	C
+intrinsic 0x0b4	src/engine/usecode/world_intrinsics.cpp:61	1038:03B8	Ultima8Engine_I_getCurrentTimerTick	?			
+footprint	src/engine/world/gravity.cpp:20	1040:0072	support_mask	same	1040:0072	module009.c fn_0072	C
+support_mask	src/engine/world/gravity.cpp:33	1040:0072	support_mask	same	1040:0072	module009.c fn_0072	C
+GravityProcess::GravityProcess	src/engine/world/gravity.cpp:79	1040:0395	GravityProcess_ctor	same	1040:0395	module009.c fn_0395	C
+GravityProcess::on_terminate	src/engine/world/gravity.cpp:278	1040:04BC	GravityProcess_dtor	same	1040:04BC	module009.c fn_04bc	C
+GravityProcess::run	src/engine/world/gravity.cpp:93	1040:06D2	GravityProcess_step	same	1040:06D2	module009.c fn_06d2	C
+drop_items_on_top	src/engine/world/gravity.cpp:318	1040:06D2	GravityProcess_step	same	1040:06D2	module009.c fn_06d2	C
+drop_out_of_fast_area	src/engine/world/gravity.cpp:324	1040:11FD	GAMEPAL_1040_11fd	same	1040:11FD	module009.c fn_11fd	C
+hurl	src/engine/world/gravity.cpp:335	1040:12A6	Item_I_hurl	same	1040:12A6	module009.c fn_12a6	C
+fall	src/engine/world/gravity.cpp:353	1040:1334	Item_I_fall	same	1040:1334	module009.c fn_1334	C
+intrinsic 0x040	src/engine/usecode/item_intrinsics.cpp:472	1040:1334	Item_I_fall	same	1040:1334	module009.c fn_1334	C
+throw_path	src/engine/world/gravity.cpp:361	1048:00A6	MissileTracker_init	same	1048:00A6	module010.c fn_00a6	C
+shoot	src/engine/world/gravity.cpp:397	1048:0290	MissileTracker_launch	same	1048:0290	module010.c fn_0290	C
+Game::save_named	src/game/game.cpp:594	1048:0429	disk_free_bytes	same	1048:0429	module010.c fn_0429	C
+intrinsic 0x06d	src/engine/usecode/world_intrinsics.cpp:85	1050:00A1	Violence_enabled	same	1050:00A1	module011.c fn_00a1	absent
+intrinsic 0x02c	src/engine/usecode/world_intrinsics.cpp:81	1050:00C1	UCMachine_I_true	same	1050:00C1	module011.c fn_00c1	absent
+LoadScreen::read_names	src/engine/ui/load_screen.cpp:24	1058:000D	SaveNames_read	same	1058:000D	module012.c fn_000d	C
+Game::save_game	src/game/game.cpp:475	1058:0115	Game_save	same	1058:0115	module012.c fn_0115	C
+Game::load_save_file	src/game/game.cpp:391	1058:02F1	Game_load	changed	1058:02F1	module012.c fn_02f1	C
+Game::set_save_name	src/game/game.cpp:588	1058:0528	SaveNames_set	same	1058:0532	module012.c fn_0532	C
+parse_frame	src/core/shape.cpp:16	1078:0116	Shape_frame_box	same	1078:0116	module016.c fn_0116	C
+merge_stacks	src/engine/world/collision.cpp:353	1088:0000	Item_merge_stacks	same	1088:0000	module018.c fn_0000	C
+contents_weight	src/engine/usecode/item_intrinsics.cpp:45	1090:0603	Item_contents_weight	same	1090:0603	module019.c fn_0603	C
+BusyUntilTeleported::BusyUntilTeleported	src/engine/world/teleport.cpp:26	1098:0000	BusyFlagProcess_ctor	same	1098:0000	module020.c fn_0000	C
+BusyUntilTeleported::on_terminate	src/engine/world/teleport.cpp:32	1098:0000	BusyFlagProcess_ctor	same	1098:0000	module020.c fn_0000	C
+BusyUntilTeleported::run	src/engine/world/teleport.cpp:31	1098:0000	BusyFlagProcess_ctor	same	1098:0000	module020.c fn_0000	C
+BusyUntilTeleported::BusyUntilTeleported	src/engine/world/teleport.cpp:26	1098:0047	BusyFlagProcess_run	same	1098:0047	module020.c fn_0047	C
+BusyUntilTeleported::on_terminate	src/engine/world/teleport.cpp:32	1098:0047	BusyFlagProcess_run	same	1098:0047	module020.c fn_0047	C
+BusyUntilTeleported::run	src/engine/world/teleport.cpp:31	1098:0047	BusyFlagProcess_run	same	1098:0047	module020.c fn_0047	C
+start_teleport_to_egg	src/engine/world/teleport.cpp:206	1098:0072	TeleportProcess_from_egg	same	1098:0072	module020.c fn_0072	C
+TeleportToEgg::TeleportToEgg	src/engine/world/teleport.cpp:44	1098:011F	TeleportProcess_ctor	same	1098:011F	module020.c fn_011f	C
+TeleportToEgg::run	src/engine/world/teleport.cpp:48	1098:011F	TeleportProcess_ctor	same	1098:011F	module020.c fn_011f	C
+start_teleport_to_egg	src/engine/world/teleport.cpp:206	1098:019C	TeleportProcess_ctor_here	same	1098:019C	module020.c fn_019c	C
+spawn_teleport	src/engine/world/teleport.cpp:93	1098:01F4	TeleportProcess_init	same	1098:01F4	module020.c fn_01f4	C
+TeleportToEgg::TeleportToEgg	src/engine/world/teleport.cpp:44	1098:022D	TeleportProcess_run	same	1098:022D	module020.c fn_022d	C
+TeleportToEgg::run	src/engine/world/teleport.cpp:48	1098:022D	TeleportProcess_run	same	1098:022D	module020.c fn_022d	C
+find_teleport_egg	src/engine/world/teleport.cpp:187	1098:022D	TeleportProcess_run	same	1098:022D	module020.c fn_022d	C
+intrinsic 0x07a	src/engine/usecode/npc_intrinsics.cpp:129	1098:04CE	MainActor_I_teleportToEgg	same	1098:04CE	module020.c fn_04ce	C
+intrinsic 0x097	src/engine/usecode/npc_intrinsics.cpp:132	1098:04F7	MainActor_I_teleportToEgg_097	same	1098:04F7	module020.c fn_04f7	C
+intrinsic 0x0a8	src/engine/usecode/item_intrinsics.cpp:340	1098:051D	Egg_I_getEggXRange	same	1098:051D	module020.c fn_051d	C
+intrinsic 0x0a4	src/engine/usecode/item_intrinsics.cpp:342	1098:055B	Egg_I_setEggXRange	same	1098:055B	module020.c fn_055b	C
+intrinsic 0x041	src/engine/usecode/item_intrinsics.cpp:293	1098:05C5	Egg_I_getEggId	same	1098:05C5	module020.c fn_05c5	C
+EggHatcher::hatch	src/engine/world/teleport.cpp:137	1098:05FD	Egg_hatch	same	1098:05FD	module020.c fn_05fd	C
+EggHatcher::EggHatcher	src/engine/world/teleport.cpp:105	1098:068B	EggHatcher_ctor	same	1098:068B	module020.c fn_068b	C
+EggHatcher::run	src/engine/world/teleport.cpp:111	1098:068B	EggHatcher_ctor	same	1098:068B	module020.c fn_068b	C
+EggHatcher::EggHatcher	src/engine/world/teleport.cpp:105	1098:0718	EggHatcher_run	same	1098:0718	module020.c fn_0718	C
+EggHatcher::run	src/engine/world/teleport.cpp:111	1098:0718	EggHatcher_run	same	1098:0718	module020.c fn_0718	C
+World::glob_near_view	src/engine/world/world.cpp:68	10A0:039C	Glob_create_items	text	10A0:039C	module021.c fn_039c	C
+ReleaseProcess::ReleaseProcess	src/engine/world/gravity.cpp:295	10A8:0020	ReleaseProcess_init	same	10A8:0020	module022.c fn_0020	C
+ReleaseProcess::run	src/engine/world/gravity.cpp:301	10A8:0078	ReleaseProcess_run	same	10A8:0078	module022.c fn_0078	C
+drop_weapon	src/engine/world/player_commands.cpp:165	10A8:00C1	Item_is_controlled_npc	same	10A8:00C1	module022.c fn_00c1	C
+intrinsic 0x013	src/engine/usecode/item_intrinsics.cpp:206	10A8:013E	Item_I_getX	same	10A8:013E	module022.c fn_013e	C
+intrinsic 0x014	src/engine/usecode/item_intrinsics.cpp:207	10A8:0176	Item_I_getY	same	10A8:0176	module022.c fn_0176	C
+intrinsic 0x009	src/engine/usecode/item_intrinsics.cpp:205	10A8:0266	Item_I_getZ	same	10A8:0266	module022.c fn_0266	C
+intrinsic 0x120	src/engine/usecode/item_intrinsics.cpp:215	10A8:029A	Item_I_getCX	same	10A8:029A	module022.c fn_029a	C
+intrinsic 0x11e	src/engine/usecode/item_intrinsics.cpp:216	10A8:02DE	Item_I_getCY	same	10A8:02DE	module022.c fn_02de	C
+intrinsic 0x11f	src/engine/usecode/item_intrinsics.cpp:217	10A8:0322	Item_I_getCZ	same	10A8:0322	module022.c fn_0322	C
+total_weight	src/engine/usecode/item_intrinsics.cpp:60	10A8:04AE	Item_total_weight	same	10A8:04AE	module022.c fn_04ae	C
+intrinsic 0x059	src/engine/usecode/item_intrinsics.cpp:160	10A8:0602	Item_I_getSurfaceWeight	same	10A8:0602	module022.c fn_0602	C
+intrinsic 0x016	src/engine/usecode/item_intrinsics.cpp:294	10A8:068F	Item_I_getShape	same	10A8:068F	module022.c fn_068f	C
+World::set_shape	src/engine/world/world.cpp:779	10A8:06A5	Item_I_setShape	same	10A8:06A5	module022.c fn_06a5	C
+intrinsic 0x024	src/engine/usecode/item_intrinsics.cpp:295	10A8:06A5	Item_I_setShape	same	10A8:06A5	module022.c fn_06a5	C
+intrinsic 0x001	src/engine/usecode/item_intrinsics.cpp:154	10A8:07B4	Item_I_getFrame	same	10A8:07B4	module022.c fn_07b4	C
+World::set_frame	src/engine/world/world.cpp:892	10A8:0810	Item_I_setFrame	same	10A8:0810	module022.c fn_0810	C
+intrinsic 0x002	src/engine/usecode/item_intrinsics.cpp:155	10A8:0810	Item_I_setFrame	same	10A8:0810	module022.c fn_0810	C
+intrinsic 0x05b	src/engine/usecode/item_intrinsics.cpp:155	10A8:0810	Item_I_setFrame	same	10A8:0810	module022.c fn_0810	C
+intrinsic 0x06a	src/engine/usecode/item_intrinsics.cpp:316	10A8:0C24	Item_I_setNpcNum	same	10A8:0C24	module022.c fn_0c24	C
+intrinsic 0x069	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x06f	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x08a	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x08f	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x0ae	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x0f8	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x100	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x102	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x105	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x107	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x109	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x10b	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x10d	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x10f	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x111	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x115	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x11c	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x125	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x130	src/engine/usecode/item_intrinsics.cpp:313	10A8:0C40	Item_I_getNpcNum	same	10A8:0C40	module022.c fn_0c40	C
+intrinsic 0x089	src/engine/usecode/item_intrinsics.cpp:470	10A8:0C5C	Item_I_setMapArray	same	10A8:0C5C	module022.c fn_0c5c	C
+intrinsic 0x003	src/engine/usecode/item_intrinsics.cpp:156	10A8:0C78	Item_I_getMapArray	same	10A8:0C78	module022.c fn_0c78	C
+intrinsic 0x0f4	src/engine/usecode/item_intrinsics.cpp:309	10A8:0C94	Item_I_getQ	same	10A8:0C94	module022.c fn_0c94	C
+intrinsic 0x07f	src/engine/usecode/item_intrinsics.cpp:311	10A8:0CAA	Item_I_getQuality	same	10A8:0CAA	module022.c fn_0caa	C
+intrinsic 0x080	src/engine/usecode/item_intrinsics.cpp:329	10A8:0CEE	Item_I_setQuality	same	10A8:0CEE	module022.c fn_0cee	C
+intrinsic 0x0bb	src/engine/usecode/item_intrinsics.cpp:329	10A8:0CEE	Item_I_setQuality	same	10A8:0CEE	module022.c fn_0cee	C
+intrinsic 0x133	src/engine/usecode/item_intrinsics.cpp:329	10A8:0CEE	Item_I_setQuality	same	10A8:0CEE	module022.c fn_0cee	C
+intrinsic 0x0a3	src/engine/usecode/item_intrinsics.cpp:335	10A8:0D31	Item_I_getUnkEggType	same	10A8:0D31	module022.c fn_0d31	C
+intrinsic 0x0cf	src/engine/usecode/npc_intrinsics.cpp:147	10A8:0DD1	Item_I_setQAndCombine	same	10A8:0DD1	module022.c fn_0dd1	C
+intrinsic 0x0f5	src/engine/usecode/item_intrinsics.cpp:312	10A8:0F5F	Item_I_setQ	same	10A8:0F5F	module022.c fn_0f5f	C
+intrinsic 0x03f	src/engine/usecode/item_intrinsics.cpp:317	10A8:0FC4	Item_I_getFamily	same	10A8:0FC4	module022.c fn_0fc4	C
+intrinsic 0x11b	src/engine/usecode/item_intrinsics.cpp:323	10A8:0FEF	Item_I_getTypeFlag	same	10A8:0FEF	module022.c fn_0fef	C
+intrinsic 0x004	src/engine/usecode/item_intrinsics.cpp:199	10A8:1038	Item_I_getStatus	same	10A8:1038	module022.c fn_1038	C
+intrinsic 0x05d	src/engine/usecode/item_intrinsics.cpp:407	10A8:104E	Item_I_legalCreateAtPoint	same	10A8:104E	module022.c fn_104e	C
+legal_create_at	src/engine/world/collision.cpp:296	10A8:104E	Item_I_legalCreateAtPoint	same	10A8:104E	module022.c fn_104e	C
+intrinsic 0x019	src/engine/usecode/item_intrinsics.cpp:410	10A8:10DB	Item_I_legalCreateAtCoords	same	10A8:10DB	module022.c fn_10db	C
+World::create	src/engine/world/world.cpp:615	10A8:11E7	Item_I_create	same	10A8:11E7	module022.c fn_11e7	C
+intrinsic 0x01f	src/engine/usecode/item_intrinsics.cpp:460	10A8:11E7	Item_I_create	same	10A8:11E7	module022.c fn_11e7	C
+intrinsic 0x020	src/engine/usecode/item_intrinsics.cpp:541	10A8:1311	Item_I_popToCoords	same	10A8:1311	module022.c fn_1311	C
+intrinsic 0x0ed	src/engine/usecode/item_intrinsics.cpp:557	10A8:1328	Item_I_popToContainer	same	10A8:1328	module022.c fn_1328	C
+intrinsic 0x033	src/engine/usecode/item_intrinsics.cpp:565	10A8:1338	Item_I_pop	same	10A8:1338	module022.c fn_1338	C
+intrinsic 0x0ec	src/engine/usecode/item_intrinsics.cpp:561	10A8:1342	Item_I_popToEnd	same	10A8:1342	module022.c fn_1342	C
+intrinsic 0x022	src/engine/usecode/item_intrinsics.cpp:537	10A8:1352	Item_I_push	same	10A8:1352	module022.c fn_1352	C
+World::destroy	src/engine/world/world.cpp:1164	10A8:1365	Item_I_destroy	same	10A8:1365	module022.c fn_1365	C
+destroy_item	src/engine/usecode/item_intrinsics.cpp:82	10A8:1365	Item_I_destroy	same	10A8:1365	module022.c fn_1365	C
+intrinsic 0x00a	src/engine/usecode/item_intrinsics.cpp:355	10A8:1365	Item_I_destroy	same	10A8:1365	module022.c fn_1365	C
+intrinsic 0x02d	src/engine/usecode/item_intrinsics.cpp:362	10A8:14AF	Container_I_destroyContents	same	10A8:14AF	module022.c fn_14af	C
+designated_target_moved	src/engine/world/aim_mode.cpp:295	10A8:1531	Item_I_move	same	10A8:1531	module022.c fn_1531	C
+intrinsic 0x06c	src/engine/usecode/item_intrinsics.cpp:548	10A8:1531	Item_I_move	same	10A8:1531	module022.c fn_1531	C
+intrinsic 0x031	src/engine/usecode/item_intrinsics.cpp:420	10A8:174D	Item_I_legalMoveToPoint	same	10A8:174D	module022.c fn_174d	C
+intrinsic 0x123	src/engine/usecode/item_intrinsics.cpp:513	10A8:19E9	Item_I_getDirToCoords	same	10A8:19E9	module022.c fn_19e9	C
+intrinsic 0x0c8	src/engine/usecode/item_intrinsics.cpp:519	10A8:1A3F	Item_I_getDirFromItem	same	10A8:1A3F	module022.c fn_1a3f	C
+intrinsic 0x00d	src/engine/usecode/item_intrinsics.cpp:514	10A8:1A74	Item_I_getDirToItem	same	10A8:1A74	module022.c fn_1a74	C
+intrinsic 0x0a5	src/engine/usecode/item_intrinsics.cpp:252	10A8:1CC5	Item_I_overlaps	same	10A8:1CC5	module022.c fn_1cc5	C
+intrinsic 0x046	src/engine/usecode/item_intrinsics.cpp:257	10A8:1EEA	Item_I_isOn	same	10A8:1EEA	module022.c fn_1eea	C
+intrinsic 0x048	src/engine/usecode/item_intrinsics.cpp:257	10A8:1EEA	Item_I_isOn	same	10A8:1EEA	module022.c fn_1eea	C
+intrinsic 0x04a	src/engine/usecode/item_intrinsics.cpp:257	10A8:1EEA	Item_I_isOn	same	10A8:1EEA	module022.c fn_1eea	C
+intrinsic 0x04c	src/engine/usecode/item_intrinsics.cpp:257	10A8:1EEA	Item_I_isOn	same	10A8:1EEA	module022.c fn_1eea	C
+intrinsic 0x04e	src/engine/usecode/item_intrinsics.cpp:257	10A8:1EEA	Item_I_isOn	same	10A8:1EEA	module022.c fn_1eea	C
+intrinsic 0x050	src/engine/usecode/item_intrinsics.cpp:257	10A8:1EEA	Item_I_isOn	same	10A8:1EEA	module022.c fn_1eea	C
+intrinsic 0x0a6	src/engine/usecode/item_intrinsics.cpp:257	10A8:1EEA	Item_I_isOn	same	10A8:1EEA	module022.c fn_1eea	C
+intrinsic 0x0bd	src/engine/usecode/item_intrinsics.cpp:257	10A8:1EEA	Item_I_isOn	same	10A8:1EEA	module022.c fn_1eea	C
+intrinsic 0x0c6	src/engine/usecode/item_intrinsics.cpp:257	10A8:1EEA	Item_I_isOn	same	10A8:1EEA	module022.c fn_1eea	C
+intrinsic 0x0dc	src/engine/usecode/item_intrinsics.cpp:257	10A8:1EEA	Item_I_isOn	same	10A8:1EEA	module022.c fn_1eea	C
+intrinsic 0x0f1	src/engine/usecode/item_intrinsics.cpp:257	10A8:1EEA	Item_I_isOn	same	10A8:1EEA	module022.c fn_1eea	C
+intrinsic 0x0fa	src/engine/usecode/item_intrinsics.cpp:257	10A8:1EEA	Item_I_isOn	same	10A8:1EEA	module022.c fn_1eea	C
+intrinsic 0x126	src/engine/usecode/item_intrinsics.cpp:257	10A8:1EEA	Item_I_isOn	same	10A8:1EEA	module022.c fn_1eea	C
+intrinsic 0x02b	src/engine/usecode/item_intrinsics.cpp:263	10A8:1F5F	Item_I_isCompletelyOn	same	10A8:1F5F	module022.c fn_1f5f	C
+intrinsic 0x05e	src/engine/usecode/item_intrinsics.cpp:380	10A8:2436	Item_I_getPoint	same	10A8:2436	module022.c fn_2436	C
+intrinsic 0x008	src/engine/usecode/item_intrinsics.cpp:490	10A8:2486	Actor_I_isNPC	same	10A8:2486	module022.c fn_2486	C
+intrinsic 0x067	src/engine/usecode/item_intrinsics.cpp:348	10A8:24B5	Item_I_isInNpc	same	10A8:24B5	module022.c fn_24b5	C
+intrinsic 0x025	src/engine/usecode/item_intrinsics.cpp:194	10A8:2514	Item_I_touch	same	10A8:2514	module022.c fn_2514	C
+intrinsic 0x005	src/engine/usecode/item_intrinsics.cpp:200	10A8:2572	Item_I_orStatus	same	10A8:2572	module022.c fn_2572	C
+intrinsic 0x01a	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x034	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x06b	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x070	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x09a	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x0b3	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x0c0	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x0c2	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x0c4	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x0e9	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x0fc	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x101	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x104	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x106	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x108	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x10a	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x10c	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x10e	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x110	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x114	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x117	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x11a	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x124	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x12b	src/engine/usecode/item_intrinsics.cpp:201	10A8:258B	Item_I_andStatus	same	10A8:258B	module022.c fn_258b	C
+intrinsic 0x08d	src/engine/usecode/item_intrinsics.cpp:296	10A8:25D0	Item_I_setBroken	same	10A8:25D0	module022.c fn_25d0	C
+intrinsic 0x119	src/engine/usecode/item_intrinsics.cpp:296	10A8:25D0	Item_I_setBroken	same	10A8:25D0	module022.c fn_25d0	C
+intrinsic 0x081	src/engine/usecode/item_intrinsics.cpp:196	10A8:2667	Item_I_use	same	10A8:2667	module022.c fn_2667	C
+intrinsic 0x0d0	src/engine/usecode/item_intrinsics.cpp:196	10A8:2667	Item_I_use	same	10A8:2667	module022.c fn_2667	C
+intrinsic 0x0d5	src/engine/usecode/item_intrinsics.cpp:196	10A8:2667	Item_I_use	same	10A8:2667	module022.c fn_2667	C
+send_contact	src/engine/world/collision.cpp:373	10A8:2718	Item_send_hit	same	10A8:2718	module022.c fn_2718	C
+got_hit	src/engine/world/item_damage.cpp:75	10A8:275F	Item_got_hit	same	10A8:275F	module022.c fn_275f	C
+hit_item	src/engine/world/item_damage.cpp:106	10A8:275F	Item_got_hit	same	10A8:275F	module022.c fn_275f	C
+leave_surface	src/engine/world/gravity.cpp:307	10A8:2970	Item_leave_surface	same	10A8:2970	module022.c fn_2970	C
+intrinsic 0x006	src/engine/usecode/item_intrinsics.cpp:181	10A8:2A35	Item_I_equip	same	10A8:2A35	module022.c fn_2a35	C
+intrinsic 0x0b6	src/engine/usecode/item_intrinsics.cpp:181	10A8:2A35	Item_I_equip	same	10A8:2A35	module022.c fn_2a35	C
+intrinsic 0x0b1	src/engine/usecode/item_intrinsics.cpp:182	10A8:2A68	Item_I_unequip	same	10A8:2A68	module022.c fn_2a68	C
+set_quality_and_combine	src/engine/world/inventory.cpp:82	10A8:2AD2	Item_combine(t)	same	10A8:2AD2	module022.c fn_2ad2	C
+World::enter_fast_area	src/engine/world/world.cpp:703	10A8:2B30	Item_I_enterFastArea	same	10A8:2B30	module022.c fn_2b30	C
+intrinsic 0x08c	src/engine/usecode/item_intrinsics.cpp:486	10A8:2B30	Item_I_enterFastArea	same	10A8:2B30	module022.c fn_2b30	C
+restart_activity	src/engine/world/attack.cpp:196	10A8:2B30	Item_I_enterFastArea	same	10A8:2B30	module022.c fn_2b30	C
+World::leave_fast_area	src/engine/world/world.cpp:730	10A8:2DAD	Item_leave_fast_area	same	10A8:2DAD	module022.c fn_2dad	C
+intrinsic 0x0e8	src/engine/usecode/item_intrinsics.cpp:185	10A8:2F3E	Item_I_cast	same	10A8:2F3E	module022.c fn_2f3e	C
+intrinsic 0x0b2	src/engine/usecode/item_intrinsics.cpp:188	10A8:2FDA	Item_I_avatarStoleSomething	same	10A8:2FDA	module022.c fn_2fda	C
+intrinsic 0x026	src/engine/usecode/item_intrinsics.cpp:299	10A8:383E	Item_I_getQHi	same	10A8:383E	module022.c fn_383e	C
+intrinsic 0x047	src/engine/usecode/item_intrinsics.cpp:299	10A8:383E	Item_I_getQHi	same	10A8:383E	module022.c fn_383e	C
+intrinsic 0x049	src/engine/usecode/item_intrinsics.cpp:299	10A8:383E	Item_I_getQHi	same	10A8:383E	module022.c fn_383e	C
+intrinsic 0x04b	src/engine/usecode/item_intrinsics.cpp:299	10A8:383E	Item_I_getQHi	same	10A8:383E	module022.c fn_383e	C
+intrinsic 0x04d	src/engine/usecode/item_intrinsics.cpp:299	10A8:383E	Item_I_getQHi	same	10A8:383E	module022.c fn_383e	C
+intrinsic 0x04f	src/engine/usecode/item_intrinsics.cpp:299	10A8:383E	Item_I_getQHi	same	10A8:383E	module022.c fn_383e	C
+intrinsic 0x051	src/engine/usecode/item_intrinsics.cpp:299	10A8:383E	Item_I_getQHi	same	10A8:383E	module022.c fn_383e	C
+intrinsic 0x0b0	src/engine/usecode/item_intrinsics.cpp:299	10A8:383E	Item_I_getQHi	same	10A8:383E	module022.c fn_383e	C
+intrinsic 0x0bf	src/engine/usecode/item_intrinsics.cpp:299	10A8:383E	Item_I_getQHi	same	10A8:383E	module022.c fn_383e	C
+intrinsic 0x0ca	src/engine/usecode/item_intrinsics.cpp:299	10A8:383E	Item_I_getQHi	same	10A8:383E	module022.c fn_383e	C
+intrinsic 0x0f0	src/engine/usecode/item_intrinsics.cpp:299	10A8:383E	Item_I_getQHi	same	10A8:383E	module022.c fn_383e	C
+intrinsic 0x0f3	src/engine/usecode/item_intrinsics.cpp:299	10A8:383E	Item_I_getQHi	same	10A8:383E	module022.c fn_383e	C
+intrinsic 0x0fb	src/engine/usecode/item_intrinsics.cpp:299	10A8:383E	Item_I_getQHi	same	10A8:383E	module022.c fn_383e	C
+intrinsic 0x12c	src/engine/usecode/item_intrinsics.cpp:299	10A8:383E	Item_I_getQHi	same	10A8:383E	module022.c fn_383e	C
+intrinsic 0x030	src/engine/usecode/item_intrinsics.cpp:301	10A8:385A	Item_I_setQHi	same	10A8:385A	module022.c fn_385a	C
+intrinsic 0x010	src/engine/usecode/item_intrinsics.cpp:297	10A8:3889	Item_I_getQLo	same	10A8:3889	module022.c fn_3889	C
+intrinsic 0x02e	src/engine/usecode/item_intrinsics.cpp:297	10A8:3889	Item_I_getQLo	same	10A8:3889	module022.c fn_3889	C
+intrinsic 0x068	src/engine/usecode/item_intrinsics.cpp:297	10A8:3889	Item_I_getQLo	same	10A8:3889	module022.c fn_3889	C
+intrinsic 0x085	src/engine/usecode/item_intrinsics.cpp:297	10A8:3889	Item_I_getQLo	same	10A8:3889	module022.c fn_3889	C
+intrinsic 0x0a2	src/engine/usecode/item_intrinsics.cpp:297	10A8:3889	Item_I_getQLo	same	10A8:3889	module022.c fn_3889	C
+intrinsic 0x0af	src/engine/usecode/item_intrinsics.cpp:297	10A8:3889	Item_I_getQLo	same	10A8:3889	module022.c fn_3889	C
+intrinsic 0x0d9	src/engine/usecode/item_intrinsics.cpp:297	10A8:3889	Item_I_getQLo	same	10A8:3889	module022.c fn_3889	C
+intrinsic 0x0ea	src/engine/usecode/item_intrinsics.cpp:297	10A8:3889	Item_I_getQLo	same	10A8:3889	module022.c fn_3889	C
+intrinsic 0x12f	src/engine/usecode/item_intrinsics.cpp:297	10A8:3889	Item_I_getQLo	same	10A8:3889	module022.c fn_3889	C
+intrinsic 0x03e	src/engine/usecode/item_intrinsics.cpp:305	10A8:38A2	Item_I_setQLo	same	10A8:38A2	module022.c fn_38a2	C
+intrinsic 0x08b	src/engine/usecode/item_intrinsics.cpp:452	10A8:38D1	Item_I_shoot	same	10A8:38D1	module022.c fn_38d1	C
+shoot	src/engine/world/gravity.cpp:397	10A8:38D1	Item_I_shoot	same	10A8:38D1	module022.c fn_38d1	C
+intrinsic 0x015	src/engine/usecode/audio_intrinsics.cpp:43	10A8:3934	AudioProcess_I_playSFXCru	same	10A8:3934	module022.c fn_3934	C
+intrinsic 0x02a	src/engine/usecode/audio_intrinsics.cpp:45	10A8:3953	AudioProcess_I_playAmbientSFXCru	same	10A8:3953	module022.c fn_3953	C
+intrinsic 0x045	src/engine/usecode/audio_intrinsics.cpp:47	10A8:3991	AudioProcess_I_playSFXCru_045	same	10A8:3991	module022.c fn_3991	C
+intrinsic 0x03b	src/engine/usecode/audio_intrinsics.cpp:49	10A8:39B0	AudioProcess_I_stopSFXCru	same	10A8:39B0	module022.c fn_39b0	C
+intrinsic 0x077	src/engine/usecode/audio_intrinsics.cpp:57	10A8:39CF	AudioProcess_I_stopSFXCru_077	same	10A8:39CF	module022.c fn_39cf	C
+intrinsic 0x03d	src/engine/usecode/audio_intrinsics.cpp:52	10A8:39EB	AudioProcess_I_isSFXPlayingForObject	same	10A8:39EB	module022.c fn_39eb	C
+intrinsic 0x0d2	src/engine/usecode/movie_intrinsics.cpp:31	10A8:3A5B	MovieGump_I_playMovieCutscene	same	10A8:3A5B	module022.c fn_3a5b	C
+intrinsic 0x093	src/engine/usecode/movie_intrinsics.cpp:32	10A8:3A9F	MovieGump_I_playMovieCutsceneAlt_093	same	10A8:3A9F	module022.c fn_3a9f	C
+intrinsic 0x0aa	src/engine/usecode/movie_intrinsics.cpp:32	10A8:3A9F	MovieGump_I_playMovieCutsceneAlt_093	same	10A8:3A9F	module022.c fn_3a9f	C
+intrinsic 0x00f	src/engine/usecode/movie_intrinsics.cpp:31	10A8:3ABB	MovieGump_I_playMovieCutsceneAlt	same	10A8:3ABB	module022.c fn_3abb	C
+intrinsic 0x060	src/engine/usecode/movie_intrinsics.cpp:33	10A8:3AD7	MovieGump_I_playMovieOverlay	same	10A8:3AD7	module022.c fn_3ad7	C
+intrinsic 0x02f	src/engine/usecode/item_intrinsics.cpp:488	10A8:3AF5	Item_I_inFastArea	same	10A8:3AF5	module022.c fn_3af5	C
+hard_weapon	src/engine/world/actor_create.cpp:22	10A8:3B10	hard_weapon	same	10A8:3B10	module022.c fn_3b10	C
+create_actor	src/engine/world/actor_create.cpp:148	10A8:3D3F	Actor_I_createActorCru	changed	10A8:3D3F	module022.c fn_3d3f	C
+intrinsic 0x129	src/engine/usecode/npc_intrinsics.cpp:186	10A8:3D3F	Actor_I_createActorCru	changed	10A8:3D3F	module022.c fn_3d3f	C
+make_actor	src/engine/world/actor_create.cpp:95	10A8:3D3F	Actor_I_createActorCru	changed	10A8:3D3F	module022.c fn_3d3f	C
+intrinsic 0x032	src/engine/usecode/item_intrinsics.cpp:447	10A8:4071	CurrentMap_I_canExistAtPoint	same	10A8:406B	module022.c fn_406b	C
+World::is_partly_on_screen	src/engine/world/world.cpp:1007	10A8:40CE	Item_I_isPartlyOnScreen	same	10A8:40C8	module022.c fn_40c8	C
+intrinsic 0x007	src/engine/usecode/item_intrinsics.cpp:469	10A8:40CE	Item_I_isPartlyOnScreen	same	10A8:40C8	module022.c fn_40c8	C
+World::is_mostly_on_screen	src/engine/world/world.cpp:1024	10A8:41F6	Item_mostly_on_screen	same	10A8:41F0	module022.c fn_41f0	C
+intrinsic 0x103	src/engine/usecode/item_intrinsics.cpp:530	10A8:4348	Item_I_isCrusTypeNPC	same	10A8:4342	module022.c fn_4342	C
+intrinsic 0x05a	src/engine/usecode/item_intrinsics.cpp:270	10A8:4377	Item_I_isCentreOn	same	10A8:4371	module022.c fn_4371	C
+World::expand_glob_egg	src/engine/world/world.cpp:46	10B0:01E7	FastArea_expand_globs_in_cell	same	10B0:01E7	module023.c fn_01e7	C
+World::expand_glob_eggs	src/engine/world/world.cpp:79	10B0:01E7	FastArea_expand_globs_in_cell	same	10B0:01E7	module023.c fn_01e7	C
+read_glob	src/engine/world/world.cpp:31	10B0:01E7	FastArea_expand_globs_in_cell	same	10B0:01E7	module023.c fn_01e7	C
+World::unload_map	src/engine/world/map_change.cpp:11	10B0:04C9	Map_unload	changed	10B0:04C9	module023.c fn_04c9	C
+World::load_fixed_map	src/engine/world/world.cpp:1223	10B0:05D6	Map_load	changed	10B0:05E3	module023.c fn_05e3	C
+World::load_map	src/engine/world/map_change.cpp:35	10B0:05D6	Map_load	changed	10B0:05E3	module023.c fn_05e3	C
+read_fixed_map	src/engine/world/world.cpp:105	10B0:05D6	Map_load	changed	10B0:05E3	module023.c fn_05e3	C
+World::saved_item_lists	src/engine/world/world.cpp:500	10B0:0B67	ItemCache_save	same	10B0:0B86	module023.c fn_0b86	C
+World::saved_item_table	src/engine/world/world.cpp:425	10B0:0B67	ItemCache_save	same	10B0:0B86	module023.c fn_0b86	C
+World::load_saved_items	src/engine/world/world.cpp:220	10B0:0FED	ItemCache_load	same	10B0:100C	module023.c fn_100c	C
+World::move_camera_to	src/engine/world/map_change.cpp:108	10B0:13BE	FastArea_update	same	10B0:13DD	module023.c fn_13dd	C
+World::update_fast_area	src/engine/world/world.cpp:1057	10B0:13BE	FastArea_update	same	10B0:13DD	module023.c fn_13dd	C
+World::init_free_slots	src/engine/world/world.cpp:1188	10B0:161B	ItemCache_init	changed	10B0:163A	module023.c fn_163a	C
+World::remove_free	src/engine/world/world.cpp:1213	10B0:1986	ItemCache_unfree_slot	same	10B0:1A52	module023.c fn_1a52	C
+World::push_free	src/engine/world/world.cpp:1202	10B0:1A23	ItemCache_free_slot	same	10B0:1AEF	module023.c fn_1aef	C
+World::destroy	src/engine/world/world.cpp:1164	10B0:1AB3	Item_forget	same	10B0:1B7F	module023.c fn_1b7f	C
+World::move_item	src/engine/world/world.cpp:1135	10B0:1C21	Item_push_pending	same	10B0:1CED	module023.c fn_1ced	C
+World::push	src/engine/world/world.cpp:641	10B0:1C21	Item_push_pending	same	10B0:1CED	module023.c fn_1ced	C
+World::move_item	src/engine/world/world.cpp:1135	10B0:1D29	Item_pop_to_coords	same	10B0:1DF5	module023.c fn_1df5	C
+World::pop_to_coords	src/engine/world/world.cpp:659	10B0:1D29	Item_pop_to_coords	same	10B0:1DF5	module023.c fn_1df5	C
+World::pop_into	src/engine/world/world.cpp:1106	10B0:229D	Item_pop_to_container	same	10B0:2369	module023.c fn_2369	C
+World::pop	src/engine/world/world.cpp:1155	10B0:23DC	Item_pop_back	same	10B0:24A8	module023.c fn_24a8	C
+World::pop_into	src/engine/world/world.cpp:1106	10B0:2467	Item_pop_to_end	same	10B0:2533	module023.c fn_2533	C
+intrinsic 0x023	src/engine/usecode/item_intrinsics.cpp:468	10B0:2622	Item_I_getEtherealTop	same	10B0:26EE	module023.c fn_26ee	C
+World::add	src/engine/world/world.cpp:137	10B0:262A	Item_alloc	same	10B0:26F6	module023.c fn_26f6	C
+World::create	src/engine/world/world.cpp:615	10B0:262A	Item_alloc	same	10B0:26F6	module023.c fn_26f6	C
+World::create_npc	src/engine/world/world.cpp:582	10B0:268D	NPC_take_free_slot	same	10B0:2759	module023.c fn_2759	C
+read_fixed_map	src/engine/world/world.cpp:105	10B8:03EF	ItemData_from_record	same	10B8:03EF	module024.c fn_03ef	C
+damage_item	src/engine/world/item_damage.cpp:28	10C0:030C	ItemDamage_apply	same	10C0:030C	module025.c fn_030c	C
+World::matches_loop_script	src/engine/world/item_search.cpp:44	10C8:010C	LoopScript_matches	same	10C8:010C	module026.c fn_010c	C
+World::area_search	src/engine/world/item_search.cpp:126	10C8:0771	AreaSearch_init	same	10C8:0771	module026.c fn_0771	C
+is_fast_path	src/engine/world/item_search.cpp:160	10C8:0771	AreaSearch_init	same	10C8:0771	module026.c fn_0771	C
+World::area_search	src/engine/world/item_search.cpp:126	10C8:0A8E	AreaSearch_next	same	10C8:0A8E	module026.c fn_0a8e	C
+World::container_search	src/engine/world/item_search.cpp:230	10C8:0DEF	ContainerSearch_init	same	10C8:0DEF	module026.c fn_0def	C
+World::surface_search	src/engine/world/item_search.cpp:174	10C8:0F73	SurfaceSearch_init	same	10C8:0F73	module026.c fn_0f73	C
+is_fast_path	src/engine/world/item_search.cpp:160	10C8:1099	SurfaceSearch_init_rect	same	10C8:1099	module026.c fn_1099	C
+World::rect_search	src/engine/world/world.cpp:545	10C8:18C0	BoxSearch_init	same	10C8:18C0	module026.c fn_18c0	C
+closest_direction_in_range	src/engine/world/world.cpp:881	10D8:0000	Item_I_getClosestDirectionInRange	same	10D8:0000	module028.c fn_0000	C
+intrinsic 0x027	src/engine/usecode/item_intrinsics.cpp:524	10D8:0000	Item_I_getClosestDirectionInRange	same	10D8:0000	module028.c fn_0000	C
+direction_8	src/engine/world/world.cpp:864	10D8:0120	direction_8	same	10D8:0120	module028.c fn_0120	C
+direction_16	src/engine/world/world.cpp:833	10D8:01C7	Item_I_getDirFromTo16	same	10D8:01C7	module028.c fn_01c7	C
+intrinsic 0x037	src/engine/usecode/item_intrinsics.cpp:508	10D8:01C7	Item_I_getDirFromTo16	same	10D8:01C7	module028.c fn_01c7	C
+intrinsic 0x0b5	src/engine/usecode/world_intrinsics.cpp:68	10E0:0000	World_I_setAlertActive	same	10E0:0000	module029.c fn_0000	C
+set_alert	src/engine/usecode/world_intrinsics.cpp:26	10E0:0000	World_I_setAlertActive	same	10E0:0000	module029.c fn_0000	C
+intrinsic 0x0b7	src/engine/usecode/world_intrinsics.cpp:72	10E0:0121	World_I_clrAlertActive	same	10E0:0121	module029.c fn_0121	C
+set_alert	src/engine/usecode/world_intrinsics.cpp:26	10E0:0121	World_I_clrAlertActive	same	10E0:0121	module029.c fn_0121	C
+intrinsic 0x000	src/engine/usecode/world_intrinsics.cpp:67	10E0:0243	World_I_getAlertActive	same	10E0:0243	module029.c fn_0243	C
+spawn_from_egg	src/engine/world/actor_create.cpp:168	10E0:0247	MonsterEgg_spawn	same	10E0:0247	module029.c fn_0247	C
+box_free	src/engine/world/collision.cpp:258	10E8:00D9	is_valid_position(t)	same	10E8:00D9	module030.c fn_00d9	C
+Sweep::add_hit	src/engine/world/collision.cpp:47	10E8:0228	Sweep_add_hit	same	10E8:0228	module030.c fn_0228	C
+Sweep::test	src/engine/world/collision.cpp:67	10E8:032E	Sweep_test_item	same	10E8:032E	module030.c fn_032e	C
+box_of	src/engine/world/collision.cpp:17	10E8:032E	Sweep_test_item	same	10E8:032E	module030.c fn_032e	C
+sweep	src/engine/world/collision.cpp:162	10E8:0B39	Sweep_run	same	10E8:0B39	module030.c fn_0b39	C
+finish_move	src/engine/world/collision.cpp:386	10E8:123A	Sweep_finish_move	same	10E8:123A	module030.c fn_123a	C
+try_move	src/engine/world/collision.cpp:310	10E8:162F	Sweep_walk	same	10E8:162F	module030.c fn_162f	C
+intrinsic 0x036	src/engine/usecode/npc_intrinsics.cpp:261	10F0:010C	Actor_I_isBusy	same	10F0:0119	module031.c fn_0119	C
+create_plain_actor	src/engine/world/actor_create.cpp:58	10F0:0145	NPC_apply_type	same	10F0:0152	module031.c fn_0152	C
+aim_after_do_anim	src/engine/world/aim_mode.cpp:95	10F0:0245	Actor_I_doAnim	same	10F0:0252	module031.c fn_0252	C
+do_anim	src/engine/world/actor_anim.cpp:605	10F0:0245	Actor_I_doAnim	same	10F0:0252	module031.c fn_0252	C
+intrinsic 0x039	src/engine/usecode/npc_intrinsics.cpp:73	10F0:0245	Actor_I_doAnim	same	10F0:0252	module031.c fn_0252	C
+note_player_movement	src/engine/world/actor_anim.cpp:560	10F0:0245	Actor_I_doAnim	same	10F0:0252	module031.c fn_0252	C
+intrinsic 0x0e5	src/engine/usecode/npc_intrinsics.cpp:64	10F0:1E71	Actor_I_setTarget	same	10F0:1E7E	module031.c fn_1e7e	C
+set_target	src/engine/world/attack.cpp:184	10F0:1E71	Actor_I_setTarget	same	10F0:1E7E	module031.c fn_1e7e	C
+intrinsic 0x0ac	src/engine/usecode/npc_intrinsics.cpp:217	10F0:1F01	Actor_I_isFalling	same	10F0:1F0E	module031.c fn_1f0e	C
+intrinsic 0x0cd	src/engine/usecode/npc_intrinsics.cpp:59	10F0:1F20	Actor_I_isInCombat	same	10F0:1F2D	module031.c fn_1f2d	C
+in_combat_stance	src/engine/world/attack.cpp:84	10F0:1F40	Actor_in_combat_stance	same	10F0:1F4D	module031.c fn_1f4d	C
+recently_hit	src/engine/world/attack.cpp:51	10F0:1F9A	Actor_recently_hit	same	10F0:1FA7	module031.c fn_1fa7	C
+intrinsic 0x03c	src/engine/usecode/item_intrinsics.cpp:505	10F0:1FE0	Actor_I_isDead	same	10F0:1FED	module031.c fn_1fed	C
+intrinsic 0x128	src/engine/usecode/item_intrinsics.cpp:505	10F0:1FE0	Actor_I_isDead	same	10F0:1FED	module031.c fn_1fed	C
+intrinsic 0x021	src/engine/usecode/npc_intrinsics.cpp:204	10F0:2010	Actor_I_setDead	same	10F0:201D	module031.c fn_201d	C
+intrinsic 0x062	src/engine/usecode/npc_intrinsics.cpp:204	10F0:2010	Actor_I_setDead	same	10F0:201D	module031.c fn_201d	C
+intrinsic 0x074	src/engine/usecode/npc_intrinsics.cpp:204	10F0:2010	Actor_I_setDead	same	10F0:201D	module031.c fn_201d	C
+intrinsic 0x0a1	src/engine/usecode/npc_intrinsics.cpp:204	10F0:2010	Actor_I_setDead	same	10F0:201D	module031.c fn_201d	C
+intrinsic 0x0a9	src/engine/usecode/npc_intrinsics.cpp:204	10F0:2010	Actor_I_setDead	same	10F0:201D	module031.c fn_201d	C
+intrinsic 0x0d8	src/engine/usecode/npc_intrinsics.cpp:204	10F0:2010	Actor_I_setDead	same	10F0:201D	module031.c fn_201d	C
+intrinsic 0x0e7	src/engine/usecode/npc_intrinsics.cpp:204	10F0:2010	Actor_I_setDead	same	10F0:201D	module031.c fn_201d	C
+intrinsic 0x12e	src/engine/usecode/npc_intrinsics.cpp:204	10F0:2010	Actor_I_setDead	same	10F0:201D	module031.c fn_201d	C
+intrinsic 0x086	src/engine/usecode/npc_intrinsics.cpp:93	10F0:216A	Actor_I_setImmortal	same	10F0:2177	module031.c fn_2177	C
+intrinsic 0x07c	src/engine/usecode/npc_intrinsics.cpp:97	10F0:2185	Actor_I_clrImmortal	same	10F0:2192	module031.c fn_2192	C
+intrinsic 0x12a	src/engine/usecode/npc_intrinsics.cpp:97	10F0:2185	Actor_I_clrImmortal	same	10F0:2192	module031.c fn_2192	C
+intrinsic 0x038	src/engine/usecode/npc_intrinsics.cpp:216	10F0:21FB	Actor_I_isKneeling	same	10F0:2208	module031.c fn_2208	C
+World::set_footpad_z	src/engine/world/world.hpp:369	10F0:221B	Actor_kneel	same	10F0:2228	module031.c fn_2228	C
+set_kneeling	src/engine/world/actor_anim.cpp:592	10F0:221B	Actor_kneel	same	10F0:2228	module031.c fn_2228	C
+World::set_footpad_z	src/engine/world/world.hpp:369	10F0:226D	Actor_stand	same	10F0:227A	module031.c fn_227a	C
+set_kneeling	src/engine/world/actor_anim.cpp:592	10F0:226D	Actor_stand	same	10F0:227A	module031.c fn_227a	C
+World::create_npc	src/engine/world/world.cpp:582	10F0:236B	NPC_allocate	changed	10F0:2378	module031.c fn_2378	C
+create_plain_actor	src/engine/world/actor_create.cpp:58	10F0:25B9	Actor_I_createActor	same	10F0:25B1	module031.c fn_25b1	C
+intrinsic 0x063	src/engine/usecode/npc_intrinsics.cpp:195	10F0:25B9	Actor_I_createActor	same	10F0:25B1	module031.c fn_25b1	C
+create_plain_actor	src/engine/world/actor_create.cpp:58	10F0:2610	NPC_reset_record	same	10F0:2608	module031.c fn_2608	C
+intrinsic 0x0df	src/engine/usecode/npc_intrinsics.cpp:224	10F0:27C8	Actor_I_getEquip	same	10F0:27C0	module031.c fn_27c0	C
+intrinsic 0x0e0	src/engine/usecode/npc_intrinsics.cpp:125	10F0:27FB	Actor_I_setEquip	same	10F0:27F3	module031.c fn_27f3	C
+set_equip	src/engine/world/actor_create.cpp:41	10F0:27FB	Actor_I_setEquip	same	10F0:27F3	module031.c fn_27f3	C
+World::teleport	src/engine/world/map_change.cpp:126	10F0:29FA	Actor_I_teleport	same	10F0:29F2	module031.c fn_29f2	C
+intrinsic 0x065	src/engine/usecode/npc_intrinsics.cpp:120	10F0:29FA	Actor_I_teleport	same	10F0:29F2	module031.c fn_29f2	C
+free_slot	src/engine/world/inventory.cpp:37	10F0:2B03	Actor_free_equip_slot	same	10F0:2AFB	module031.c fn_2afb	C
+free_slot	src/engine/world/inventory.cpp:37	10F0:2B2D	Actor_free_ammo_slot	same	10F0:2B25	module031.c fn_2b25	C
+free_slot	src/engine/world/inventory.cpp:37	10F0:2B62	Actor_free_item_slot	same	10F0:2B5A	module031.c fn_2b5a	C
+intrinsic 0x011	src/engine/usecode/item_intrinsics.cpp:292	10F0:2B90	Actor_I_getMap	same	10F0:2B88	module031.c fn_2b88	C
+intrinsic 0x0e1	src/engine/usecode/npc_intrinsics.cpp:49	10F0:2C78	Actor_I_getDefaultActivity0	same	10F0:2C70	module031.c fn_2c70	C
+intrinsic 0x0e2	src/engine/usecode/npc_intrinsics.cpp:50	10F0:2C92	Actor_I_getDefaultActivity1	same	10F0:2C8A	module031.c fn_2c8a	C
+intrinsic 0x0e3	src/engine/usecode/npc_intrinsics.cpp:51	10F0:2CAC	Actor_I_getDefaultActivity2	same	10F0:2CA4	module031.c fn_2ca4	C
+intrinsic 0x057	src/engine/usecode/npc_intrinsics.cpp:60	10F0:2D02	Actor_I_setActivity	same	10F0:2CFA	module031.c fn_2cfa	C
+intrinsic 0x07e	src/engine/usecode/npc_intrinsics.cpp:60	10F0:2D02	Actor_I_setActivity	same	10F0:2CFA	module031.c fn_2cfa	C
+intrinsic 0x0ce	src/engine/usecode/npc_intrinsics.cpp:60	10F0:2D02	Actor_I_setActivity	same	10F0:2CFA	module031.c fn_2cfa	C
+intrinsic 0x0db	src/engine/usecode/npc_intrinsics.cpp:60	10F0:2D02	Actor_I_setActivity	same	10F0:2CFA	module031.c fn_2cfa	C
+intrinsic 0x0f2	src/engine/usecode/npc_intrinsics.cpp:60	10F0:2D02	Actor_I_setActivity	same	10F0:2CFA	module031.c fn_2cfa	C
+set_activity	src/engine/world/attack.cpp:129	10F0:2D02	Actor_I_setActivity	same	10F0:2CFA	module031.c fn_2cfa	C
+start_activity_process	src/engine/world/activity.cpp:337	10F0:2D02	Actor_I_setActivity	same	10F0:2CFA	module031.c fn_2cfa	C
+clear_in_combat	src/engine/world/attack.cpp:117	10F0:31A9	Actor_I_clrInCombat	same	10F0:31A1	module031.c fn_31a1	C
+intrinsic 0x053	src/engine/usecode/npc_intrinsics.cpp:68	10F0:31A9	Actor_I_clrInCombat	same	10F0:31A1	module031.c fn_31a1	C
+intrinsic 0x00e	src/engine/usecode/npc_intrinsics.cpp:79	10F0:326B	Actor_I_turnToward	same	10F0:3263	module031.c fn_3263	C
+intrinsic 0x07d	src/engine/usecode/npc_intrinsics.cpp:172	10F0:32F4	Actor_I_getHp	same	10F0:32EC	module031.c fn_32ec	C
+intrinsic 0x052	src/engine/usecode/npc_intrinsics.cpp:48	10F0:330D	Actor_I_getCurrentActivityNo	same	10F0:3305	module031.c fn_3305	C
+intrinsic 0x083	src/engine/usecode/npc_intrinsics.cpp:218	10F0:3454	Actor_I_getMana	same	10F0:344C	module031.c fn_344c	C
+intrinsic 0x084	src/engine/usecode/npc_intrinsics.cpp:87	10F0:346E	Actor_I_setMana	same	10F0:3466	module031.c fn_3466	C
+intrinsic 0x082	src/engine/usecode/npc_intrinsics.cpp:109	10F0:348B	MainActor_I_getMaxEnergy	same	10F0:3483	module031.c fn_3483	C
+max_energy	src/engine/world/chargers.cpp:61	10F0:348B	MainActor_I_getMaxEnergy	same	10F0:3483	module031.c fn_3483	C
+intrinsic 0x0de	src/engine/usecode/npc_intrinsics.cpp:235	10F0:3594	Actor_I_setCombatTactic	same	10F0:358C	module031.c fn_358c	C
+intrinsic 0x0b8	src/engine/usecode/world_intrinsics.cpp:95	10F0:3696	Ultima8Engine_I_getAvatarInStasis	same	10F0:368E	module031.c fn_368e	C
+intrinsic 0x00c	src/engine/usecode/world_intrinsics.cpp:91	10F0:369E	Ultima8Engine_I_setAvatarInStasis	same	10F0:3696	module031.c fn_3696	C
+intrinsic 0x01c	src/engine/usecode/item_intrinsics.cpp:506	10F0:3714	Actor_I_getDir	same	10F0:370C	module031.c fn_370c	C
+intrinsic 0x112	src/engine/usecode/item_intrinsics.cpp:506	10F0:3714	Actor_I_getDir	same	10F0:370C	module031.c fn_370c	C
+intrinsic 0x121	src/engine/usecode/item_intrinsics.cpp:506	10F0:3714	Actor_I_getDir	same	10F0:370C	module031.c fn_370c	C
+intrinsic 0x131	src/engine/usecode/item_intrinsics.cpp:506	10F0:3714	Actor_I_getDir	same	10F0:370C	module031.c fn_370c	C
+intrinsic 0x01d	src/engine/usecode/npc_intrinsics.cpp:219	10F0:372E	Actor_I_getLastAnimSet	same	10F0:3726	module031.c fn_3726	C
+intrinsic 0x05c	src/engine/usecode/npc_intrinsics.cpp:219	10F0:372E	Actor_I_getLastAnimSet	same	10F0:3726	module031.c fn_3726	C
+intrinsic 0x0ba	src/engine/usecode/npc_intrinsics.cpp:219	10F0:372E	Actor_I_getLastAnimSet	same	10F0:3726	module031.c fn_3726	C
+intrinsic 0x0d7	src/engine/usecode/npc_intrinsics.cpp:219	10F0:372E	Actor_I_getLastAnimSet	same	10F0:3726	module031.c fn_3726	C
+intrinsic 0x0e4	src/engine/usecode/npc_intrinsics.cpp:219	10F0:372E	Actor_I_getLastAnimSet	same	10F0:3726	module031.c fn_3726	C
+intrinsic 0x132	src/engine/usecode/npc_intrinsics.cpp:219	10F0:372E	Actor_I_getLastAnimSet	same	10F0:3726	module031.c fn_3726	C
+intrinsic 0x0cb	src/engine/usecode/npc_intrinsics.cpp:178	10F0:3748	Actor_I_addHp	same	10F0:3740	module031.c fn_3740	C
+add_energy	src/engine/world/inventory.cpp:47	10F0:379A	Actor_add_energy	same	10F0:3792	module031.c fn_3792	C
+intrinsic 0x0eb	src/engine/usecode/npc_intrinsics.cpp:241	10F0:3833	MainActor_I_getNumberOfCredits	same	10F0:382B	module031.c fn_382b	C
+intrinsic 0x029	src/engine/usecode/world_intrinsics.cpp:86	10F0:38D5	World_I_gameDifficulty	same	10F0:38CD	module031.c fn_38cd	C
+carried	src/engine/world/inventory.cpp:24	10F0:395E	Player_find_equipped_shape	same	10F0:3956	module031.c fn_3956	C
+find_equipped	src/engine/world/combat_control.cpp:50	10F0:395E	Player_find_equipped_shape	same	10F0:3956	module031.c fn_3956	C
+find_equipped_shape	src/engine/ui/status_bar.cpp:28	10F0:395E	Player_find_equipped_shape	same	10F0:3956	module031.c fn_3956	C
+CombatControl::rounds	src/engine/world/combat_control.cpp:69	10F0:3A1F	Actor_rounds_left	same	10F0:3A17	module031.c fn_3a17	C
+CombatControl::use_round	src/engine/world/combat_control.cpp:80	10F0:3AB2	Actor_use_round	same	10F0:3AAA	module031.c fn_3aaa	C
+CombatControl::reload	src/engine/world/combat_control.cpp:103	10F0:3BA3	Actor_reload	same	10F0:3B9B	module031.c fn_3b9b	C
+intrinsic 0x0fd	src/engine/usecode/npc_intrinsics.cpp:158	10F0:3CE8	MainActor_I_hasKeycard	same	10F0:3CE0	module031.c fn_3ce0	C
+intrinsic 0x079	src/engine/usecode/npc_intrinsics.cpp:154	10F0:3D4B	MainActor_I_clrKeycards	same	10F0:3D43	module031.c fn_3d43	C
+WeaselGump::reset_credits	src/engine/ui/weasel_gump.cpp:154	10F0:3D74	Player_credits	same	10F0:3D6C	module031.c fn_3d6c	C
+intrinsic 0x00b	src/engine/usecode/npc_intrinsics.cpp:85	10F0:3DFC	Actor_I_getUnkByte	same	10F0:3DF4	module031.c fn_3df4	C
+intrinsic 0x0e6	src/engine/usecode/npc_intrinsics.cpp:231	10F0:3E18	Actor_I_setUnkByte	same	10F0:3E10	module031.c fn_3e10	C
+intrinsic 0x0dd	src/engine/usecode/npc_intrinsics.cpp:223	10F0:3E35	Actor_I_getLastActivityNo	same	10F0:3E2D	module031.c fn_3e2d	C
+send_contact	src/engine/world/collision.cpp:373	10F8:0379	ContactProcess_run	same	10F8:0383	module032.c fn_0383	C
+intrinsic 0x0ad	src/engine/usecode/item_intrinsics.cpp:374	1100:054D	Item_I_getFamilyOfType	same	1100:054D	module033.c fn_054d	C
+ActivityProcess::ActivityProcess	src/engine/world/activity.cpp:51	1108:0000	Activity_new	same	1108:0000	module034.c fn_0000	C
+ActivityProcess::on_added	src/engine/world/activity.cpp:69	1108:0000	Activity_new	same	1108:0000	module034.c fn_0000	C
+ActivityProcess::runs_in_slice	src/engine/world/activity.cpp:56	1108:0000	Activity_new	same	1108:0000	module034.c fn_0000	C
+sees_controlled	src/engine/world/activity.cpp:259	1108:00C2	Activity_sees_controlled	same	1108:00C2	module034.c fn_00c2	C
+spot_controlled	src/engine/world/activity.cpp:35	1108:026E	Activity_spot_controlled	same	1108:026E	module034.c fn_026e	C
+StandProcess::StandProcess	src/engine/world/activity.cpp:84	1108:0359	Stand_run	same	1108:0359	module034.c fn_0359	C
+StandProcess::run	src/engine/world/activity.cpp:87	1108:0359	Stand_run	same	1108:0359	module034.c fn_0359	C
+SurrenderProcess::SurrenderProcess	src/engine/world/activity.cpp:172	1108:0383	Surrender_new	same	1108:0383	module034.c fn_0383	C
+SurrenderProcess::on_added	src/engine/world/activity.cpp:175	1108:0383	Surrender_new	same	1108:0383	module034.c fn_0383	C
+SurrenderProcess::on_terminate	src/engine/world/activity.cpp:202	1108:0383	Surrender_new	same	1108:0383	module034.c fn_0383	C
+SurrenderProcess::plead	src/engine/world/activity.cpp:208	1108:0383	Surrender_new	same	1108:0383	module034.c fn_0383	C
+SurrenderProcess::run	src/engine/world/activity.cpp:181	1108:0383	Surrender_new	same	1108:0383	module034.c fn_0383	C
+SurrenderProcess::SurrenderProcess	src/engine/world/activity.cpp:172	1108:0437	Surrender_dtor	same	1108:0437	module034.c fn_0437	C
+SurrenderProcess::on_added	src/engine/world/activity.cpp:175	1108:0437	Surrender_dtor	same	1108:0437	module034.c fn_0437	C
+SurrenderProcess::on_terminate	src/engine/world/activity.cpp:202	1108:0437	Surrender_dtor	same	1108:0437	module034.c fn_0437	C
+SurrenderProcess::plead	src/engine/world/activity.cpp:208	1108:0437	Surrender_dtor	same	1108:0437	module034.c fn_0437	C
+SurrenderProcess::run	src/engine/world/activity.cpp:181	1108:0437	Surrender_dtor	same	1108:0437	module034.c fn_0437	C
+SurrenderProcess::SurrenderProcess	src/engine/world/activity.cpp:172	1108:04AB	Surrender_run	same	1108:04AB	module034.c fn_04ab	C
+SurrenderProcess::on_added	src/engine/world/activity.cpp:175	1108:04AB	Surrender_run	same	1108:04AB	module034.c fn_04ab	C
+SurrenderProcess::on_terminate	src/engine/world/activity.cpp:202	1108:04AB	Surrender_run	same	1108:04AB	module034.c fn_04ab	C
+SurrenderProcess::plead	src/engine/world/activity.cpp:208	1108:04AB	Surrender_run	same	1108:04AB	module034.c fn_04ab	C
+SurrenderProcess::run	src/engine/world/activity.cpp:181	1108:04AB	Surrender_run	same	1108:04AB	module034.c fn_04ab	C
+WalkProcess::WalkProcess	src/engine/world/activity.cpp:132	1108:0693	Walk_new	same	1108:0693	module034.c fn_0693	C
+WalkProcess::run	src/engine/world/activity.cpp:135	1108:0693	Walk_new	same	1108:0693	module034.c fn_0693	C
+WalkProcess::WalkProcess	src/engine/world/activity.cpp:132	1108:0708	Walk_run	same	1108:0708	module034.c fn_0708	C
+WalkProcess::run	src/engine/world/activity.cpp:135	1108:0708	Walk_run	same	1108:0708	module034.c fn_0708	C
+GuardProcess::GuardProcess	src/engine/world/activity.cpp:233	1108:0A0E	Guard_run	same	1108:0A0E	module034.c fn_0a0e	C
+GuardProcess::run	src/engine/world/activity.cpp:236	1108:0A0E	Guard_run	same	1108:0A0E	module034.c fn_0a0e	C
+LoiterProcess::LoiterProcess	src/engine/world/activity.cpp:96	1108:0BFA	Loiter_run	same	1108:0BFA	module034.c fn_0bfa	C
+LoiterProcess::run	src/engine/world/activity.cpp:104	1108:0BFA	Loiter_run	same	1108:0BFA	module034.c fn_0bfa	C
+ActivityProcess::tick	src/engine/world/activity.cpp:63	1108:0D3E	TYPE_1108_0d3e	same	1108:0D3E	module034.c fn_0d3e	C
+AttackProcess::AttackProcess	src/engine/world/attack.cpp:288	1110:0000	AttackProcess_new	same	1110:0000	module035.c fn_0000	C
+AttackProcess::bark_timer	src/engine/world/attack.cpp:329	1110:0334	Attack_bark_timer	same	1110:0334	module035.c fn_0334	C
+AttackProcess::recently_started	src/engine/world/attack.cpp:317	1110:03AA	Attack_recently_started	same	1110:03AA	module035.c fn_03aa	C
+AttackProcess::run	src/engine/world/attack.cpp:464	1110:06B9	AttackProcess_run	same	1110:06B9	module035.c fn_06b9	C
+AttackProcess::can_hit	src/engine/world/attack.cpp:347	1110:13B7	Attack_can_hit	same	1110:13B7	module035.c fn_13b7	C
+AttackProcess::approach	src/engine/world/attack.cpp:355	1110:141B	Attack_approach	same	1110:141B	module035.c fn_141b	C
+AttackProcess::run	src/engine/world/attack.cpp:464	1110:14F6	Attack_default	same	1110:14F6	module035.c fn_14f6	C
+AttackProcess::next_burst_shot	src/engine/world/attack.cpp:432	1110:2259	ATTACK_1110_2259	same	1110:2259	module035.c fn_2259	C
+PathfinderProcess::PathfinderProcess	src/engine/world/pathfind.cpp:28	1118:0000	PathFinder_new_to_point	same	1118:0000	module036.c fn_0000	C
+walk_to	src/engine/world/pathfind.cpp:49	1118:0000	PathFinder_new_to_point	same	1118:0000	module036.c fn_0000	C
+PathfinderProcess::PathfinderProcess	src/engine/world/pathfind.cpp:28	1118:01DC	PathFinder_new_to_item	same	1118:01DC	module036.c fn_01dc	C
+walk_to	src/engine/world/pathfind.cpp:49	1118:01DC	PathFinder_new_to_item	same	1118:01DC	module036.c fn_01dc	C
+PathfinderProcess::run	src/engine/world/pathfind.cpp:139	1118:0428	PathFinder_run	same	1118:0428	module036.c fn_0428	C
+PathfinderProcess::on_terminate	src/engine/world/pathfind.cpp:175	1118:072E	PathFinder_finish	same	1118:072E	module036.c fn_072e	C
+PathfinderProcess::choose_direction	src/engine/world/pathfind.cpp:64	1118:08E4	PathFinder_choose_direction	same	1118:08E4	module036.c fn_08e4	C
+NpcTypes::load	src/core/dtable.cpp:231	1120:0075	NpcTypes_load	same	1120:0075	module037.c fn_0075	C
+NpcTypes::index	src/core/dtable.cpp:243	1120:010A	NpcTypes_index	same	1120:010A	module037.c fn_010a	C
+weapon_index	src/core/dtable.cpp:140	1120:0145	Weapon_index	same	1120:0145	module037.c fn_0145	C
+ammo_index	src/core/dtable.cpp:167	1120:020F	Ammo_index	same	1120:020F	module037.c fn_020f	C
+ammo_icon	src/core/dtable.cpp:209	1120:0240	Ammo_icon	same	1120:0240	module037.c fn_0240	C
+ammo_name	src/core/dtable.cpp:197	1120:02AB	Ammo_name	same	1120:02AB	module037.c fn_02ab	C
+icon_of	src/core/dtable.cpp:121	1120:030E	Weapon_icon	same	1120:030E	module037.c fn_030e	C
+weapon_name	src/core/dtable.cpp:185	1120:032E	Weapon_name	same	1120:032E	module037.c fn_032e	C
+family12_index	src/core/dtable.cpp:175	1120:0373	Family12Item_index	same	1120:0373	module037.c fn_0373	C
+icon_of	src/core/dtable.cpp:121	1120:03A4	Family12Item_icon	same	1120:03A4	module037.c fn_03a4	C
+family12_name	src/core/dtable.cpp:203	1120:03C3	Family12Item_name	same	1120:03C3	module037.c fn_03c3	C
+icon_of	src/core/dtable.cpp:121	1120:0455	InvItem_icon	same	1120:0455	module037.c fn_0455	C
+inventory_item_index	src/core/dtable.cpp:223	1120:0455	InvItem_icon	same	1120:0455	module037.c fn_0455	C
+item_name	src/core/dtable.cpp:191	1120:0474	InvItem_name	same	1120:0474	module037.c fn_0474	C
+item_name	src/engine/ui/weasel_gump.cpp:45	1120:056A	Inventory_item_name	same	1120:056A	module037.c fn_056a	C
+icon_frame	src/engine/ui/weasel_gump.cpp:54	1120:05DC	Inventory_item_icon_frame	same	1120:05DC	module037.c fn_05dc	C
+fire_type	src/core/dtable.cpp:132	1120:062D	FireType_find	same	1120:062D	module037.c fn_062d	C
+World::track	src/engine/world/world.cpp:749	1128:0098	Tracker_add	same	1128:0098	module038.c fn_0098	C
+World::untrack	src/engine/world/world.cpp:762	1128:00FE	Tracker_remove	same	1128:00FE	module038.c fn_00fe	C
+find_target	src/engine/world/projectile.cpp:130	1128:0158	Tracker_find_target	same	1128:0158	module038.c fn_0158	C
+splash_damage	src/engine/world/item_damage.cpp:152	1128:039C	Tracker_splash_damage	same	1128:039C	module038.c fn_039c	C
+World::saved_tracker	src/engine/world/world.cpp:530	1128:05B7	Tracker_save	same	1128:05B7	module038.c fn_05b7	C
+intrinsic 0x099	src/engine/usecode/world_intrinsics.cpp:76	1130:0000	World_I_resetVargasShield	?			
+DeathSilence::DeathSilence	src/engine/world/projectile.cpp:49	1130:000E	DeathSilence_new	same	1130:000E	module039.c fn_000e	C
+DeathSilence::run	src/engine/world/projectile.cpp:57	1130:000E	DeathSilence_new	same	1130:000E	module039.c fn_000e	C
+DeathSilence::runs_in_slice	src/engine/world/projectile.cpp:53	1130:000E	DeathSilence_new	same	1130:000E	module039.c fn_000e	C
+DeathSilence::tick	src/engine/world/projectile.cpp:56	1130:000E	DeathSilence_new	same	1130:000E	module039.c fn_000e	C
+DeathSilence::DeathSilence	src/engine/world/projectile.cpp:49	1130:00B1	DeathSilence_run	same	1130:00B1	module039.c fn_00b1	C
+DeathSilence::run	src/engine/world/projectile.cpp:57	1130:00B1	DeathSilence_run	same	1130:00B1	module039.c fn_00b1	C
+DeathSilence::runs_in_slice	src/engine/world/projectile.cpp:53	1130:00B1	DeathSilence_run	same	1130:00B1	module039.c fn_00b1	C
+DeathSilence::tick	src/engine/world/projectile.cpp:56	1130:00B1	DeathSilence_run	same	1130:00B1	module039.c fn_00b1	C
+DeathSilence::DeathSilence	src/engine/world/projectile.cpp:49	1130:00D6	DeathSilence_tick	same	1130:00D6	module039.c fn_00d6	C
+DeathSilence::run	src/engine/world/projectile.cpp:57	1130:00D6	DeathSilence_tick	same	1130:00D6	module039.c fn_00d6	C
+DeathSilence::runs_in_slice	src/engine/world/projectile.cpp:53	1130:00D6	DeathSilence_tick	same	1130:00D6	module039.c fn_00d6	C
+DeathSilence::tick	src/engine/world/projectile.cpp:56	1130:00D6	DeathSilence_tick	same	1130:00D6	module039.c fn_00d6	C
+aim_point	src/engine/world/projectile.cpp:166	1130:00EE	aim_point	same	1130:00EE	module039.c fn_00ee	C
+takes_full_bullet_damage	src/engine/world/projectile.cpp:83	1130:01F7	Shape_takes_bullet_damage	same	1130:01F7	module039.c fn_01f7	C
+intrinsic 0x035	src/engine/usecode/npc_intrinsics.cpp:279	1130:0247	Item_I_receiveHit	same	1130:0247	module039.c fn_0247	C
+apply_damage	src/engine/world/projectile.cpp:282	1130:026B	Item_receive_damage	same	1130:026B	module039.c fn_026b	C
+fire_weapon	src/engine/world/projectile.cpp:186	1130:11DA	Item_I_fireWeapon	same	1130:11DA	module039.c fn_11da	C
+intrinsic 0x01e	src/engine/usecode/npc_intrinsics.cpp:266	1130:11DA	Item_I_fireWeapon	same	1130:11DA	module039.c fn_11da	C
+projectile_frame	src/engine/world/projectile.cpp:94	1130:11DA	Item_I_fireWeapon	same	1130:11DA	module039.c fn_11da	C
+fire_distance	src/engine/world/attack.cpp:247	1130:1755	Item_I_fireDistance	same	1130:1755	module039.c fn_1755	C
+intrinsic 0x116	src/engine/usecode/npc_intrinsics.cpp:285	1130:1755	Item_I_fireDistance	same	1130:1755	module039.c fn_1755	C
+intrinsic 0x044	src/engine/usecode/item_intrinsics.cpp:553	1130:1C01	Item_I_getRangeIfVisible	same	1130:1C01	module039.c fn_1c01	C
+range_if_visible	src/engine/world/activity.cpp:288	1130:1C01	Item_I_getRangeIfVisible	same	1130:1C01	module039.c fn_1c01	C
+Charger::Charger	src/engine/world/chargers.cpp:19	1130:1D70	CruHealer_ctor	same	1130:1D70	module039.c fn_1d70	C
+Charger::on_terminate	src/engine/world/chargers.cpp:47	1130:1D70	CruHealer_ctor	same	1130:1D70	module039.c fn_1d70	C
+Charger::run	src/engine/world/chargers.cpp:28	1130:1D70	CruHealer_ctor	same	1130:1D70	module039.c fn_1d70	C
+Charger::Charger	src/engine/world/chargers.cpp:19	1130:1E7B	CruHealer_run	same	1130:1E7B	module039.c fn_1e7b	C
+Charger::on_terminate	src/engine/world/chargers.cpp:47	1130:1E7B	CruHealer_run	same	1130:1E7B	module039.c fn_1e7b	C
+Charger::run	src/engine/world/chargers.cpp:28	1130:1E7B	CruHealer_run	same	1130:1E7B	module039.c fn_1e7b	C
+Charger::Charger	src/engine/world/chargers.cpp:19	1130:1F1A	BatteryCharger_ctor	same	1130:1F1A	module039.c fn_1f1a	C
+Charger::on_terminate	src/engine/world/chargers.cpp:47	1130:1F1A	BatteryCharger_ctor	same	1130:1F1A	module039.c fn_1f1a	C
+Charger::run	src/engine/world/chargers.cpp:28	1130:1F1A	BatteryCharger_ctor	same	1130:1F1A	module039.c fn_1f1a	C
+Charger::Charger	src/engine/world/chargers.cpp:19	1130:2025	BatteryCharger_run	same	1130:2025	module039.c fn_2025	C
+Charger::on_terminate	src/engine/world/chargers.cpp:47	1130:2025	BatteryCharger_run	same	1130:2025	module039.c fn_2025	C
+Charger::run	src/engine/world/chargers.cpp:28	1130:2025	BatteryCharger_run	same	1130:2025	module039.c fn_2025	C
+intrinsic 0x0ee	src/engine/usecode/npc_intrinsics.cpp:112	1130:20C5	BatteryChargerProcess_I_create	same	1130:20C5	module039.c fn_20c5	C
+intrinsic 0x0f6	src/engine/usecode/npc_intrinsics.cpp:115	1130:20E5	CruHealerProcess_I_create	same	1130:20E5	module039.c fn_20e5	C
+remap_action	src/engine/world/actor_anim.cpp:521	1130:2105	Actor_remap_action	same	1130:2105	module039.c fn_2105	C
+intrinsic 0x058	src/engine/usecode/npc_intrinsics.cpp:166	1138:0000	World_I_setControlledNPCNum	same	1138:0000	module040.c fn_0000	C
+intrinsic 0x01b	src/engine/usecode/world_intrinsics.cpp:87	1138:0010	World_I_getControlledNPCNum	same	1138:0010	module040.c fn_0010	C
+idle	src/engine/world/player_commands.cpp:61	1138:0014	last_anim_upright(t)	same	1138:0014	module040.c fn_0014	C
+stance_not_moving	src/engine/world/avatar_mover.cpp:38	1138:0070	last_anim_not_moving(t)	same	1138:0070	module040.c fn_0070	C
+CombatControl::CombatControl	src/engine/world/combat_control.cpp:61	1138:00E3	Controller_ctor	same	1138:00E3	module040.c fn_00e3	C
+enter_aim_mode	src/engine/world/aim_mode.cpp:111	1138:0299	Controller_enter_aim_mode	same	1138:0299	module040.c fn_0299	C
+check_designation	src/engine/world/aim_mode.cpp:279	1138:02F3	Controller_check_designation	same	1138:02F3	module040.c fn_02f3	C
+redesignate	src/engine/world/aim_mode.cpp:270	1138:03D0	Controller_redesignate	same	1138:03D0	module040.c fn_03d0	C
+designate	src/engine/world/aim_mode.cpp:242	1138:0459	Controller_designate	same	1138:0459	module040.c fn_0459	C
+designated_target_moved	src/engine/world/aim_mode.cpp:295	1138:0459	Controller_designate	same	1138:0459	module040.c fn_0459	C
+marker_place	src/engine/world/aim_mode.cpp:46	1138:0459	Controller_designate	same	1138:0459	module040.c fn_0459	C
+leave_aim_mode	src/engine/world/aim_mode.cpp:124	1138:0692	Controller_leave_aim_mode	same	1138:0692	module040.c fn_0692	C
+place_crosshair	src/engine/world/aim_mode.cpp:142	1138:0708	Controller_place_crosshair	same	1138:0708	module040.c fn_0708	C
+CombatControl::tick	src/engine/world/combat_control.cpp:254	1138:087F	Controller_run	same	1138:087F	module040.c fn_087f	C
+Game::on_key	src/game/game.cpp:928	1138:0896	Controller_key_misc	changed	1138:0896	module040.c fn_0896	C
+action_redirectable	src/engine/world/avatar_mover.cpp:46	1138:0F8D	action_redirectable	same	1138:0F94	module040.c fn_0f94	C
+turn_crosshair	src/engine/world/aim_mode.cpp:167	1138:10C8	AvatarMover_turn_targeting	same	1138:10CF	module040.c fn_10cf	C
+AvatarMover::handle_key	src/engine/world/avatar_mover.cpp:69	1138:12CF	AvatarMover_handle_key	same	1138:12D6	module040.c fn_12d6	C
+CombatControl::handle_key	src/engine/world/combat_control.cpp:128	1138:220A	Controller_on_message	?			
+CombatControl::keypad_command	src/engine/world/combat_control.cpp:148	1138:220A	Controller_on_message	?			
+jump	src/engine/world/player_commands.cpp:176	1138:220A	Controller_on_message	?			
+CombatControl::fire	src/engine/world/combat_control.cpp:174	1138:2789	Controller_fire	same	1138:2790	module040.c fn_2790	C
+set_controlled_npc	src/engine/world/attack.cpp:95	1138:2C02	Controller_set_controlled	same	1138:2C09	module040.c fn_2c09	C
+wake_npcs_on_screen	src/engine/world/activity.cpp:306	1138:2DAF	alert_visible_npcs	same	1138:2DB6	module040.c fn_2db6	C
+CombatControl::reset_fire	src/engine/world/combat_control.cpp:242	1138:2F9F	Controller_stop_firing	same	1138:2FA6	module040.c fn_2fa6	C
+stop_auto_firer	src/engine/world/auto_firer.cpp:56	1138:2F9F	Controller_stop_firing	same	1138:2FA6	module040.c fn_2fa6	C
+AutoFirer::AutoFirer	src/engine/world/auto_firer.cpp:27	1138:2FFB	AutoFirer_ctor	same	1138:3002	module040.c fn_3002	C
+AutoFirer::tick	src/engine/world/auto_firer.cpp:35	1138:30B0	AutoFirer_tick	same	1138:30B7	module040.c fn_30b7	C
+AutoFirer::on_terminate	src/engine/world/auto_firer.cpp:51	1138:3162	CRUSADER_1138_3162	same	1138:3169	module040.c fn_3169	C
+SwitchMap::SwitchMap	src/engine/world/teleport.cpp:154	1138:3181	CRUSADER_1138_3181	same	1138:3188	module040.c fn_3188	C
+SwitchMap::run	src/engine/world/teleport.cpp:157	1138:3181	CRUSADER_1138_3181	same	1138:3188	module040.c fn_3188	C
+set_pose	src/engine/world/actor_anim.cpp:488	1138:32A8	Actor_set_pose	same	1138:32AF	module040.c fn_32af	C
+raise_overlay	src/engine/world/sprite_process.cpp:23	1140:0007	Sprite_raise_overlay	same	1140:0007	module041.c fn_0007	absent
+SpriteProcess::on_added	src/engine/world/sprite_process.cpp:48	1140:00DE	SpriteProcess_I_createSprite	same	1140:00DE	module041.c fn_00de	absent
+intrinsic 0x0c7	src/engine/usecode/npc_intrinsics.cpp:102	1140:00DE	SpriteProcess_I_createSprite	same	1140:00DE	module041.c fn_00de	absent
+SpriteProcess::on_added	src/engine/world/sprite_process.cpp:48	1140:029F	SpriteProcess_new	same	1140:029F	module041.c fn_029f	absent
+SpriteProcess::on_terminate	src/engine/world/sprite_process.cpp:83	1140:0444	SpriteProcess_dtor	same	1140:0444	module041.c fn_0444	absent
+SpriteProcess::run	src/engine/world/sprite_process.cpp:68	1140:04E2	SpriteProcess_run	same	1140:04E2	module041.c fn_04e2	absent
+ProjectileProcess::ProjectileProcess	src/engine/world/projectile.cpp:514	1140:06CE	SuperSprite_ctor	same	1140:06CE	module041.c fn_06ce	absent
+ProjectileProcess::ProjectileProcess	src/engine/world/projectile.cpp:514	1140:08C2	SuperSprite_set_shape	same	1140:08C2	module041.c fn_08c2	absent
+ProjectileProcess::on_added	src/engine/world/projectile.cpp:537	1140:09C9	SuperSprite_launch	same	1140:09C9	module041.c fn_09c9	absent
+ProjectileProcess::set_homing	src/engine/world/projectile.cpp:574	1140:09C9	SuperSprite_launch	same	1140:09C9	module041.c fn_09c9	absent
+spread_divisor	src/engine/world/projectile.cpp:107	1140:09C9	SuperSprite_launch	same	1140:09C9	module041.c fn_09c9	absent
+ProjectileProcess::on_added	src/engine/world/projectile.cpp:537	1140:0E01	SuperSprite_launch_ahead	same	1140:0E01	module041.c fn_0e01	absent
+ProjectileProcess::on_added	src/engine/world/projectile.cpp:537	1140:0E88	SuperSprite_launch_cursor	same	1140:0E88	module041.c fn_0e88	absent
+ProjectileProcess::impact	src/engine/world/projectile.cpp:551	1140:1098	SuperSprite_impact	same	1140:1098	module041.c fn_1098	absent
+ProjectileProcess::homing_step	src/engine/world/projectile.cpp:583	1140:151D	SuperSprite_run	same	1140:151D	module041.c fn_151d	absent
+ProjectileProcess::ricochet	src/engine/world/projectile.cpp:626	1140:151D	SuperSprite_run	same	1140:151D	module041.c fn_151d	absent
+ProjectileProcess::run	src/engine/world/projectile.cpp:655	1140:151D	SuperSprite_run	same	1140:151D	module041.c fn_151d	absent
+ProjectileProcess::impact	src/engine/world/projectile.cpp:551	1140:1E09	SuperSprite_splash	same	1140:1E09	module041.c fn_1e09	absent
+turn_to	src/engine/world/attack.cpp:210	1150:009C	Actor_turn_to	same	1150:009C	module043.c fn_009c	C
+impact_sprite	src/engine/world/sprite_process.cpp:105	1150:02DF	impact_sprite	same	1150:02DF	module043.c fn_02df	C
+WorldMouse::send_fire	src/engine/world/world_mouse.cpp:139	1150:05E8	Controller_send_fire_key	same	1150:05E8	module043.c fn_05e8	C
+muzzle_height	src/engine/world/aim_mode.cpp:67	1150:065D	Actor_muzzle_height	same	1150:065D	module043.c fn_065d	C
+firing_frame	src/engine/world/auto_firer.cpp:10	1150:076C	SPRITE_1150_076c	same	1150:076C	module043.c fn_076c	C
+intrinsic 0x017	src/engine/usecode/npc_intrinsics.cpp:273	1150:0859	Item_I_explode	same	1150:0859	module043.c fn_0859	C
+explode	src/engine/world/item_damage.cpp:111	1150:0891	Item_explode_ex	same	1150:0891	module043.c fn_0891	C
+intrinsic 0x0bc	src/engine/usecode/item_intrinsics.cpp:437	1150:0B67	CurrentMap_I_canExistAt	same	1150:0B67	module043.c fn_0b67	C
+ActorAnimProcess::ActorAnimProcess	src/engine/world/actor_anim.cpp:156	1158:0000	ActorAnim_ctor	same	1158:0000	module044.c fn_0000	C
+ActorAnimProcess::start	src/engine/world/actor_anim.cpp:193	1158:016F	ActorAnim_init	same	1158:016F	module044.c fn_016f	C
+fit_start	src/engine/world/actor_anim.cpp:54	1158:016F	ActorAnim_init	same	1158:016F	module044.c fn_016f	C
+test_action	src/engine/world/actor_anim.cpp:418	1158:016F	ActorAnim_init	same	1158:016F	module044.c fn_016f	C
+tested_at_start	src/engine/world/actor_anim.cpp:32	1158:016F	ActorAnim_init	same	1158:016F	module044.c fn_016f	C
+ActorAnimProcess::run	src/engine/world/actor_anim.cpp:243	1158:1908	ActorAnim_step	changed	1158:1906	module044.c fn_1906	C
+ActorAnimProcess::step	src/engine/world/actor_anim.cpp:267	1158:1908	ActorAnim_step	changed	1158:1906	module044.c fn_1906	C
+test_action	src/engine/world/actor_anim.cpp:418	1158:1908	ActorAnim_step	changed	1158:1906	module044.c fn_1906	C
+test_action	src/engine/world/actor_anim.cpp:418	1158:2B4D	AnimPrim_test_save	same	1158:2B4C	module044.c fn_2b4c	C
+ActorAnimProcess::on_terminate	src/engine/world/actor_anim.cpp:654	1158:2BF7	ANIMPRIM_1158_2bf7	same	1158:2BF6	module044.c fn_2bf6	C
+ActorAnimProcess::on_terminate	src/engine/world/actor_anim.cpp:654	1158:2DC6	ActorAnim_fail	same	1158:2DC5	module044.c fn_2dc5	C
+ActorAnimProcess::on_terminate	src/engine/world/actor_anim.cpp:654	1158:2E66	ActorAnim_end	same	1158:2E65	module044.c fn_2e65	C
+ActorAnimProcess::run	src/engine/world/actor_anim.cpp:243	1158:2F21	ActorAnim_blocked	same	1158:2F20	module044.c fn_2f20	C
+ActorAnimProcess::fall_if_unsupported	src/engine/world/actor_anim.cpp:397	1158:3091	ActorAnim_check_support	same	1158:3090	module044.c fn_3090	C
+ActorAnimProcess::set_direction	src/engine/world/actor_anim.cpp:172	1158:31DA	ActorAnim_set_direction	same	1158:31D9	module044.c fn_31d9	C
+special_frame	src/engine/world/actor_anim.cpp:115	1160:01F0	Actor_special_frame	same	1160:01F0	module045.c fn_01f0	C
+WeaponOverlay::load	src/core/weapon_overlay.cpp:26	1160:03FF	WeaponOverlay_load_class	same	1160:03FF	module045.c fn_03ff	C
+WeaponOverlay::weapon_class	src/core/weapon_overlay.cpp:38	1160:0572	overlay_class_index	same	1160:0572	module045.c fn_0572	C
+WeaponOverlay::weapon_class	src/core/weapon_overlay.cpp:38	1160:05B7	overlay_class	same	1160:05B7	module045.c fn_05b7	C
+WeaponOverlay::piece	src/core/weapon_overlay.cpp:50	1160:0643	WeaponOverlay_piece	same	1160:0643	module045.c fn_0643	C
+overlay_shape	src/core/dtable.cpp:212	1160:0771	overlay_shape	same	1160:0771	module045.c fn_0771	C
+AnimDat::parse	src/core/anim_dat.cpp:51	1168:0041	AnimAction_load	same	1168:0041	module046a.c fn_0041	C
+AnimAction::frame	src/core/anim_dat.cpp:35	1168:0106	AnimAction_frame_ptr	same	1168:0106	module046b.c fn_0106	C
+AnimDat::parse	src/core/anim_dat.cpp:51	1170:0615	AnimFile_read_shape_table	same	1170:0615	module047.c fn_0615	C
+AnimFrame::decode	src/core/anim_dat.cpp:12	1180:0013	AnimFrame_copy	same	1180:0013	module049.c fn_0013	C
+intrinsic 0x064	src/engine/usecode/world_intrinsics.cpp:128	1188:0013	CameraProcess_I_redrawNow	same	1188:0013	module050.c fn_0013	C
+World::set_camera	src/engine/world/world.cpp:795	1188:0CBA	CameraProcess_I_moveTo	same	1188:0CBA	module050.c fn_0cba	C
+intrinsic 0x042	src/engine/usecode/world_intrinsics.cpp:148	1188:0CBA	CameraProcess_I_moveTo	same	1188:0CBA	module050.c fn_0cba	C
+Game::render_view	src/game/game.cpp:1530	1188:12F1	CameraProcess_redraw_view	same	1188:12F1	module050.c fn_12f1	C
+Game::animate_scenery	src/game/game.cpp:735	1188:1719	ANIMCACH_1188_1719	same	1188:1719	module050.c fn_1719	C
+Game::render	src/game/game.cpp:1492	1188:19C1	CameraProcess_present	same	1188:19C1	module050.c fn_19c1	C
+intrinsic 0x043	src/engine/usecode/world_intrinsics.cpp:131	1188:1AA5	CameraProcess_I_setCenterOn	same	1188:1AA5	module050.c fn_1aa5	C
+intrinsic 0x087	src/engine/usecode/world_intrinsics.cpp:152	1188:1CC5	CameraProcess_I_getCameraX	same	1188:1CC5	module050.c fn_1cc5	C
+intrinsic 0x088	src/engine/usecode/world_intrinsics.cpp:153	1188:1CCD	CameraProcess_I_getCameraY	same	1188:1CCD	module050.c fn_1ccd	C
+intrinsic 0x0d6	src/engine/usecode/world_intrinsics.cpp:154	1188:1CD5	CameraProcess_I_getCameraZ	same	1188:1CD5	module050.c fn_1cd5	C
+PickupListProcess::PickupListProcess	src/engine/world/pickup_list.cpp:66	1190:0000	PickupList_process_ctor	same	1190:0000	module051.c fn_0000	absent
+PickupListProcess::run	src/engine/world/pickup_list.cpp:71	1190:0057	PickupList_process_run	same	1190:0057	module051.c fn_0057	absent
+PickupArea::draw	src/engine/ui/pickup_area.cpp:35	1190:010F	PickupList_draw	same	1190:010F	module051.c fn_010f	absent
+PickupList::count_second	src/engine/world/pickup_list.cpp:59	1190:0414	PickupList_count_second	same	1190:0414	module051.c fn_0414	absent
+PickupArea::width	src/engine/ui/pickup_area.cpp:27	1190:049C	PickupList_add	same	1190:049C	module051.c fn_049c	absent
+PickupList::add	src/engine/world/pickup_list.cpp:38	1190:049C	PickupList_add	same	1190:049C	module051.c fn_049c	absent
+describe	src/engine/world/pickup_list.cpp:23	1190:070F	PickupList_describe	text	1190:070F	module051.c fn_070f	absent
+animate_items	src/engine/world/item_anim.cpp:20	1198:1398	DisplayList_animated_due	same	1198:1398	module052.c fn_1398	absent
+animate_items	src/engine/world/item_anim.cpp:20	1198:162B	DisplayList_animate_items	same	1198:162B	module052.c fn_162b	absent
+draw_display_list	src/engine/world/render.cpp:299	11A0:02E4	DisplayList_draw_item	same	11A0:02E4	module053.c fn_02e4	absent
+ScreenSprites::add	src/engine/world/screen_sprites.hpp:34	11A8:0115	SpriteMgr_add	same	11A8:0115	module054.c fn_0115	absent
+ScreenSprites::move	src/engine/world/screen_sprites.hpp:46	11A8:071E	SPMGR_11a8_071e	same	11A8:071E	module054.c fn_071e	absent
+intrinsic 0x05f	src/engine/usecode/world_intrinsics.cpp:158	11B8:0000	CruStatusGump_I_hideStatusGump	same	11B8:0000	module056.c fn_0000	C
+intrinsic 0x061	src/engine/usecode/world_intrinsics.cpp:162	11B8:0006	CruStatusGump_I_showStatusGump	same	11B8:0006	module056.c fn_0006	C
+StatusBar::StatusBar	src/engine/ui/status_bar.cpp:45	11B8:000C	StatusBar_init	same	11B8:000C	module056.c fn_000c	C
+StatusBar::contents	src/engine/ui/status_bar.cpp:67	11B8:0192	StatusBar_draw	same	11B8:0192	module056.c fn_0192	C
+StatusBar::draw	src/engine/ui/status_bar.cpp:95	11B8:0192	StatusBar_draw	same	11B8:0192	module056.c fn_0192	C
+Game::apply_status_bar_mouse_range	src/game/game.cpp:1395	11B8:0932	StatusBar_show	same	11B8:0932	module056.c fn_0932	C
+Game::apply_status_bar_mouse_range	src/game/game.cpp:1395	11B8:098F	StatusBar_hide	same	11B8:098F	module056.c fn_098f	C
+Keyboard::repeat	src/engine/input/keyboard.cpp:24	11C0:0129	KeyDaemon_tick	?			
+Kernel::run_slice	src/engine/kernel.cpp:101	11D8:0255	Kernel_run_slice	same	11D8:0255	module060.c fn_0255	absent
+Kernel::runnable	src/engine/kernel.cpp:93	11D8:0255	Kernel_run_slice	same	11D8:0255	module060.c fn_0255	absent
+intrinsic 0x0ef	src/engine/usecode/world_intrinsics.cpp:137	11D8:0977	Kernel_I_getNumProcesses	same	11D8:0977	module060.c fn_0977	absent
+Kernel::add	src/engine/kernel.cpp:9	11D8:0AFF	Kernel_add_process	same	11D8:0AFF	module060.c fn_0aff	absent
+intrinsic 0x06e	src/engine/usecode/world_intrinsics.cpp:140	11D8:0C63	Kernel_I_resetRef	same	11D8:0C63	module060.c fn_0c63	absent
+Kernel::fail_processes	src/engine/kernel.cpp:50	11D8:0D0E	Kernel_fail_processes	same	11D8:0D0E	module060.c fn_0d0e	absent
+Kernel::fail_all	src/engine/kernel.cpp:63	11D8:11FE	Kernel_fail_all	same	11D8:11FE	module060.c fn_11fe	absent
+Process::add_wait_operand	src/engine/process.cpp:17	11D8:1327	Kernel_implies	same	11D8:1327	module060.c fn_1327	absent
+Process::wait_for	src/engine/process.cpp:36	11D8:1327	Kernel_implies	same	11D8:1327	module060.c fn_1327	absent
+Kernel::find_process	src/engine/kernel.cpp:41	11D8:151D	Kernel_active_of_type	same	11D8:151D	module060.c fn_151d	absent
+current_anim	src/engine/world/actor_anim.cpp:509	11D8:151D	Kernel_active_of_type	same	11D8:151D	module060.c fn_151d	absent
+ActorAnimProcess::next_queued	src/engine/world/actor_anim.cpp:233	11D8:17DB	Kernel_queue_by_type	same	11D8:17DB	module060.c fn_17db	absent
+Kernel::set_level	src/engine/kernel.cpp:139	11D8:19B5	Kernel_set_level	same	11D8:19B5	module060.c fn_19b5	absent
+Kernel::reap	src/engine/kernel.cpp:174	11D8:1DCC	Kernel_reap_zombies	same	11D8:1DCC	module060.c fn_1dcc	absent
+Kernel::advance_time	src/engine/kernel.cpp:73	11D8:2A86	Kernel_update_elapsed	same	11D8:2A86	module060.c fn_2a86	absent
+TimedProcess::accumulate	src/engine/process.cpp:139	11D8:2A86	Kernel_update_elapsed	same	11D8:2A86	module060.c fn_2a86	absent
+Game::update	src/game/game.cpp:675	11D8:31CF	Kernel_main_loop	same	11D8:31CF	module060.c fn_31cf	absent
+Keyboard::key	src/engine/input/keyboard.cpp:6	11D8:3574	keyboard_isr	?			
+Kernel::on_terminated	src/engine/kernel.cpp:148	11E0:0000	NotList_notify	same	11E0:0000	module061.c fn_0000	C
+Kernel::on_terminated	src/engine/kernel.cpp:148	11E8:046B	Process_notify_termination	same	11E8:046B	module062.c fn_046b	C
+Kernel::on_terminated	src/engine/kernel.cpp:148	11E8:058E	Process_terminate_body	same	11E8:058E	module062.c fn_058e	C
+Process::dependency_done	src/engine/process.cpp:89	11E8:06E0	Process_wait_satisfied	same	11E8:06E0	module062.c fn_06e0	C
+Process::evaluate_wait	src/engine/process.cpp:68	11E8:06E0	Process_wait_satisfied	same	11E8:06E0	module062.c fn_06e0	C
+Process::add_wait_operand	src/engine/process.cpp:17	11E8:0F2F	Process_wait_for	same	11E8:0F2F	module062.c fn_0f2f	C
+Process::wait_for	src/engine/process.cpp:36	11E8:0F2F	Process_wait_for	same	11E8:0F2F	module062.c fn_0f2f	C
+Process::finish	src/engine/process.cpp:120	11E8:112C	Process_terminate_with_result	same	11E8:112C	module062.c fn_112c	C
+Process::finish	src/engine/process.cpp:120	11E8:115C	Process_fail	same	11E8:115C	module062.c fn_115c	C
+Music::file_name	src/engine/audio/music.cpp:38	1200:00C8	music_track_path	same	1200:00C8	module065.c fn_00c8	C
+Music::play	src/engine/audio/music.cpp:71	1200:0143	MusicProcess_I_playMusic	changed	1200:0143	module065.c fn_0143	C
+intrinsic 0x012	src/engine/usecode/audio_intrinsics.cpp:75	1200:0143	MusicProcess_I_playMusic	changed	1200:0143	module065.c fn_0143	C
+intrinsic 0x091	src/engine/usecode/audio_intrinsics.cpp:80	1200:0223	MusicProcess_I_stopMusic	same	1200:0237	module065.c fn_0237	C
+FlexArchive::open	src/core/flex.cpp:24	1248:0142	Flex_open	same	1248:0142	module074.c fn_0142	absent
+FlexArchive::open	src/core/flex.cpp:24	1248:01C8	Flex_read_index	same	1248:01C8	module074.c fn_01c8	absent
+FlexArchive::entry	src/core/flex.cpp:97	1248:02A8	Flex_read_entry	same	1248:02A8	module074.c fn_02a8	absent
+SoundFlex::open	src/core/sound_flex.cpp:11	1258:0000	TagFlex_ctor	same	1258:0000	module076.c fn_0000	absent
+SoundFlex::open	src/core/sound_flex.cpp:11	1258:026C	TagFlex_read_names	same	1258:026C	module076.c fn_026c	absent
+remap_luma	src/engine/ui/movie_player.cpp:22	1268:0157	vport_remap_luma	same	1268:0157	module078.c fn_0157	absent
+Palette::load	src/core/palette.cpp:10	1268:03A3	palette_load	same	1268:03A3	module078.c fn_03a3	absent
+outline	src/core/surface.hpp:29	1280:06D9	vport_draw_rect	same	1280:06D9	module081.c fn_06d9	absent
+TextWriter::put	src/core/font.cpp:64	12C0:0071	TextStream_put	same	12C0:0071	module089.c fn_0071	C
+TextWriter::print	src/core/font.cpp:79	12C0:015C	TextStream_puts	same	12C0:015C	module089.c fn_015c	C
+TextWriter::print_clipped	src/core/font.cpp:87	12C0:0183	TextStream_puts_clipped	same	12C0:0183	module089.c fn_0183	C
+TextWriter::measure	src/core/font.cpp:100	12C0:01F9	TextStream_measure	same	12C0:01F9	module089.c fn_01f9	C
+TrigTables::load	src/core/trig.cpp:13	12D0:0000	Trig_load	same	12D0:0000	module091.c fn_0000	absent
+random_next	src/core/random.cpp:8	12D8:04A0	random_next	same	12D8:04A0	module092.c fn_04a0	C
+random_seed	src/core/random.cpp:34	12D8:04E3	random_seed	same	12D8:04E3	module092.c fn_04e3	C
+random_range	src/core/random.cpp:21	12D8:04FF	random_range	same	12D8:04FF	module092.c fn_04ff	C
+intrinsic 0x018	src/engine/usecode/world_intrinsics.cpp:63	12E0:0293	UCMachine_I_rndRange	same	12E0:0293	module093.c fn_0293	absent
+random_between	src/core/random.cpp:27	12E0:0293	UCMachine_I_rndRange	same	12E0:0293	module093.c fn_0293	absent
+intrinsic 0x0d1	src/engine/usecode/audio_intrinsics.cpp:70	12E0:054A	AudioProcess_I_stopAllSFX	same	12E0:054A	module093.c fn_054a	absent
+Game::fire_frame	src/game/game.cpp:208	12E0:06BF	ass_init	changed	?		
+AmfModule::parse	src/core/amf_module.cpp:27	12E8:00A6	amf_load	same	12E8:038F	module094.c fn_038f	absent
+SoundManager::find	src/engine/audio/sound_manager.cpp:8	12F0:0102	sound_find_voice	same	12F0:0102	module095.c fn_0102	absent
+SoundManager::play	src/engine/audio/sound_manager.cpp:43	12F0:0136	sound_play	same	12F0:0136	module095.c fn_0136	absent
+SoundManager::retrigger	src/engine/audio/sound_manager.cpp:58	12F0:026A	sound_retrigger	same	12F0:026A	module095.c fn_026a	absent
+SoundManager::stop	src/engine/audio/sound_manager.cpp:70	12F0:02EB	sound_stop	same	12F0:02EB	module095.c fn_02eb	absent
+SoundManager::allocate	src/engine/audio/sound_manager.cpp:21	12F0:0367	sound_alloc_voice	same	12F0:0367	module095.c fn_0367	absent
+SoundManager::update	src/engine/audio/sound_manager.cpp:126	12F0:0428	sound_update	same	12F0:0428	module095.c fn_0428	absent
+SoundManager::stop_sfx	src/engine/audio/sound_manager.cpp:86	12F0:04D8	sound_stop_sfx	same	12F0:04D8	module095.c fn_04d8	absent
+SoundManager::set_volume	src/engine/audio/sound_manager.cpp:99	12F0:0543	sound_set_volume	same	12F0:0543	module095.c fn_0543	absent
+SoundManager::handle_playing	src/engine/audio/sound_manager.cpp:118	12F0:05BC	sound_find_sfx	same	12F0:05BC	module095.c fn_05bc	absent
+SoundFlex::sample	src/core/sound_flex.cpp:24	12F8:052D	SoundCache_get	same	12F8:052D	module096.c fn_052d	absent
+draw_raised	src/engine/ui/message_gump.cpp:12	1300:004B	Frame_draw_raised	same	1300:004B	module097.c fn_004b	C
+draw_pressed	src/engine/ui/message_gump.cpp:23	1300:01A5	Frame_draw_pressed	same	1300:01A5	module097.c fn_01a5	C
+DifficultyScreen::mouse_down	src/engine/ui/difficulty_screen.cpp:77	1310:001D	Button_on_mouse	same	1310:001D	module099.c fn_001d	C
+DifficultyScreen::mouse_up	src/engine/ui/difficulty_screen.cpp:93	1310:001D	Button_on_mouse	same	1310:001D	module099.c fn_001d	C
+KeypadGump::mouse_down	src/engine/ui/keypad_gump.cpp:176	1310:001D	Button_on_mouse	same	1310:001D	module099.c fn_001d	C
+KeypadGump::mouse_up	src/engine/ui/keypad_gump.cpp:197	1310:001D	Button_on_mouse	same	1310:001D	module099.c fn_001d	C
+MainMenu::mouse_down	src/engine/ui/main_menu.cpp:152	1310:001D	Button_on_mouse	same	1310:001D	module099.c fn_001d	C
+MainMenu::mouse_up	src/engine/ui/main_menu.cpp:195	1310:001D	Button_on_mouse	same	1310:001D	module099.c fn_001d	C
+OptionsScreen::mouse_up	src/engine/ui/options_screen.cpp:331	1310:001D	Button_on_mouse	same	1310:001D	module099.c fn_001d	C
+ShapeButtons::mouse_down	src/engine/ui/shape_dialog.cpp:52	1310:001D	Button_on_mouse	same	1310:001D	module099.c fn_001d	C
+ShapeButtons::mouse_up	src/engine/ui/shape_dialog.cpp:70	1310:001D	Button_on_mouse	same	1310:001D	module099.c fn_001d	C
+WeaselGump::mouse_down	src/engine/ui/weasel_gump.cpp:493	1310:001D	Button_on_mouse	same	1310:001D	module099.c fn_001d	C
+KeypadGump::mouse_move	src/engine/ui/keypad_gump.cpp:189	1310:0151	Button_on_drag	same	1310:0151	module099.c fn_0151	C
+MainMenu::mouse_move	src/engine/ui/main_menu.cpp:179	1310:0151	Button_on_drag	same	1310:0151	module099.c fn_0151	C
+OptionsScreen::mouse_move	src/engine/ui/options_screen.cpp:320	1310:0151	Button_on_drag	same	1310:0151	module099.c fn_0151	C
+WeaselGump::mouse_move	src/engine/ui/weasel_gump.cpp:502	1310:0151	Button_on_drag	same	1310:0151	module099.c fn_0151	C
+KeypadGump::mouse_up	src/engine/ui/keypad_gump.cpp:197	1310:0254	Button_on_mouse_deselect	same	1310:0254	module099.c fn_0254	C
+WeaselGump::mouse_up	src/engine/ui/weasel_gump.cpp:508	1310:0254	Button_on_mouse_deselect	same	1310:0254	module099.c fn_0254	C
+OptionsScreen::mouse_down	src/engine/ui/options_screen.cpp:288	1310:0371	RepeatButton_on_mouse	same	1310:0371	module099.c fn_0371	C
+OptionsScreen::mouse_up	src/engine/ui/options_screen.cpp:331	1310:0371	RepeatButton_on_mouse	same	1310:0371	module099.c fn_0371	C
+OptionsScreen::mouse_move	src/engine/ui/options_screen.cpp:320	1310:04CD	RepeatButton_on_drag	same	1310:04CD	module099.c fn_04cd	C
+OptionsScreen::update	src/engine/ui/options_screen.cpp:346	1310:04FD	RepeatButton_update	same	1310:04FD	module099.c fn_04fd	C
+TextWriter::put	src/core/font.cpp:64	1318:002E	Font_draw_char	same	1318:002E	module100.c fn_002e	C
+FontSet::load	src/core/font.cpp:19	1318:0215	FontHandler_init	same	1318:0215	module100.c fn_0215	C
+Game::dispatch_mouse	src/game/game.cpp:1452	1328:0624	Dispatch_input	same	1328:0624	module102.c fn_0624	C
+gump_key_code	src/engine/ui/gump_keys.hpp:35	1328:0624	Dispatch_input	same	1328:0624	module102.c fn_0624	C
+MouseInput::kind	src/engine/input/mouse_queue.cpp:6	1328:0935	MouseEvent_to_gump_event	same	1328:0935	module102.c fn_0935	C
+ComputerGump::update	src/engine/ui/computer_gump.cpp:102	1328:1588	Gump_run_modal	same	1328:1588	module102.c fn_1588	C
+Game::close_screen	src/game/game.cpp:1269	1328:1588	Gump_run_modal	same	1328:1588	module102.c fn_1588	C
+Game::open_screen	src/game/game.cpp:1257	1328:1588	Gump_run_modal	same	1328:1588	module102.c fn_1588	C
+Game::show_message	src/game/game.cpp:1084	1328:1588	Gump_run_modal	same	1328:1588	module102.c fn_1588	C
+WeaselGump::update	src/engine/ui/weasel_gump.cpp:206	1328:1588	Gump_run_modal	same	1328:1588	module102.c fn_1588	C
+MouseQueue::send	src/engine/input/mouse_queue.cpp:16	1330:0652	MouseCtl_queue_push	same	1330:0652	module103.c fn_0652	C
+Game::show_message	src/game/game.cpp:1084	1358:0046	MessageGump_ctor	same	1358:0046	module108.c fn_0046	C
+MessageGump::MessageGump	src/engine/ui/message_gump.cpp:33	1358:0046	MessageGump_ctor	same	1358:0046	module108.c fn_0046	C
+Game::close_message	src/game/game.cpp:1096	1358:02C8	MessageGump_on_key	same	1358:02C8	module108.c fn_02c8	C
+MessageGump::draw	src/engine/ui/message_gump.cpp:57	1358:02DF	MessageGump_draw	same	1358:02DF	module108.c fn_02df	C
+Game::mouse_button	src/game/game.cpp:1414	1360:045D	MouseCtl_on_driver_event	same	1360:045D	module109.c fn_045d	absent
+Game::mouse_move	src/game/game.cpp:1405	1360:045D	MouseCtl_on_driver_event	same	1360:045D	module109.c fn_045d	absent
+MouseQueue::move	src/engine/input/mouse_queue.cpp:21	1360:045D	MouseCtl_on_driver_event	same	1360:045D	module109.c fn_045d	absent
+MouseQueue::press	src/engine/input/mouse_queue.cpp:26	1360:045D	MouseCtl_on_driver_event	same	1360:045D	module109.c fn_045d	absent
+MouseQueue::release	src/engine/input/mouse_queue.cpp:48	1360:045D	MouseCtl_on_driver_event	same	1360:045D	module109.c fn_045d	absent
+MouseQueue::tick	src/engine/input/mouse_queue.cpp:56	1360:045D	MouseCtl_on_driver_event	same	1360:045D	module109.c fn_045d	absent
+MouseCursor::pop	src/engine/ui/mouse_cursor.cpp:28	1360:0D06	cursor_pop	same	1360:0D06	module109.c fn_0d06	absent
+MouseCursor::load	src/engine/ui/mouse_cursor.cpp:10	1360:0D5A	cursor_load_shapes	same	1360:0D5A	module109.c fn_0d5a	absent
+MouseQueue::next	src/engine/input/mouse_queue.cpp:66	1360:0E1F	MouseCtl_next_event	same	1360:0E1F	module109.c fn_0e1f	absent
+WeaselGump::draw	src/engine/ui/weasel_gump.cpp:165	1368:05D4	NEWGUMP_1368_05d4	same	1368:05D4	module110.c fn_05d4	C
+WeaselGump::button_at	src/engine/ui/weasel_gump.cpp:484	1368:0955	NEWGUMP_1368_0955	same	1368:0955	module110.c fn_0955	C
+KeypadGump::finish	src/engine/ui/keypad_gump.cpp:113	1368:1297	Gump_send_event	same	1368:1297	module110.c fn_1297	C
+KeypadGump::finish	src/engine/ui/keypad_gump.cpp:113	1368:12EE	Gump_close	same	1368:12EE	module110.c fn_12ee	C
+ShapeButton::ShapeButton	src/engine/ui/shape_dialog.cpp:34	1378:0000	ShapeButton_ctor	same	1378:0000	module112.c fn_0000	C
+WeaselGump::WeaselGump	src/engine/ui/weasel_gump.cpp:85	1378:0000	ShapeButton_ctor	same	1378:0000	module112.c fn_0000	C
+WeaselGump::button_rect	src/engine/ui/weasel_gump.cpp:124	1378:0000	ShapeButton_ctor	same	1378:0000	module112.c fn_0000	C
+WeaselGump::draw	src/engine/ui/weasel_gump.cpp:165	1378:0093	ShapeButton_draw	same	1378:0093	module112.c fn_0093	C
+WeaselGump::mouse_down	src/engine/ui/weasel_gump.cpp:493	1378:00CD	ShapeButton_select	same	1378:00CD	module112.c fn_00cd	C
+WeaselGump::mouse_up	src/engine/ui/weasel_gump.cpp:508	1378:00E9	ShapeButton_deselect	same	1378:00E9	module112.c fn_00e9	C
+OptionsScreen::hit	src/engine/ui/options_screen.cpp:279	1378:0105	ShapeButton_contains	same	1378:0105	module112.c fn_0105	C
+ShapeFrame::pixel	src/core/shape.cpp:85	1378:0105	ShapeButton_contains	same	1378:0105	module112.c fn_0105	C
+WeaselGump::on_button	src/engine/ui/weasel_gump.cpp:474	1378:0105	ShapeButton_contains	same	1378:0105	module112.c fn_0105	C
+MessageGump::MessageGump	src/engine/ui/message_gump.cpp:33	1388:0000	TextButton_ctor	same	1388:0000	module114.c fn_0000	C
+MessageGump::draw	src/engine/ui/message_gump.cpp:57	1388:00CC	TextButton_draw	same	1388:00CC	module114.c fn_00cc	C
+Game::read_computer	src/game/game.cpp:1280	13A0:0005	ComputerGump_I_readComputer	same	13A0:0005	module117.c fn_0005	C
+ComputerGump::ComputerGump	src/engine/ui/computer_gump.cpp:17	13A0:0034	ComputerGump_ctor	same	13A0:0034	module117.c fn_0034	C
+Game::read_computer	src/game/game.cpp:1280	13A0:0212	ComputerGump_dtor	same	13A0:0212	module117.c fn_0212	C
+ComputerGump::draw	src/engine/ui/computer_gump.cpp:109	13A0:02D1	ComputerGump_draw	text	13A0:02D1	module117.c fn_02d1	C
+ComputerGump::wrap	src/engine/ui/computer_gump.cpp:30	13A0:03C8	ComputerGump_set_text	same	13A0:03C8	module117.c fn_03c8	C
+ComputerGump::draw	src/engine/ui/computer_gump.cpp:109	13A0:0487	ComputerGump_layout	same	13A0:0487	module117.c fn_0487	C
+ComputerGump::layout	src/engine/ui/computer_gump.cpp:52	13A0:0487	ComputerGump_layout	same	13A0:0487	module117.c fn_0487	C
+ComputerGump::mouse_down	src/engine/ui/computer_gump.cpp:157	13A0:0887	ComputerGump_mouse	same	13A0:0887	module117.c fn_0887	C
+ComputerGump::run	src/engine/ui/computer_gump.cpp:76	13A0:08D2	ComputerGump_run	same	13A0:08D2	module117.c fn_08d2	C
+ComputerGump::key	src/engine/ui/computer_gump.cpp:143	13A0:0A2A	ComputerGump_key	same	13A0:0A2A	module117.c fn_0a2a	C
+KeypadGump::KeypadGump	src/engine/ui/keypad_gump.cpp:31	13C8:0000	KeypadButton_ctor	same	13C8:0000	module122.c fn_0000	C
+KeypadGump::mouse_down	src/engine/ui/keypad_gump.cpp:176	13C8:006D	KeypadButton_select	same	13C8:006D	module122.c fn_006d	C
+KeypadGump::release	src/engine/ui/keypad_gump.cpp:169	13C8:0086	KeypadButton_sound	same	13C8:0086	module122.c fn_0086	C
+KeypadGump::draw	src/engine/ui/keypad_gump.cpp:41	13C8:00C4	KeypadButton_draw	same	13C8:00C4	module122.c fn_00c4	C
+Game::show_keypad	src/game/game.cpp:1298	13C8:00FE	KeypadGump_I_showKeypad	same	13C8:00FE	module122.c fn_00fe	C
+KeypadGump::KeypadGump	src/engine/ui/keypad_gump.cpp:31	13C8:0133	KeypadGump_ctor	same	13C8:0133	module122.c fn_0133	C
+Game::show_keypad	src/game/game.cpp:1298	13C8:04EE	KeypadGump_dtor	same	13C8:04EE	module122.c fn_04ee	C
+KeypadGump::button	src/engine/ui/keypad_gump.cpp:69	13C8:0543	KeypadGump_on_button	same	13C8:0543	module122.c fn_0543	C
+KeypadGump::key	src/engine/ui/keypad_gump.cpp:119	13C8:0646	KeypadGump_on_key	?			
+KeypadGump::compute_value	src/engine/ui/keypad_gump.cpp:92	13C8:089A	KeypadGump_compute_value	same	13C8:089A	module122.c fn_089a	C
+KeypadGump::draw	src/engine/ui/keypad_gump.cpp:41	13C8:08F5	KeypadGump_draw	same	13C8:08F5	module122.c fn_08f5	C
+KeypadGump::check	src/engine/ui/keypad_gump.cpp:98	13C8:09DB	Keypad_check_code	same	13C8:09DB	module122.c fn_09db	C
+Game::open_menu	src/game/game.cpp:1013	13D0:0000	MainMenu_ctor	changed	13D0:0000	module123.c fn_0000	C
+MainMenu::MainMenu	src/engine/ui/main_menu.cpp:29	13D0:0000	MainMenu_ctor	changed	13D0:0000	module123.c fn_0000	C
+Game::close_menu	src/game/game.cpp:1048	13D0:03F5	MainMenu_dtor	same	13D0:03F5	module123.c fn_03f5	C
+MainMenu::draw	src/engine/ui/main_menu.cpp:68	13D0:04EE	MainMenu_draw_background	same	13D0:04EE	module123.c fn_04ee	C
+MainMenu::key	src/engine/ui/main_menu.cpp:101	13D0:06CD	MainMenu_on_key	same	13D0:06CD	module123.c fn_06cd	C
+Game::follow_menu_screen	src/game/game.cpp:1378	13D0:082E	MainMenu_activate	same	13D0:082E	module123.c fn_082e	C
+MainMenu::activate	src/engine/ui/main_menu.cpp:213	13D0:082E	MainMenu_activate	same	13D0:082E	module123.c fn_082e	C
+MainMenu::after_sub_screen	src/engine/ui/main_menu.cpp:253	13D0:082E	MainMenu_activate	same	13D0:082E	module123.c fn_082e	C
+OptionsScreen::mouse_down	src/engine/ui/options_screen.cpp:288	13D0:0DC0	OptionChoice_on_mouse	same	13D0:0DC0	module123.c fn_0dc0	C
+OptionsScreen::OptionsScreen	src/engine/ui/options_screen.cpp:97	13D0:0ECE	Options_ctor	changed	13D0:0ECE	module123.c fn_0ece	C
+OptionsScreen::chosen	src/engine/ui/options_screen.cpp:128	13D0:0ECE	Options_ctor	changed	13D0:0ECE	module123.c fn_0ece	C
+step_for	src/engine/ui/options_screen.cpp:78	13D0:0ECE	Options_ctor	changed	13D0:0ECE	module123.c fn_0ece	C
+OptionsScreen::draw	src/engine/ui/options_screen.cpp:156	13D0:17C5	Options_draw	changed	13D0:17C5	module123.c fn_17c5	C
+OptionsScreen::line_of	src/engine/ui/options_screen.cpp:120	13D0:1D81	Options_on_child_activated	same	13D0:1D81	module123.c fn_1d81	C
+OptionsScreen::key	src/engine/ui/options_screen.cpp:221	13D0:20B7	Options_on_key	?			
+OptionsScreen::act	src/engine/ui/options_screen.cpp:366	13D0:236E	Options_key	same	13D0:236E	module123.c fn_236e	C
+step	src/engine/ui/options_screen.cpp:87	13D0:236E	Options_key	same	13D0:236E	module123.c fn_236e	C
+DifficultyScreen::DifficultyScreen	src/engine/ui/difficulty_screen.cpp:17	13D0:25A2	DifficultyGump_ctor	same	13D0:25A2	module123.c fn_25a2	C
+Game::follow_menu_screen	src/game/game.cpp:1378	13D0:25A2	DifficultyGump_ctor	same	13D0:25A2	module123.c fn_25a2	C
+DifficultyScreen::mouse_up	src/engine/ui/difficulty_screen.cpp:93	13D0:2975	DifficultyGump_on_child_activated	same	13D0:2975	module123.c fn_2975	C
+DifficultyScreen::key	src/engine/ui/difficulty_screen.cpp:53	13D0:29B3	DifficultyGump_on_key	same	13D0:29B3	module123.c fn_29b3	C
+DifficultyScreen::draw	src/engine/ui/difficulty_screen.cpp:32	13D0:2B16	DifficultyGump_draw_background	changed	13D0:2B16	module123.c fn_2b16	C
+MainMenu::draw	src/engine/ui/main_menu.cpp:68	13D0:2C6B	MenuButton_draw	same	13D0:2C56	module123.c fn_2c56	C
+DifficultyScreen::DifficultyScreen	src/engine/ui/difficulty_screen.cpp:17	13D0:2D5E	DifficultyButton_ctor	same	13D0:2D49	module123.c fn_2d49	C
+DifficultyScreen::draw	src/engine/ui/difficulty_screen.cpp:32	13D0:2E2B	DifficultyButton_draw	same	13D0:2E16	module123.c fn_2e16	C
+MouseCursor::load	src/engine/ui/mouse_cursor.cpp:10	13D8:0000	game_mouse_new	same	13E0:0000	module125.c fn_0000	C
+MouseCursor::zone	src/engine/ui/mouse_cursor.cpp:46	13D8:008D	game_mouse_zone	same	13E0:008D	module125.c fn_008d	C
+MouseCursor::frame	src/engine/ui/mouse_cursor.cpp:67	13D8:01A0	game_mouse_cursor_frame	same	13E0:01A0	module125.c fn_01a0	C
+MouseCursor::direction	src/engine/ui/mouse_cursor.cpp:55	13D8:031A	game_mouse_direction	same	13E0:031A	module125.c fn_031a	C
+Game::show_weasel	src/game/game.cpp:1318	13E0:0000	WeaselGump_I_showWeaselGump	same	13E8:0000	module126.c fn_0000	C
+WeaselGump::WeaselGump	src/engine/ui/weasel_gump.cpp:85	13E0:005C	WeaselGump_ctor	same	13E8:005C	module126.c fn_005c	C
+Game::show_weasel	src/game/game.cpp:1318	13E0:0435	WeaselGump_dtor	same	13E8:0435	module126.c fn_0435	C
+WeaselGump::question_mode	src/engine/ui/weasel_gump.cpp:276	13E0:0486	WeaselGump_question_mode	same	13E8:0486	module126.c fn_0486	C
+WeaselGump::browsing_mode	src/engine/ui/weasel_gump.cpp:268	13E0:0608	WeaselGump_browsing_mode	same	13E8:0608	module126.c fn_0608	C
+WeaselGump::draw	src/engine/ui/weasel_gump.cpp:165	13E0:07BB	WeaselGump_paint	changed	13E8:07BB	module126.c fn_07bb	C
+WeaselGump::load_items	src/engine/ui/weasel_gump.cpp:133	13E0:0B39	WeaselGump_load_items	same	13E8:0B1C	module126.c fn_0b1c	C
+WeaselGump::clamp_current	src/engine/ui/weasel_gump.cpp:283	13E0:0C97	WeaselGump_clamp_current	same	13E8:0C7A	module126.c fn_0c7a	C
+Game::play_weasel_movie	src/game/game.cpp:1342	13E0:0CD8	WeaselGump_play_movie	changed	13E8:0CBB	module126.c fn_0cbb	C
+WeaselGump::play_movie	src/engine/ui/weasel_gump.cpp:214	13E0:0CD8	WeaselGump_play_movie	changed	13E8:0CBB	module126.c fn_0cbb	C
+WeaselGump::step	src/engine/ui/weasel_gump.cpp:221	13E0:0EB7	WeaselGump_on_notify	same	13E8:0E9A	module126.c fn_0e9a	C
+WeaselGump::button	src/engine/ui/weasel_gump.cpp:289	13E0:10B5	WeaselGump_button	changed	13E8:1098	module126.c fn_1098	C
+WeaselGump::key	src/engine/ui/weasel_gump.cpp:439	13E0:13D3	WeaselGump_on_key	?			
+WeaselGump::in_cart	src/engine/ui/weasel_gump.cpp:415	13E0:15D4	WeaselGump_in_cart	same	13E8:15B7	module126.c fn_15b7	C
+WeaselGump::owned	src/engine/ui/weasel_gump.cpp:422	13E0:1610	WeaselGump_owned	same	13E8:15F3	module126.c fn_15f3	C
+WeaselGump::may_buy_more	src/engine/ui/weasel_gump.cpp:429	13E0:168A	WeaselGump_may_buy_more	same	13E8:166D	module126.c fn_166d	C
+WeaselGump::buy	src/engine/ui/weasel_gump.cpp:364	13E0:1767	WeaselGump_buy	same	13E8:174A	module126.c fn_174a	C
+WeaselGump::buy_cart	src/engine/ui/weasel_gump.cpp:379	13E0:1895	WeaselGump_buy_cart	same	13E8:1878	module126.c fn_1878	C
+WeaselGump::next	src/engine/ui/weasel_gump.cpp:405	13E0:1956	WeaselGump_next	same	13E8:1939	module126.c fn_1939	C
+WeaselGump::previous	src/engine/ui/weasel_gump.cpp:395	13E0:19A8	WeaselGump_previous	same	13E8:198B	module126.c fn_198b	C
+icon_shape	src/engine/ui/weasel_gump.cpp:63	13E0:19EF	WeaselGump_icon_shape	same	13E8:19D2	module126.c fn_19d2	C
+Game::play_end_credits	src/game/game.cpp:911	13E8:0000	EndCredits_run	?			
+intrinsic 0x092	src/engine/usecode/world_intrinsics.cpp:117	13E8:0033	Cycle_I_keepPausedAfterMovies	same	13F0:0033	module127.c fn_0033	C
+intrinsic 0x094	src/engine/usecode/world_intrinsics.cpp:121	13E8:0039	Cycle_I_resumeAfterMovies	same	13F0:0039	module127.c fn_0039	C
+intrinsic 0x073	src/engine/usecode/world_intrinsics.cpp:107	13E8:0071	Ultima8Engine_I_setCruStasis	same	13F0:0071	module127.c fn_0071	C
+intrinsic 0x076	src/engine/usecode/world_intrinsics.cpp:111	13E8:0077	Ultima8Engine_I_clrCruStasis	same	13F0:0077	module127.c fn_0077	C
+intrinsic 0x0a7	src/engine/usecode/world_intrinsics.cpp:228	13E8:00B9	UCMachine_I_true_0A7	same	13F0:00B9	module127.c fn_00b9	C
+may_add_item	src/engine/world/inventory.cpp:190	13E8:00C8	Player_may_add_item	same	13F0:00C8	module127.c fn_00c8	C
+add_item_cru	src/engine/world/inventory.cpp:90	13E8:0330	MainActor_I_addItemCru	same	13F0:0330	module127.c fn_0330	C
+add_one	src/engine/world/inventory.cpp:70	13E8:0330	MainActor_I_addItemCru	same	13F0:0330	module127.c fn_0330	C
+intrinsic 0x03a	src/engine/usecode/npc_intrinsics.cpp:140	13E8:0330	MainActor_I_addItemCru	same	13F0:0330	module127.c fn_0330	C
+intrinsic 0x0b9	src/engine/usecode/npc_intrinsics.cpp:143	13E8:0330	MainActor_I_addItemCru	same	13F0:0330	module127.c fn_0330	C
+set_quality_and_combine	src/engine/world/inventory.cpp:82	13E8:0330	MainActor_I_addItemCru	same	13F0:0330	module127.c fn_0330	C
+find_slot	src/engine/world/player_commands.cpp:37	13E8:0C07	Player_previous_weapon	same	13F0:0C07	module127.c fn_0c07	C
+previous_weapon	src/engine/world/player_commands.cpp:95	13E8:0C07	Player_previous_weapon	same	13F0:0C07	module127.c fn_0c07	C
+CombatControl::keypad_command	src/engine/world/combat_control.cpp:148	13E8:0C72	Player_next_weapon	same	13F0:0C72	module127.c fn_0c72	C
+find_slot	src/engine/world/player_commands.cpp:37	13E8:0C72	Player_next_weapon	same	13F0:0C72	module127.c fn_0c72	C
+next_weapon	src/engine/world/player_commands.cpp:103	13E8:0C72	Player_next_weapon	same	13F0:0C72	module127.c fn_0c72	C
+find_slot	src/engine/world/player_commands.cpp:37	13E8:0D5F	Player_previous_item	same	13F0:0D5F	module127.c fn_0d5f	C
+previous_item	src/engine/world/player_commands.cpp:117	13E8:0D5F	Player_previous_item	same	13F0:0D5F	module127.c fn_0d5f	C
+CombatControl::keypad_command	src/engine/world/combat_control.cpp:148	13E8:0DC0	Player_next_item	same	13F0:0DC0	module127.c fn_0dc0	C
+find_slot	src/engine/world/player_commands.cpp:37	13E8:0DC0	Player_next_item	same	13F0:0DC0	module127.c fn_0dc0	C
+next_item	src/engine/world/player_commands.cpp:125	13E8:0DC0	Player_next_item	same	13F0:0DC0	module127.c fn_0dc0	C
+intrinsic 0x075	src/engine/usecode/world_intrinsics.cpp:103	13E8:0E21	Ultima8Engine_I_clrCrusaderTeleporting	same	13F0:0E21	module127.c fn_0e21	C
+intrinsic 0x071	src/engine/usecode/world_intrinsics.cpp:98	13E8:0E27	Ultima8Engine_I_getCrusaderTeleporting	same	13F0:0E27	module127.c fn_0e27	C
+intrinsic 0x072	src/engine/usecode/world_intrinsics.cpp:99	13E8:0E2B	Ultima8Engine_I_setCrusaderTeleporting	same	13F0:0E2B	module127.c fn_0e2b	C
+Game::enter_menu_mode	src/game/game.cpp:1352	13E8:0E7D	World_enter_menu_mode	same	13F0:0E7D	module127.c fn_0e7d	C
+Game::open_menu	src/game/game.cpp:1008	13E8:0E7D	World_enter_menu_mode	same	13F0:0E7D	module127.c fn_0e7d	C
+Game::close_menu	src/game/game.cpp:1048	13E8:0EF9	World_leave_menu_mode	same	13F0:0EF9	module127.c fn_0ef9	C
+Game::leave_menu_mode	src/game/game.cpp:1364	13E8:0EF9	World_leave_menu_mode	same	13F0:0EF9	module127.c fn_0ef9	C
+Game::open_menu	src/game/game.cpp:1008	13E8:10C3	World_game_menu	same	13F0:10C3	module127.c fn_10c3	C
+Game::function_key	src/game/game.cpp:1104	13E8:14B4	World_on_key	changed	13F0:14B4	module127.c fn_14b4	C
+Game::on_key	src/game/game.cpp:928	13E8:14B4	World_on_key	changed	13F0:14B4	module127.c fn_14b4	C
+drop_weapon	src/engine/world/player_commands.cpp:165	13E8:14B4	World_on_key	changed	13F0:14B4	module127.c fn_14b4	C
+finish	src/engine/world/item_selection.cpp:67	13E8:14B4	WORLD_13e8_14b4	changed	13F0:14B4	module127.c fn_14b4	C
+player_command	src/engine/world/player_commands.cpp:199	13E8:14B4	World_on_key	changed	13F0:14B4	module127.c fn_14b4	C
+selection_key	src/engine/world/item_selection.cpp:154	13E8:14B4	World_on_key	changed	13F0:14B4	module127.c fn_14b4	C
+set_off_detpacs	src/engine/world/player_commands.cpp:152	13E8:14B4	World_on_key	changed	13F0:14B4	module127.c fn_14b4	C
+take	src/engine/world/item_selection.cpp:77	13E8:14B4	WORLD_13e8_14b4	changed	13F0:14B4	module127.c fn_14b4	C
+use_active_item	src/engine/world/player_commands.cpp:133	13E8:14B4	World_on_key	changed	13F0:14B4	module127.c fn_14b4	C
+use_carried	src/engine/world/player_commands.cpp:144	13E8:14B4	World_on_key	changed	13F0:14B4	module127.c fn_14b4	C
+use_up	src/engine/world/player_commands.cpp:78	13E8:14B4	World_on_key	changed	13F0:14B4	module127.c fn_14b4	C
+WorldMouse::event	src/engine/world/world_mouse.cpp:37	13E8:2A13	World_on_mouse_motion	?			
+WorldMouse::motion	src/engine/world/world_mouse.cpp:47	13E8:2A13	World_on_mouse_motion	?			
+WorldMouse::send_arrow	src/engine/world/world_mouse.cpp:128	13E8:2A13	World_on_mouse_motion	?			
+WorldMouse::event	src/engine/world/world_mouse.cpp:37	13E8:2B74	World_on_left_button	same	13F0:2B67	module127.c fn_2b67	C
+WorldMouse::left	src/engine/world/world_mouse.cpp:66	13E8:2B74	World_on_left_button	same	13F0:2B67	module127.c fn_2b67	C
+selection_click	src/engine/world/item_selection.cpp:100	13E8:2B74	World_on_left_button	same	13F0:2B67	module127.c fn_2b67	C
+WorldMouse::event	src/engine/world/world_mouse.cpp:37	13E8:2DAD	World_on_right_button	same	13F0:2DA0	module127.c fn_2da0	C
+WorldMouse::right	src/engine/world/world_mouse.cpp:82	13E8:2DAD	World_on_right_button	same	13F0:2DA0	module127.c fn_2da0	C
+WorldMouse::send_arrow	src/engine/world/world_mouse.cpp:128	13E8:2DAD	World_on_right_button	same	13F0:2DA0	module127.c fn_2da0	C
+WorldMouse::idle	src/engine/world/world_mouse.cpp:114	13E8:307F	World_on_idle	same	13F0:3072	module127.c fn_3072	C
+WorldMouse::send_arrow	src/engine/world/world_mouse.cpp:128	13E8:307F	World_on_idle	same	13F0:3072	module127.c fn_3072	C
+start_selection	src/engine/world/item_selection.cpp:105	13E8:33D9	ItemSelection_start	same	13F0:33CC	module127.c fn_33cc	C
+cancel_selection	src/engine/world/item_selection.cpp:146	13E8:3796	ItemSelection_cancel	same	13F0:3789	module127.c fn_3789	C
+next	src/engine/world/item_selection.cpp:41	13E8:37B4	ItemSelection_next	same	13F0:37A7	module127.c fn_37a7	C
+previous	src/engine/world/item_selection.cpp:58	13E8:388F	ItemSelection_previous	same	13F0:3882	module127.c fn_3882	C
+HelpScreen::Pictures::load	src/engine/ui/help_screen.cpp:25	13E8:3BA5	HelpScreen_show_page	same	13F0:3B98	module127.c fn_3b98	C
+HelpScreen::draw	src/engine/ui/help_screen.cpp:69	13E8:3BA5	HelpScreen_show_page	same	13F0:3B98	module127.c fn_3b98	C
+HelpScreen::show	src/engine/ui/help_screen.cpp:47	13E8:3BA5	HelpScreen_show_page	same	13F0:3B98	module127.c fn_3b98	C
+HelpScreen::mouse_up	src/engine/ui/help_screen.cpp:119	13E8:3D53	HelpScreen_on_child_activated	same	13F0:3D46	module127.c fn_3d46	C
+HelpScreen::key	src/engine/ui/help_screen.cpp:80	13E8:3D99	HelpScreen_on_key	same	13F0:3D8C	module127.c fn_3d8c	C
+HelpScreen::update	src/engine/ui/help_screen.cpp:133	13E8:3EC8	HelpScreen_tick	changed	13F0:3EBB	module127.c fn_3ebb	C
+CreditsData::load	src/engine/ui/credits.cpp:50	13F0:003A	Credits_init	same	13F8:003A	module128.c fn_003a	absent
+Game::run_credits	src/game/game.cpp:865	13F0:0290	Credits_done	same	13F8:0290	module128.c fn_0290	absent
+Game::run_credits	src/game/game.cpp:865	13F0:03F4	Credits_run	same	13F8:03F4	module128.c fn_03f4	absent
+Credits::line	src/engine/ui/credits.cpp:97	13F0:041D	Credits_text_step	same	13F8:041D	module128.c fn_041d	absent
+Credits::text_step	src/engine/ui/credits.cpp:110	13F0:041D	Credits_text_step	same	13F8:041D	module128.c fn_041d	absent
+Credits::palette_step	src/engine/ui/credits.cpp:77	13F0:0753	Credits_palette_step	same	13F8:0753	module128.c fn_0753	absent
+Credits::start_effect	src/engine/ui/credits.cpp:68	13F0:0776	Credits_start_effect	same	13F8:0776	module128.c fn_0776	absent
+Game::ask	src/game/game.cpp:1241	13F8:0000	QuestionGump_ctor	same	1400:0000	module129.c fn_0000	absent
+ShapeDialog::ShapeDialog	src/engine/ui/shape_dialog.cpp:83	13F8:0000	QuestionGump_ctor	same	1400:0000	module129.c fn_0000	absent
+ShapeDialog::key	src/engine/ui/shape_dialog.cpp:110	13F8:0299	QuestionGump_on_key	same	1400:0299	module129.c fn_0299	absent
+ShapeDialog::ShapeDialog	src/engine/ui/shape_dialog.cpp:83	13F8:0383	NoticeGump_ctor	same	1400:0383	module129.c fn_0383	absent
+ShapeDialog::key	src/engine/ui/shape_dialog.cpp:110	13F8:0575	NoticeGump_on_key	same	1400:0575	module129.c fn_0575	absent
+Game::set_globals	src/game/game.cpp:621	1410:0051	Flags_load	same	1418:0051	module132.c fn_0051	C
+intrinsic 0x0ff	src/engine/usecode/world_intrinsics.cpp:231	1418:0073	UCMachine_I_numToStr	same	1420:0073	module133.c fn_0073	C
+intrinsic 0x113	src/engine/usecode/world_intrinsics.cpp:231	1418:0073	UCMachine_I_numToStr	same	1420:0073	module133.c fn_0073	C
+intrinsic 0x122	src/engine/usecode/world_intrinsics.cpp:231	1418:0073	UCMachine_I_numToStr	same	1420:0073	module133.c fn_0073	C
+UCMachine::assign	src/engine/usecode/uc_machine.cpp:106	1418:038B	INTER_1418_038b	same	1420:038B	module133.c fn_038b	C
+UCMachine::dereference	src/engine/usecode/uc_machine.cpp:81	1418:038B	INTER_1418_038b	same	1420:038B	module133.c fn_038b	C
+UCMachine::execute	src/engine/usecode/uc_machine.cpp:130	1418:038B	INTER_1418_038b	same	1420:038B	module133.c fn_038b	C
+UCMachine::step	src/engine/usecode/uc_machine.cpp:155	1418:038B	INTER_1418_038b	same	1420:038B	module133.c fn_038b	C
+loop_area_size	src/engine/usecode/uc_machine.cpp:48	1418:038B	INTER_1418_038b	same	1420:038B	module133.c fn_038b	C
+UCMachine::start_event	src/engine/usecode/uc_machine.cpp:70	1420:0E3A	Usecode_start_event_if_present	same	1428:0E3A	module134.c fn_0e3a	C
+DumbTimer::run	src/engine/world/aim_mode.cpp:309	1430:0313	DumbTimer_run	same	1438:0313	module136.c fn_0313	C
+PaletteCycleProcess::tick	src/engine/world/palette_cycle.cpp:35	1438:011B	CycleProcess_run	same	1440:011B	module137.c fn_011b	absent
+PaletteFaderProcess::PaletteFaderProcess	src/engine/palette_fader.cpp:45	1440:0000	FadeProcess_ctor	same	1448:0000	module138.c fn_0000	absent
+PaletteFaderProcess::on_added	src/engine/palette_fader.cpp:65	1440:0000	FadeProcess_ctor	same	1448:0000	module138.c fn_0000	absent
+PaletteFade::tick	src/engine/palette_fader.cpp:23	1440:03A0	FadeProcess_tick	same	1448:03A0	module138.c fn_03a0	absent
+intrinsic 0x09e	src/engine/usecode/world_intrinsics.cpp:179	1440:04EA	PaletteFaderProcess_I_fadeToBlack_09E	same	1448:04EA	module138.c fn_04ea	absent
+greyscale	src/engine/palette_fader.cpp:10	1440:05BE	fade_to_greyscale	same	1448:05BE	module138.c fn_05be	absent
+intrinsic 0x078	src/engine/usecode/world_intrinsics.cpp:175	1440:06E6	PaletteFaderProcess_I_fadeToBlack	same	1448:06E6	module138.c fn_06e6	absent
+intrinsic 0x09c	src/engine/usecode/world_intrinsics.cpp:195	1440:06F4	PaletteFaderProcess_I_fadeToGamePal	same	1448:06F4	module138.c fn_06f4	absent
+intrinsic 0x07b	src/engine/usecode/world_intrinsics.cpp:192	1440:07CC	PaletteFaderProcess_I_fadeFromBlack	same	1448:07CC	module138.c fn_07cc	absent
+intrinsic 0x090	src/engine/usecode/world_intrinsics.cpp:206	1440:07DA	PaletteFaderProcess_I_jumpToAllBlack	same	1448:07DA	module138.c fn_07da	absent
+intrinsic 0x0da	src/engine/usecode/world_intrinsics.cpp:211	1440:0853	PaletteFaderProcess_I_jumpToAllWhite	same	1448:0853	module138.c fn_0853	absent
+intrinsic 0x09b	src/engine/usecode/world_intrinsics.cpp:216	1440:0A7C	PaletteFaderProcess_I_jumpToNormalPalette	same	1448:0A7C	module138.c fn_0a7c	absent
+intrinsic 0x0a0	src/engine/usecode/world_intrinsics.cpp:201	1440:0AB2	PaletteFaderProcess_I_fadeToGivenColor	same	1448:0AB2	module138.c fn_0ab2	absent
+intrinsic 0x09d	src/engine/usecode/world_intrinsics.cpp:196	1440:0BC6	PaletteFaderProcess_I_fadeToGamePal_09D	same	1448:0BC6	module138.c fn_0bc6	absent
+intrinsic 0x09f	src/engine/usecode/world_intrinsics.cpp:183	1440:0C47	PaletteFaderProcess_I_fadeToBlack_09F	same	1448:0C47	module138.c fn_0c47	absent
+SoundSources::volume_for	src/engine/audio/sound_sources.cpp:20	1450:0000	sound_source_volume_for_item	same	1458:0000	module140.c fn_0000	absent
+SoundSources::refresh	src/engine/audio/sound_sources.cpp:33	1450:01D0	sound_sources_refresh	same	1458:01D0	module140.c fn_01d0	absent
+SoundSources::play	src/engine/audio/sound_sources.cpp:63	1450:021E	sound_source_play	same	1458:021E	module140.c fn_021e	absent
+SoundSources::start	src/engine/audio/sound_sources.cpp:52	1450:021E	sound_source_play	same	1458:021E	module140.c fn_021e	absent
+SoundSources::play_ambient	src/engine/audio/sound_sources.cpp:71	1450:02C5	sound_source_play_unique	same	1458:02C5	module140.c fn_02c5	absent
+SoundSources::retrigger	src/engine/audio/sound_sources.cpp:86	1450:03AD	sound_source_retrigger	same	1458:03AD	module140.c fn_03ad	absent
+SoundSources::stop	src/engine/audio/sound_sources.cpp:101	1450:0486	sound_source_stop	same	1458:0486	module140.c fn_0486	absent
+SoundSources::stop_item	src/engine/audio/sound_sources.cpp:114	1450:0551	sound_source_stop_item	same	1458:0551	module140.c fn_0551	absent
+SoundSources::stop_item_loops	src/engine/audio/sound_sources.cpp:124	1450:05B1	sound_source_stop_item_loops	same	1458:05B1	module140.c fn_05b1	absent
+SoundSources::is_playing	src/engine/audio/sound_sources.cpp:141	1450:0633	sound_source_is_playing	same	1458:0633	module140.c fn_0633	absent
+SoundSources::is_playing_anywhere	src/engine/audio/sound_sources.cpp:150	1450:06C0	sound_source_is_playing_sfx	same	1458:06C0	module140.c fn_06c0	absent
+SoundSources::set_volume	src/engine/audio/sound_sources.cpp:159	1450:0750	sound_source_set_volume	same	1458:0750	module140.c fn_0750	absent
+SoundSources::release	src/engine/audio/sound_sources.cpp:41	1450:07B9	sound_source_release_handle	same	1458:07B9	module140.c fn_07b9	absent
+SoundSources::update_volumes	src/engine/audio/sound_sources.cpp:170	1450:0813	sound_source_update_volume	same	1458:0813	module140.c fn_0813	absent
+BitReader::get	src/core/avi_movie.cpp:25	1460:0000	bits_msb	same	1468:0000	module142.c fn_0000	absent
+Game::start_movie	src/game/game.cpp:768	1468:03E3	VideoPlayer_open	same	1470:03E3	module143.c fn_03e3	absent
+Game::update_movie	src/game/game.cpp:793	1468:03E3	VideoPlayer_open	same	1470:03E3	module143.c fn_03e3	absent
+MoviePlayer::MoviePlayer	src/engine/ui/movie_player.cpp:47	1468:03E3	VideoPlayer_open	same	1470:03E3	module143.c fn_03e3	absent
+AviMovie::parse	src/core/avi_movie.cpp:76	1468:17B0	VideoPlayer_next_chunk	same	1470:17B0	module143.c fn_17b0	absent
+MoviePlayer::next_chunk	src/engine/ui/movie_player.cpp:161	1468:17B0	VideoPlayer_next_chunk	same	1470:17B0	module143.c fn_17b0	absent
+MoviePlayer::decode	src/engine/ui/movie_player.cpp:187	1468:1A92	VideoPlayer_draw_strip	same	1470:1A92	module143.c fn_1a92	absent
+MoviePlayer::show_subtitle	src/engine/ui/movie_player.cpp:211	1468:1DA1	VideoPlayer_subtitle	same	1470:1DA1	module143.c fn_1da1	absent
+MoviePlayer::queue_audio	src/engine/ui/movie_player.cpp:172	1468:1EF7	VideoPlayer_queue_audio	same	1470:1EF7	module143.c fn_1ef7	absent
+AviMovie::parse	src/core/avi_movie.cpp:76	1468:2188	VideoPlayer_read_header	same	1470:2188	module143.c fn_2188	absent
+riff_chunks	src/core/avi_movie.cpp:48	1468:2188	VideoPlayer_read_header	same	1470:2188	module143.c fn_2188	absent
+Game::update_movie	src/game/game.cpp:793	1468:2869	VideoPlayer_tick	same	1470:2869	module143.c fn_2869	absent
+MoviePlayer::tick	src/engine/ui/movie_player.cpp:229	1468:2869	VideoPlayer_tick	same	1470:2869	module143.c fn_2869	absent
+movie_base_name	src/engine/ui/movie_player.cpp:35	1468:2F7C	VideoPlayer_open_file	same	1470:2F7C	module143.c fn_2f7c	absent
+Game::start_movie	src/game/game.cpp:768	1468:3ABC	VideoPlayer_setup_screen	same	1470:3ABC	module143.c fn_3abc	absent
+MoviePlayer::setup_screen	src/engine/ui/movie_player.cpp:81	1468:3ABC	VideoPlayer_setup_screen	same	1470:3ABC	module143.c fn_3abc	absent
+Game::end_movie	src/game/game.cpp:811	1468:3C23	VideoPlayer_restore_screen	same	1470:3C23	module143.c fn_3c23	absent
+Game::end_movie	src/game/game.cpp:811	1468:3D7A	VideoPlayer_close	same	1470:3D7A	module143.c fn_3d7a	absent
+Game::play_movie	src/game/game.cpp:760	1468:3F77	play_movie_cutscene	same	1470:3F77	module143.c fn_3f77	absent
+Game::play_movie	src/game/game.cpp:760	1468:4060	play_movie_cutscene_buffered	same	1470:4060	module143.c fn_4060	absent
+Game::play_movie	src/game/game.cpp:760	1468:4169	play_movie_overlay	same	1470:4169	module143.c fn_4169	absent
+load_movie_subtitles	src/core/movie_subtitles.cpp:63	1470:00FB	Subtitles_load	same	1478:00FB	module144.c fn_00fb	absent
+parse_movie_subtitles	src/core/movie_subtitles.cpp:42	1470:0239	Subtitles_parse	same	1478:0239	module144.c fn_0239	absent
+text_after	src/core/movie_subtitles.cpp:28	1470:0398	Subtitles_text_after	same	1478:0398	module144.c fn_0398	absent

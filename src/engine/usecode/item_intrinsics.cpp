@@ -180,9 +180,14 @@ std::vector<std::uint16_t> register_item_intrinsics(UCMachine& m, World& w) {
     };
     bind({0x006, 0x0B6}, equip_event(10));
     bind({0x0B1}, equip_event(11));
-    // Item::I_cast (10A8:2F3E): event 0x11 (mask 0x20000) without argument;
-    // the pid or 0.
-    bind({0x0E8}, [&m, &w](Item& i, Args) -> std::uint32_t { return m.start_event(w.usecode_class(i), 0x11, i.id); });
+    // Item::I_cast (10A8:2F3E): event 0x11 (mask 0x20000) with the value,
+    // pushed as a 32-bit argument (unsigned 16-bit, zero-extended); the pid.
+    bind({0x0E8}, [&m, &w](Item& i, Args a) -> std::uint32_t {
+        const std::uint32_t value = arg16(a, 4);
+        const std::array<std::uint8_t, 4> arg = {
+            static_cast<std::uint8_t>(value), static_cast<std::uint8_t>(value >> 8), 0, 0};
+        return m.start_event(w.usecode_class(i), 0x11, i.id, arg);
+    });
     // Item::I_avatarStoleSomething (10A8:2FDA): the same with event 0x13
     // (mask 0x80000), nothing for a dead NPC.
     bind({0x0B2}, [&w, steal = equip_event(0x13)](Item& i, Args a) -> std::uint32_t {

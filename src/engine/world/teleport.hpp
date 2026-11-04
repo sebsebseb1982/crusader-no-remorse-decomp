@@ -4,9 +4,10 @@
 //
 // MainActor::I_teleportToEgg(map, egg, wait) starts a process (vtable
 // DS:0FE2). At creation it ends the player's processes of type 0xF0
-// (Kernel::I_resetRef), stops every sound, and with `wait` raises the
-// player's "busy" flag (DS:7E10) until one slice after the process ends (a
-// second process, vtable DS:1006, waits for it and puts the flag back).
+// (Kernel::I_resetRef) and, in this form only, stops every sound (1098:011F);
+// with `wait` it raises the player's "busy" flag (DS:7E10) until one slice
+// after the process ends (a second process, vtable DS:1006, waits for it and
+// puts the flag back).
 // When it runs:
 //   1. on another map, the player is teleported to (0, 0, 0) there, which
 //      loads the map (World::teleport);
@@ -18,7 +19,8 @@
 //      ("No destination for this egg!").
 // A teleport is ignored while another one moves the player back (DS:0F89).
 //
-// MainActor::I_teleportToEgg with one argument (0x097) uses the current map.
+// MainActor::I_teleportToEgg with one argument (0x097) uses the current map
+// and leaves the sounds playing.
 //
 // EggHatcher (SHAPHAND_1098_068b / 0718, type 0x20F, owned by the egg; ended
 // with the egg's other processes when it leaves the fast area): at each
@@ -40,7 +42,10 @@ namespace crusader {
 
 constexpr std::uint16_t kTeleportStartEgg = 0x1E;  // where a mission starts
 
-Pid start_teleport_to_egg(Kernel& kernel, World& world, int map, std::uint16_t egg, bool wait);
+// `stop_sounds` is the explicit-map form's sound reset (1098:011F): true for
+// 0x07A and the mission start; false for 0x097 (current map) and for the map
+// switch, which has already stopped them (1028:0477).
+Pid start_teleport_to_egg(Kernel& kernel, World& world, int map, std::uint16_t egg, bool wait, bool stop_sounds);
 Pid start_switch_map(Kernel& kernel, World& world, int map);
 Pid start_egg_hatcher(Kernel& kernel, World& world, ObjId egg);
 

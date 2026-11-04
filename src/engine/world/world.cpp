@@ -438,24 +438,43 @@ std::vector<std::uint8_t> World::saved_item_table() const {
 
     // Array 9 chains the lists: map cells, container contents, the pending
     // stack from its top, the free lists. The last item of a list, and an
-    // item in none (NPCs of other maps), get 0.
+    // item in none (NPCs of other maps), get 0. Sprites (port-only transient
+    // effects) are filtered out: they must not come back on load.
     std::vector<ObjId> next(kItemSlots, 0);
     auto link = [&](auto first, auto last) {
         for (auto it = first; it != last && std::next(it) != last; ++it) next[*it] = *std::next(it);
     };
-    for (const auto& c : cells_) link(c.begin(), c.end());
+    auto link_filtered = [&](const auto& ids) {
+        ObjId prev = 0;
+        for (ObjId id : ids) {
+            const Item* item = get(id);
+            if (!item || item->sprite_only) continue;
+            if (prev != 0) next[prev] = id;
+            prev = id;
+        }
+    };
+    for (const auto& c : cells_) link_filtered(c);
     auto chained = [&](const Item& container) {
         std::vector<ObjId> ids;
         for (ObjId c : container.contents) {
-            if (const Item* child = get(c); child && !child->unchained) ids.push_back(c);
+            if (const Item* child = get(c); child && !child->unchained && !child->sprite_only) ids.push_back(c);
         }
         return ids;
     };
     for (const auto& [id, item] : items_) {
         const auto ids = chained(item);
-        link(ids.begin(), ids.end());
+        link_filtered(ids);
     }
-    link(pending_.rbegin(), pending_.rend());
+    // Pending stack: link from top down.
+    {
+        ObjId prev = 0;
+        for (auto it = pending_.rbegin(); it != pending_.rend(); ++it) {
+            const Item* item = get(*it);
+            if (!item || item->sprite_only) continue;
+            if (prev != 0) next[prev] = *it;
+            prev = *it;
+        }
+    }
     link(free_items_.ids.begin(), free_items_.ids.end());
     link(free_npcs_.ids.begin(), free_npcs_.ids.end());
 
@@ -483,7 +502,10 @@ std::vector<std::uint8_t> World::saved_item_table() const {
     };
     put(10, 0, slot0_array11_);
     for (const auto& [id, item] : stale_) write(item);
-    for (const auto& [id, item] : items_) write(item);
+    for (const auto& [id, item] : items_) {
+        if (item.sprite_only) continue;
+        write(item);
+    }
     // A container's quality heads its chain.
     for (const auto& [id, item] : items_) {
         const std::uint8_t fam = family(item);
@@ -508,11 +530,21 @@ std::vector<std::uint8_t> World::saved_item_lists() const {
     word(4, static_cast<std::uint32_t>(fast_area_.s1));
     word(6, static_cast<std::uint32_t>(fast_area_.d0));
     word(8, static_cast<std::uint32_t>(fast_area_.d1));
-    // Cell heads (DS:1100) and counts (DS:1104), x-major.
+    // Cell heads (DS:1100) and counts (DS:1104), x-major. Sprites (port-only
+    // transient effects) are skipped in the heads and counts.
     for (std::size_t at = 0; at < kCellWords; ++at) {
         const auto& c = cells_[at];
-        word(10 + 2 * at, c.empty() ? 0 : c.front());
-        word(10 + 2 * kCellWords + 2 * at, static_cast<std::uint32_t>(static_cast<int>(c.size()) + cell_count_bias_[at]));
+        ObjId head = 0;
+        std::size_t count = 0;
+        for (ObjId id : c) {
+            const Item* item = get(id);
+            if (item && !item->sprite_only) {
+                if (head == 0) head = id;
+                ++count;
+            }
+        }
+        word(10 + 2 * at, head);
+        word(10 + 2 * kCellWords + 2 * at, static_cast<std::uint32_t>(static_cast<int>(count) + cell_count_bias_[at]));
     }
     auto head = [](const FreeSlots& l) -> std::uint32_t { return l.ids.empty() ? 0 : l.ids.front(); };
     word(kListWordsAt + 0, static_cast<std::uint32_t>(free_items_.ids.size()));  // DS:7DD0
@@ -521,8 +553,18 @@ std::vector<std::uint8_t> World::saved_item_lists() const {
     word(kListWordsAt + 6, head(free_npcs_));                                     // DS:7DCA
     word(kListWordsAt + 8, free_items_.tail);                                     // DS:7DCC
     word(kListWordsAt + 10, free_npcs_.tail);                                     // DS:7DCE
-    word(kListWordsAt + 12, pending_.empty() ? 0 : pending_.back());              // DS:7DD4
-    word(kListWordsAt + 14, static_cast<std::uint32_t>(pending_.size()));         // DS:7DD6
+    // Pending stack: its top is the last non-sprite, its count excludes them.
+    ObjId pending_top = 0;
+    std::size_t pending_count = 0;
+    for (ObjId id : pending_) {
+        const Item* item = get(id);
+        if (item && !item->sprite_only) {
+            pending_top = id;
+            ++pending_count;
+        }
+    }
+    word(kListWordsAt + 12, pending_top);                                          // DS:7DD4
+    word(kListWordsAt + 14, static_cast<std::uint32_t>(pending_count));            // DS:7DD6
     return out;
 }
 

@@ -3,6 +3,7 @@
 #include "engine/kernel.hpp"
 #include "engine/palette_fader.hpp"
 #include "engine/usecode/uc_process.hpp"
+#include "engine/world/attack.hpp"
 
 #include <array>
 #include <memory>
@@ -47,7 +48,7 @@ void set_alert(World& world, bool on) {
 }
 
 // @orig none: binds the intrinsics, numbered by USECODE/UNKCOFF.DAT
-std::vector<std::uint16_t> register_world_intrinsics(UCMachine& m, World& w) {
+std::vector<std::uint16_t> register_world_intrinsics(UCMachine& m, World& w, const AnimDat* anims) {
     std::vector<std::uint16_t> bound;
     auto bind = [&](std::initializer_list<std::uint16_t> numbers, UCMachine::Intrinsic fn) {
         for (std::uint16_t n : numbers) {
@@ -85,11 +86,13 @@ std::vector<std::uint16_t> register_world_intrinsics(UCMachine& m, World& w) {
     bind({0x06D}, [](UCMachine&, UCProcess&, Args) -> std::uint32_t { return 1; });
     bind({0x029}, [&s](UCMachine&, UCProcess&, Args) -> std::uint32_t { return s.difficulty; });
     bind({0x01B}, [&s](UCMachine&, UCProcess&, Args) -> std::uint32_t { return s.controlled_npc; });
-    // Ultima8Engine::I_setAvatarInStasis (10F0:369E). Not reproduced: a
-    // living player in combat leaves it (NPC_10f0_32a8: Actor_I_clrInCombat
-    // with DS:135E set, a flag not decoded).
-    bind({0x00C}, [&s](UCMachine&, UCProcess&, Args a) -> std::uint32_t {
+    // Ultima8Engine::I_setAvatarInStasis (10F0:3696): the flag; a living
+    // player in combat leaves it (Actor::clearInCombatQuiet, NPC_10f0_32a0;
+    // its global quiet flag has no reader in this version).
+    bind({0x00C}, [&s, &w, anims](UCMachine& machine, UCProcess&, Args a) -> std::uint32_t {
         s.avatar_in_stasis = arg16(a, 0) != 0;
+        if (s.avatar_in_stasis && anims && in_combat(w, 1) && !w.is_dead(1))
+            clear_in_combat(machine.kernel(), w, *anims, 1);
         return 0;
     });
     bind({0x0B8}, [&s](UCMachine&, UCProcess&, Args) -> std::uint32_t { return s.avatar_in_stasis; });

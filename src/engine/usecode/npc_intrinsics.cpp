@@ -127,10 +127,10 @@ std::vector<std::uint16_t> register_npc_intrinsics(UCMachine& m, World& w, const
     // on the current map (1098:04F7): the pid. MainActor::I_switchMap(map)
     // (1028:049C).
     m.set_intrinsic(0x07A, [&w](UCMachine& machine, UCProcess&, Args a) -> std::uint32_t {
-        return start_teleport_to_egg(machine.kernel(), w, arg16(a, 0), arg16(a, 2), (arg16(a, 4) & 0xFF) != 0);
+        return start_teleport_to_egg(machine.kernel(), w, arg16(a, 0), arg16(a, 2), (arg16(a, 4) & 0xFF) != 0, true);
     });
     m.set_intrinsic(0x097, [&w](UCMachine& machine, UCProcess&, Args a) -> std::uint32_t {
-        return start_teleport_to_egg(machine.kernel(), w, w.current_map(), arg16(a, 0), (arg16(a, 2) & 0xFF) != 0);
+        return start_teleport_to_egg(machine.kernel(), w, w.current_map(), arg16(a, 0), (arg16(a, 2) & 0xFF) != 0, false);
     });
     m.set_intrinsic(0x0CC, [&w](UCMachine& machine, UCProcess&, Args a) -> std::uint32_t {
         start_switch_map(machine.kernel(), w, arg16(a, 0));

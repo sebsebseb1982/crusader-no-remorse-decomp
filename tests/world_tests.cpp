@@ -81,6 +81,76 @@ std::uint32_t run_on_item(World& w, ObjId item, const std::vector<std::uint8_t>&
     return result;
 }
 
+// Item::I_cast passes its value to usecode event 0x11 (10A8:2F3E). The event
+// body stores the argument it receives in the item's quality (I_setQ, 0x0F5).
+void test_item_cast_argument() {
+    World w;
+    Item it;
+    it.shape = 0x123;
+    const ObjId id = w.add(it).id;
+
+    // Caller (event 0): push 0x1234; push this; cast(this, 0x1234); add_sp 6;
+    // ret.
+    const std::vector<std::uint8_t> caller = {0x0B, 0x34, 0x12, 0x40, 0x06, 0x0F,
+                                              0x06, 0xE8, 0x00, 0x6E, 0xFA, 0x50};
+    // Event 0x11: push word bp+0x0A (the cast value); push this; setQ(this,
+    // value); add_sp 6; ret.
+    const std::vector<std::uint8_t> handler = {0x3F, 0x0A, 0x40, 0x06, 0x0F,
+                                               0x06, 0xF5, 0x00, 0x6E, 0xFA, 0x50};
+    std::vector<std::uint32_t> offsets(0x12, 0);
+    offsets[0] = 1;
+    offsets[0x11] = 1 + static_cast<std::uint32_t>(caller.size());
+    std::vector<std::uint8_t> code(caller);
+    code.insert(code.end(), handler.begin(), handler.end());
+
+    // The item's usecode class is its shape (0x123).
+    std::vector<std::vector<std::uint8_t>> classes(0x124);
+    classes[0x123] = UsecodeFile::make_class(offsets, code);
+    const auto file = UsecodeFile::from_classes(std::move(classes));
+    Kernel k;
+    UCMachine m(k, file);
+    register_item_intrinsics(m, w);
+    const Pid pid = m.start_event(0x123, 0, id);
+    for (int i = 0; i < 10 && k.get(pid); ++i) k.run_slice();
+    for (int i = 0; i < 10; ++i) k.run_slice();  // the cast event it spawned
+    CHECK(m.faults().empty());
+    CHECK(w.get(id) != nullptr && w.get(id)->quality == 0x1234);
+}
+
+// Ultima8Engine::I_setAvatarInStasis (10F0:3696): setting stasis on a living
+// player who is in combat takes him out of it (NPC_10f0_32a0).
+void test_stasis_leaves_combat() {
+    constexpr std::size_t table = AnimDat::kShapes * 4, action = table + AnimDat::kActions * 4;
+    std::vector<std::uint8_t> bytes(action + 4 + 8 * 4 * 8);
+    auto u32 = [&](std::size_t at, std::size_t value) {
+        for (int k = 0; k < 4; ++k) bytes[at + k] = static_cast<std::uint8_t>(value >> (k * 8));
+    };
+    u32(4, table);
+    u32(table + 4, action);
+    bytes[action] = 4;
+    const AnimDat anims = AnimDat::parse(bytes);
+
+    World w;
+    Item player;
+    player.id = 1;
+    player.shape = 1;
+    w.add_with_id(player);
+    w.npc_record(1)[npc::kCombatFlags] = 0x08;
+    CHECK(in_combat(w, 1));
+
+    // setAvatarInStasis(1)
+    const std::vector<std::uint8_t> code = {0x0B, 0x01, 0x00, 0x0F, 0x02, 0x0C, 0x00, 0x6E, 0xFE, 0x50};
+    const auto file = UsecodeFile::from_classes({UsecodeFile::make_class({1}, code)});
+    Kernel k;
+    UCMachine m(k, file);
+    register_world_intrinsics(m, w, &anims);
+    const Pid pid = m.start_event(0, 0, 1);
+    for (int i = 0; i < 10 && k.get(pid); ++i) k.run_slice();
+    CHECK(m.faults().empty());
+    CHECK(w.state.avatar_in_stasis);
+    CHECK(!in_combat(w, 1));
+}
+
 void test_item_intrinsics() {
     World w;
     Item it;
@@ -995,6 +1065,8 @@ int main() {
     test_create_npc_reuses_a_slot();
     test_created_npc_teleport();
     test_item_intrinsics();
+    test_item_cast_argument();
+    test_stasis_leaves_combat();
     test_pending_stack();
     test_position_intrinsics();
     test_fast_area();

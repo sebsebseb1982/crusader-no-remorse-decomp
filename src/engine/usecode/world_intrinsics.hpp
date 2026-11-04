@@ -2,6 +2,7 @@
 // Engine-wide intrinsics (clock, randomness, difficulty, alert, stasis...),
 // numbered as in the French CRUSADER.EXE.
 
+#include "core/anim_dat.hpp"
 #include "engine/usecode/uc_machine.hpp"
 #include "engine/world/world.hpp"
 
@@ -17,6 +18,9 @@ namespace crusader {
 // (FREE event 0x3B, ALRMTRIG, ALARMBOX, doors and keypads).
 void set_alert(World& world, bool on);
 
-std::vector<std::uint16_t> register_world_intrinsics(UCMachine& machine, World& world);
+// `anims` is needed by setAvatarInStasis, which takes a living player out of
+// combat (0 = not bound).
+std::vector<std::uint16_t> register_world_intrinsics(UCMachine& machine, World& world,
+                                                     const AnimDat* anims = nullptr);
 
 }  // namespace crusader

@@ -172,7 +172,7 @@ protected:
             audio->stop_all();
             audio->sources.clear();
         }
-        start_teleport_to_egg(kernel_, world_, map_, kTeleportStartEgg, true);
+        start_teleport_to_egg(kernel_, world_, map_, kTeleportStartEgg, true, false);
     }
 
 private:
@@ -203,11 +203,15 @@ ObjId find_teleport_egg(const World& world, std::uint16_t egg) {
 }
 
 // @orig 1098:0072 1098:019C
-Pid start_teleport_to_egg(Kernel& kernel, World& world, int map, std::uint16_t egg, bool wait) {
+Pid start_teleport_to_egg(Kernel& kernel, World& world, int map, std::uint16_t egg, bool wait, bool stop_sounds) {
     const Pid pid = spawn_teleport(kernel, world, map, egg, wait);
-    if (Audio* audio = world.audio()) {
-        audio->sources.clear();
-        audio->stop_all();
+    // Only the explicit-map constructor stops the sounds (1098:011F); the
+    // current-map one (1098:019C) leaves them playing.
+    if (stop_sounds) {
+        if (Audio* audio = world.audio()) {
+            audio->sources.clear();
+            audio->stop_all();
+        }
     }
     return pid;
 }
