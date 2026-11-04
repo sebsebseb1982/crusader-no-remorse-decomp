@@ -368,8 +368,18 @@ bool ActorAnimProcess::step() {
     const int move_dir = a->turned() ? (dir_ + 4) & 0xF : dir_;
     const int d = f->distance * 2;
     if (!in_place_ && (d != 0 || f->delta_z != 0)) {
-        const World::Point target{item->x + kDirectionDx[move_dir] * d, item->y + kDirectionDy[move_dir] * d,
-                                  std::max(0, item->z + f->delta_z)};
+        World::Point target{item->x + kDirectionDx[move_dir] * d, item->y + kDirectionDy[move_dir] * d,
+                            std::max(0, item->z + f->delta_z)};
+        // In combat, an action flagged 0x80 (shape 0x33C) goes one unit up or
+        // down per step towards its target's height (z wraps as a byte).
+        if ((flags & 0x80) && in_combat(world_, owner())) {
+            const ObjId t = static_cast<ObjId>(record[npc::kTarget] | record[npc::kTarget + 1] << 8);
+            if (const Item* ti = t != 0 ? world_.get(t) : nullptr) {
+                const int z = item->z & 0xFF, tz = ti->z & 0xFF;
+                if (z > tz) target.z = (target.z + 255) & 0xFF;
+                else if (z < tz) target.z = (target.z + 1) & 0xFF;
+            }
+        }
         SweepResult r;
         if (f->ground_check) {
             // Walking move needing support, which may climb steps (ITEM.C 1841

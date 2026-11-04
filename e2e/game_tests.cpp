@@ -3863,6 +3863,41 @@ void test_special_frames(const std::filesystem::path& data) {
     }
 }
 
+// ANIMPRIM.C 1908: in combat, the actions flagged 0x80 (shape 0x33C) go one
+// unit up or down per step towards the target's height. The port kept the
+// height of the frames.
+void test_combat_height(const std::filesystem::path& data) {
+    constexpr ObjId kGuard = 4;
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "garde-mort-debout.sav");
+    World& w = game.world();
+    Item* guard = w.get(kGuard);
+    CHECK(guard != nullptr);
+    if (!guard) return;
+    w.set_camera(guard->x, guard->y, guard->z);
+    for (int f = 0; f < 10; ++f) game.update(kFrameUs);
+    guard = w.get(kGuard);
+    if (!guard) return;
+    w.set_shape(*guard, 0x33C);
+    const AnimAction* a = game.animations().action(0x33C, 1);
+    CHECK(a && (a->flags() & 0x80));
+    const int z0 = guard->z & 0xFF;
+    const ObjId mark = w.create(0x81, 0);
+    w.pop_to_coords(guard->x - 512, guard->y, z0 + 40);
+    auto r = w.npc_record(kGuard);
+    r[npc::kCombatFlags] |= 0x08;
+    r[npc::kTarget] = static_cast<std::uint8_t>(mark);
+    r[npc::kTarget + 1] = static_cast<std::uint8_t>(mark >> 8);
+    CHECK(do_anim(game.kernel(), w, game.animations(), kGuard, 1, kDirCurrent, 10000, true) != 0);
+    int top = z0;
+    for (int f = 0; f < 60; ++f) {
+        game.update(kFrameUs);
+        if (const Item* g = w.get(kGuard)) top = std::max(top, g->z & 0xFF);
+    }
+    std::printf("combat height: shape 0x33C from z %d, target at %d, up to %d\n", z0, z0 + 40, top);
+    CHECK(top > z0 && top <= z0 + 40);
+}
+
 void test_death_out_of_fast_area(const std::filesystem::path& data) {
     constexpr ObjId kGuard = 4;
     Game game(data, test_saves(data));
@@ -4473,6 +4508,7 @@ int main(int argc, char** argv) {
     test_auto_firer(data);
     test_anim_end(data);
     test_special_frames(data);
+    test_combat_height(data);
     test_stations(data);
     test_scenery_use(data);
     test_computer(data);

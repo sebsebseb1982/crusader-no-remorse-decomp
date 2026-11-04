@@ -18,7 +18,7 @@
 //
 // Not yet (compared with the byte-exact C, docs/audit-decomp.md): frame
 // skipping (1908: off-screen NPCs and the frameskip option play two frames
-// per step), combat height tracking (action flag 0x80), the restart of
+// per step), the restart of
 // actions flagged 0x40 (none in ANIM.DAT), the target of a pathfinder walk
 // passed to the sweep. The special frames (0x1000): special_frame; the
 // start test of the controlled NPC's moves (016F): fit_start.
