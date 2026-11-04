@@ -41,12 +41,19 @@ struct Sweep {
     std::int32_t dx, dy, dz;
     std::int32_t best_dx, best_dy, best_dz;
     SweepResult result;
+    ObjId goal = 0;  // +0x2D
 
     // @orig 10E8:0228
     void add_hit(ObjId item, std::int32_t hx, std::int32_t hy, std::int32_t hz, bool blocking) {
         // ITEMFIND.C 0228: a blocking contact closer on any axis becomes the blocker.
         if (blocking && (std::abs(hx) < std::abs(best_dx) || std::abs(hy) < std::abs(best_dy) ||
                          std::abs(hz) < std::abs(best_dz))) {
+            if (goal != 0 && item == goal) {
+                result.goal_hit = true;
+                if (result.blocker == 0) result.goal_first = true;
+            } else {
+                result.goal_first = false;
+            }
             result.blocker = item;
             best_dx = hx;
             best_dy = hy;
@@ -153,7 +160,7 @@ std::uint16_t collision_mask(const ShapeInfo* info) {
 
 // @orig 10E8:0B39
 SweepResult sweep(const World& world, std::uint16_t shape, ObjId mover, const World::Point& start,
-                  const World::Point& end, std::uint8_t flags, std::uint16_t mask) {
+                  const World::Point& end, std::uint8_t flags, std::uint16_t mask, ObjId goal) {
     const ShapeInfo* info = world.shape_info(shape);
     const Item* m = world.get(mover);
     Sweep s{world,
@@ -173,6 +180,7 @@ SweepResult sweep(const World& world, std::uint16_t shape, ObjId mover, const Wo
             0,
             0,
             {}};
+    s.goal = goal;
     s.best_dx = s.dx;
     s.best_dy = s.dy;
     s.best_dz = s.dz;
@@ -300,15 +308,15 @@ SweepResult try_move(const World& world, ObjId mover, const World::Point& end, s
 
 // @orig 10E8:162F
 SweepResult try_move(const World& world, ObjId mover, const World::Point& start, const World::Point& end,
-                     std::uint8_t flags) {
+                     std::uint8_t flags, ObjId goal) {
     const Item* m = world.get(mover);
     if (!m) return {};
-    if (start.z != end.z) return sweep(world, m->shape, mover, start, end, flags);
+    if (start.z != end.z) return sweep(world, m->shape, mover, start, end, flags, 0, goal);
 
     // Level move: the ground may be up to 9 below; follow it down, straight
     // down from the end point (the second sweep starts at param_4). From the
     // start, a step down would cross the step being left.
-    SweepResult r = sweep(world, m->shape, mover, start, end, flags | kSweepGroundSlack);
+    SweepResult r = sweep(world, m->shape, mover, start, end, flags | kSweepGroundSlack, 0, goal);
     if (r.ok) {
         if (r.ground_gap != 0) {
             const World::Point lower{end.x, end.y, end.z - r.ground_gap};
@@ -318,15 +326,20 @@ SweepResult try_move(const World& world, ObjId mover, const World::Point& start,
         return r;
     }
     if (!(flags & kSweepStepUp)) return r;
-    // Blocked: try climbing 8, then 9 units.
+    // Not onto the goal when it blocks first.
+    if (goal != 0 && r.goal_first) return r;
+    // Blocked: try climbing 8, then 9 units. At 9 the ground below is not
+    // followed down. Refused, the last sweep tried is returned.
     for (std::int32_t step : {8, 9}) {
         const World::Point raised{start.x, start.y, start.z + step};
-        if (!sweep(world, m->shape, mover, start, raised, kSweepNoGround).ok) continue;
-        SweepResult up = sweep(world, m->shape, mover, raised, {end.x, end.y, end.z + step}, flags | kSweepGroundSlack);
-        if (up.ok) {
-            up.end.z = end.z + step - up.ground_gap;
-            return up;
+        r = sweep(world, m->shape, mover, start, raised, kSweepNoGround, 0, goal);
+        if (!r.ok) continue;
+        r = sweep(world, m->shape, mover, raised, {end.x, end.y, end.z + step}, flags | kSweepGroundSlack);
+        if (r.ok) {
+            r.end.z = end.z + step - (step == 8 ? r.ground_gap : 0);
+            return r;
         }
+        if (step == 9) return r;
     }
     return r;
 }

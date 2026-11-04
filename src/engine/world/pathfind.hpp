@@ -3,21 +3,23 @@
 // type 0x204). See docs/combat.md, "Se déplacer".
 //
 // Not a search over a graph: each turn, the process picks the next step's
-// direction from the NPC's position by simulating one frame of the walk
-// (action 1, or 0x24 in combat) in candidate directions, then plays the real
-// walk in the chosen direction and waits for it.
+// direction from the NPC's position by test walks (action 1, or 0x24 in
+// combat: a whole half stride in ANIMPRIM.C test mode, test_action, aimed at
+// the goal item) in candidate directions, then plays the real walk in the
+// chosen direction and waits for it. The test walk ends where it stopped;
+// the next one starts from there.
 //
 // Choosing a direction (1118:08E4), from position p:
 //   d = 8-direction from p to the goal. When p is closer to the goal (x, y
-//   Chebyshev) than ever before, a step towards d is simulated; if it passes,
+//   Chebyshev) than ever before, a test walk towards d is made; if it passes,
 //   wall following stops.
 //   Candidates: d + {0, +2, -2, +4, -4, +6, -6, -8} (or the mirror table
 //   {0, -2, +2, ...}, chosen at random when the process starts). Following a
 //   wall: from the reverse of the last direction, turning by 2 the way of the
 //   chosen side, the candidates 2, 4, 5, 6, 7 of that list.
-//   The first candidate whose simulated step passes is taken. Reaching the
-//   goal item (simulation touching it, when it is a solid shape with height)
-//   or the stop distance ends the walk after this step. When none passes:
+//   The first candidate whose test walk passes is taken. Reaching the goal
+//   item (the test walk blocked first by it, sweep +0x49, when it is a solid
+//   shape with height) or the stop distance ends the walk after this step. When none passes:
 //   no way. Taking a candidate other than d starts wall following, on the
 //   side given by the candidate's rank.
 //   In combat, when the NPC then has a line of fire to its target, it stops

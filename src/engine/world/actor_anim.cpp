@@ -18,61 +18,11 @@ namespace crusader {
 
 namespace {
 
-// The test run of ANIMPRIM.C 016F: a process with a test position (+0x50)
-// plays the action from `pos` without showing anything, and tells whether it
-// would end (or reach the end of its half stride) without a blocked step and
-// without the actor stumbling. `pos` becomes where it stopped: after a
-// blocked walking step, the last place reached; after another blocked step,
-// the place it tried to reach (1908, the test branch).
-// @orig 1158:016F 1158:1908
-bool action_fits(const World& world, const AnimAction& a, std::uint16_t action, ObjId actor, int dir,
+bool action_fits(const World& world, const AnimDat& anims, std::uint16_t action, ObjId actor, int dir,
                  World::Point& pos) {
-    const auto record = world.npc_record(actor);
-    const Item* item = world.get(actor);
-    if (!item || record.empty()) return false;
-    const int count = static_cast<int>(a.frame_count());
-    const int flags = a.flags();
-    const bool second_half = !(record[npc::kAnimFlags] & 0x04);
-    int index = 0;
-    if (flags & 0x01) index = second_half ? count / 2 : ((flags & 0x04) ? count - 1 : 0);
-    else if ((flags & 0x04) && world.npc_word(actor, npc::kLastAnim) == action) index = 1;
-    const int move_dir = a.turned() ? (dir + 4) & 0xF : dir;
-    for (int n = 0; n < count; ++n, ++index) {
-        if (flags & 0x01) {
-            if (second_half) {
-                if ((flags & 0x04) && index == count - 1) return true;
-            } else {
-                if ((index == count / 2 && count != 3) || (index == 2 && count == 3)) return true;
-                if (index == count) index = (flags & 0x04) ? 1 : 0;
-            }
-        }
-        if (index >= count) return true;
-        const AnimFrame* f = a.frame(dir, static_cast<std::size_t>(index));
-        if (!f) return false;
-        const int d = f->distance * 2;
-        const World::Point target{pos.x + kDirectionDx[move_dir] * d, pos.y + kDirectionDy[move_dir] * d,
-                                  std::max(0, pos.z + f->delta_z)};
-        if (f->ground_check) {
-            SweepResult r = try_move(world, actor, pos, target, kSweepSupportOnly | kSweepStepUp);
-            if (!r.ok && r.blocker == 0) r = try_move(world, actor, pos, target, kSweepNoGround);
-            if (!r.ok) return false;
-            pos = r.end;
-            if (!(support_mask(world, item->shape, pos.x, pos.y, pos.z, true, actor) & 0x10)) return false;
-        } else {
-            SweepResult r = sweep(world, item->shape, actor, pos, target, kSweepNoGround);
-            World::Point tried = target;
-            if (!r.ok && r.blocker != 0) {
-                tried = {pos.x, pos.y, target.z};
-                r = sweep(world, item->shape, actor, pos, tried, kSweepNoGround);
-            }
-            if (!r.ok) {
-                pos = tried;
-                return false;
-            }
-            pos = r.end;
-        }
-    }
-    return true;
+    const ActionTest t = test_action(world, anims, actor, action, dir, pos);
+    pos = t.end;
+    return t.ok;
 }
 
 bool is_roll(std::uint16_t action) { return action == 0x17 || action == 0x18 || action == 0x3D || action == 0x3E; }
@@ -115,7 +65,7 @@ std::uint16_t fit_start(Kernel& kernel, World& world, const AnimDat& anims, ObjI
         finish_move(world, actor, r);
     };
     World::Point at = start;
-    if (action_fits(world, *a, action, actor, dir, at)) return action;
+    if (action_fits(world, anims, action, actor, dir, at)) return action;
     if (is_roll(action)) {
         int reach[7] = {};
         for (int i = 1; i < 7; ++i) {
@@ -124,7 +74,7 @@ std::uint16_t fit_start(Kernel& kernel, World& world, const AnimDat& anims, ObjI
             const SweepResult r = try_move(world, actor, start, there, kSweepSupportOnly);
             if (!r.ok) continue;
             at = there;
-            if (action_fits(world, *a, action, actor, dir, at)) {
+            if (action_fits(world, anims, action, actor, dir, at)) {
                 move(r);
                 return action;
             }
@@ -145,7 +95,7 @@ std::uint16_t fit_start(Kernel& kernel, World& world, const AnimDat& anims, ObjI
         const SweepResult r = try_move(world, actor, start, there, kSweepSupportOnly);
         if (!r.ok) continue;
         at = there;
-        if (!action_fits(world, *a, action, actor, dir, at)) continue;
+        if (!action_fits(world, anims, action, actor, dir, at)) continue;
         move(r);
         return action;
     }
@@ -464,39 +414,73 @@ bool ActorAnimProcess::fall_if_unsupported(const World::Point& from, const World
     return true;
 }
 
-// @orig 1158:2B4D 1158:1908
-SimulatedStep simulate_step(const World& world, const AnimDat& anims, ObjId actor, std::uint16_t action, int dir,
-                            World::Point& pos, ObjId goal) {
+// @orig 1158:2B4D 1158:016F 1158:1908
+ActionTest test_action(const World& world, const AnimDat& anims, ObjId actor, std::uint16_t action, int dir,
+                       World::Point pos, ObjId goal) {
+    ActionTest out;
+    out.end = pos;
     const Item* item = world.get(actor);
     const auto record = world.npc_record(actor);
-    const AnimAction* a = item ? anims.action(item->shape, action) : nullptr;
-    if (!a || a->frame_count() == 0 || record.empty()) return {};
-    // First frame, as ActorAnimProcess::start would pick it.
-    const std::uint8_t flags = a->flags();
-    const int count = static_cast<int>(a->frame_count());
-    const std::uint16_t last = static_cast<std::uint16_t>(record[npc::kLastAnim] | record[npc::kLastAnim + 1] << 8);
-    int index = 0;
-    if (flags & 0x01) index = !(record[npc::kAnimFlags] & 0x04) ? count >> 1 : ((flags & 0x04) ? count - 1 : 0);
-    else if ((flags & 0x04) && last == action) index = 1;
-    index = std::min(index, count - 1);
+    const AnimAction* found = item ? anims.action(item->shape, action) : nullptr;
+    if (!found || found->frame_count() == 0 || record.empty()) return out;
+    const AnimAction& a = *found;
+    // ANIMPRIM.C 31DA: 8-direction actions use the even directions.
     dir &= 0xF;
-    if (!a->sixteen_directions() && (dir & 1)) dir = (dir - 1) & 0xF;
-    const AnimFrame* f = a->frame(dir, static_cast<std::size_t>(index));
-    if (!f) return {};
-    const int move_dir = a->turned() ? (dir + 4) & 0xF : dir;
-    const int d = f->distance * 2;
-    if (d == 0 && f->delta_z == 0) return {true, false};
-    const World::Point target{pos.x + kDirectionDx[move_dir] * d, pos.y + kDirectionDy[move_dir] * d,
-                              std::max(0, pos.z + f->delta_z)};
-    const std::uint8_t sweep_flags = f->ground_check ? (kSweepSupportOnly | kSweepStepUp) : kSweepNoGround;
-    const SweepResult r = try_move(world, actor, pos, target, sweep_flags);
-    bool touched = goal != 0 && r.blocker == goal;
-    for (const SweepHit& h : r.hits) touched = touched || (goal != 0 && h.item == goal);
-    if (r.ok) {
-        pos = r.end;
-        return {true, touched};
+    if (!a.sixteen_directions() && (dir & 1)) dir = (dir - 1) & 0xF;
+    const int count = static_cast<int>(a.frame_count());
+    const int flags = a.flags();
+    const bool second_half = !(record[npc::kAnimFlags] & 0x04);
+    int index = 0;
+    if (flags & 0x01) index = second_half ? count / 2 : ((flags & 0x04) ? count - 1 : 0);
+    else if ((flags & 0x04) && world.npc_word(actor, npc::kLastAnim) == action) index = 1;
+    const int move_dir = a.turned() ? (dir + 4) & 0xF : dir;
+    const auto done = [&](bool ok) {
+        out.ok = ok;
+        out.end = pos;
+        return out;
+    };
+    for (int n = 0; n < count; ++n, ++index) {
+        if (flags & 0x01) {
+            if (second_half) {
+                if ((flags & 0x04) && index == count - 1) return done(true);
+            } else {
+                if ((index == count / 2 && count != 3) || (index == 2 && count == 3)) return done(true);
+                if (index == count) index = (flags & 0x04) ? 1 : 0;
+            }
+        }
+        if (index >= count) return done(true);
+        const AnimFrame* f = a.frame(dir, static_cast<std::size_t>(index));
+        if (!f) return done(false);
+        const int d = f->distance * 2;
+        const World::Point target{pos.x + kDirectionDx[move_dir] * d, pos.y + kDirectionDy[move_dir] * d,
+                                  std::max(0, pos.z + f->delta_z)};
+        SweepResult r;
+        if (f->ground_check) {
+            r = try_move(world, actor, pos, target, kSweepSupportOnly | kSweepStepUp, goal);
+            if (!r.ok && r.blocker == 0) r = try_move(world, actor, pos, target, kSweepNoGround, goal);
+            if (r.ok) pos = r.end;
+        } else {
+            World::Point tried = target;
+            r = sweep(world, item->shape, actor, pos, tried, kSweepNoGround, 0, goal);
+            if (!r.ok && r.blocker != 0) {
+                tried = {pos.x, pos.y, target.z};
+                r = sweep(world, item->shape, actor, pos, tried, kSweepNoGround, 0, goal);
+            }
+            pos = tried;
+        }
+        // +0x49: the goal blocks first; the result gets bit 1 (+0x42).
+        if (r.goal_first) out.reached = true;
+        if (!r.ok) {
+            // Stopped by its goal, the action is over (+0x3D), unless
+            // unstoppable; any other blocked step fails it.
+            return done(r.goal_first && !(flags & 0x08));
+        }
+        // ANIMPRIM.C 3091 in test mode: an actor that would stumble fails it.
+        if (f->ground_check && !(support_mask(world, item->shape, pos.x, pos.y, pos.z, true, actor) & 0x10)) {
+            return done(false);
+        }
     }
-    return {touched, touched};
+    return done(true);
 }
 
 // CRUSADER_1138_32a8: shows the first frame of `action` in the NPC's direction.

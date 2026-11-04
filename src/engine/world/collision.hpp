@@ -42,6 +42,11 @@ struct SweepResult {
     std::vector<SweepHit> hits;     // in the order met (the original's list is newest first)
     World::Point delta{};           // movement asked for (the original's +0x16)
     World::Point done{};            // movement up to the blocker, all of it when none (+0x10)
+    // With a goal item (the original's +0x2D): the goal became the blocker
+    // while no other was (+0x49, cleared when a closer one replaces it), and
+    // the goal was a blocker at some point (+0x50).
+    bool goal_first = false;
+    bool goal_hit = false;
 };
 
 // Collision mask of a shape.
@@ -51,7 +56,7 @@ std::uint16_t collision_mask(const ShapeInfo* info);
 // towards `end` (ITEMFIND.C 0B39). `mask` overrides the shape's mask when
 // non-zero.
 SweepResult sweep(const World& world, std::uint16_t shape, ObjId mover, const World::Point& start,
-                  const World::Point& end, std::uint8_t flags, std::uint16_t mask = 0);
+                  const World::Point& end, std::uint8_t flags, std::uint16_t mask = 0, ObjId goal = 0);
 
 // ITEMFIND.C 00D9 with SEG1018 00FD: whether a box of w x d x h at `at`
 // (x - w + 1 .. x, y - d + 1 .. y, z .. z + h - 1, at most 255) is free: the
@@ -72,11 +77,13 @@ bool position_free(const World& world, std::uint16_t shape, const World::Point& 
 ObjId legal_create_at(World& world, std::uint16_t shape, std::uint8_t frame, const World::Point& at);
 
 // Walking move (ITEMFIND.C 162F): on level moves the actor follows the ground
-// down by up to 9 units and, with kSweepStepUp, climbs steps of 8 or 9.
+// down by up to 9 units and, with kSweepStepUp, climbs steps of 8 or 9 (not
+// when the goal blocks first). Refused, the result is that of the last sweep
+// tried, as the original's sweep object keeps it.
 SweepResult try_move(const World& world, ObjId mover, const World::Point& end, std::uint8_t flags);
 // Same from `start` instead of the mover's position (simulated moves).
 SweepResult try_move(const World& world, ObjId mover, const World::Point& start, const World::Point& end,
-                     std::uint8_t flags);
+                     std::uint8_t flags, ObjId goal = 0);
 
 // ITEMFIND.C 123A, after a sweep of `mover` (that it describes): moves the
 // mover to `r.end` and sends the contact events, in this order:

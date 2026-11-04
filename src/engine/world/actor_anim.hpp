@@ -147,18 +147,22 @@ std::uint16_t fit_start(Kernel& kernel, World& world, const AnimDat& anims, ObjI
 Pid do_anim(Kernel& kernel, World& world, const AnimDat& anims, ObjId actor, std::uint16_t action, int dir,
             std::uint32_t max_queued = 10000, bool replace = false);
 
-// ANIMPRIM.C test mode (a position pointer given to the constructor, used by
-// the path finder): the first frame `action` would show facing `dir` is
-// tried from `pos` instead of the actor's position, without changing
-// anything. On success `pos` takes the new position. A step blocked by
-// `goal` counts as a success that touched it (result bit 1); other blocked
-// steps fail (no support counts as blocked: no falling in this mode).
-struct SimulatedStep {
+// ANIMPRIM.C test mode (a position given to the constructor, +0x50, used by
+// the start test of 016F, the path finder and the walk activity): the action
+// is played from `pos` facing `dir` without showing anything, as the actor
+// would start it (frame index, half strides). It succeeds when it ends (or
+// ends its half stride) without a blocked step and without the actor
+// stumbling. A step blocked first by `goal` (sweep +0x49) sets `reached`
+// and ends the action, a success unless the action is unstoppable. `end` is
+// where it stopped: after a blocked walking step the last place reached,
+// after another blocked step the place it tried to reach.
+struct ActionTest {
     bool ok = false;
-    bool touched_goal = false;
+    bool reached = false;
+    World::Point end{};
 };
-SimulatedStep simulate_step(const World& world, const AnimDat& anims, ObjId actor, std::uint16_t action, int dir,
-                            World::Point& pos, ObjId goal);
+ActionTest test_action(const World& world, const AnimDat& anims, ObjId actor, std::uint16_t action, int dir,
+                       World::Point pos, ObjId goal = 0);
 
 // CRUSADER_1138_32a8: shows the first frame of `action` in the actor's
 // direction at once (last action = `action`, frame index 0).

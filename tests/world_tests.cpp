@@ -9,8 +9,10 @@
 #include "engine/usecode/uc_process.hpp"
 #include "engine/usecode/world_intrinsics.hpp"
 #include "engine/world/actor_anim.hpp"
+#include "engine/world/attack.hpp"
 #include "engine/world/collision.hpp"
 #include "engine/world/gravity.hpp"
+#include "engine/world/pathfind.hpp"
 #include "engine/world/render.hpp"
 #include "engine/world/world.hpp"
 
@@ -524,6 +526,119 @@ void test_collisions() {
     CHECK(!box_free(w, 16, 16, 1, 0x8001, {140, 100, 63}) && box_free(w, 16, 16, 1, 0x8000, {140, 100, 63}));
 }
 
+// ATTACK.C 1118:08E4: the path finder tries each direction with a test walk
+// of a whole half stride (two frames here). East, the first frame is clear and
+// the second meets a wall: the original turns aside, north or south. The port
+// tried one frame and walked east into the wall.
+void test_pathfinder_test_walk() {
+    constexpr std::size_t table = AnimDat::kShapes * 4, action = table + AnimDat::kActions * 4;
+    std::vector<std::uint8_t> bytes(action + 4 + 8 * 4 * 8);
+    auto u32 = [&](std::size_t at, std::size_t value) {
+        for (int k = 0; k < 4; ++k) bytes[at + k] = static_cast<std::uint8_t>(value >> (k * 8));
+    };
+    u32(4, table);
+    u32(table + 4, action);
+    bytes[action] = 4;
+    bytes[action + 1] = 1;
+    bytes[action + 2] = 1;
+    for (std::size_t f = 0; f < 8 * 4; ++f) {
+        bytes[action + 4 + f * 8 + 4] = 4;  // distance 4 * 2 = 8
+        bytes[action + 4 + f * 8 + 5] = 2;  // ground check
+    }
+    const AnimDat anims = AnimDat::parse(bytes);
+    std::vector<ShapeInfo> tf(4);
+    tf[1].flags = ShapeInfo::kSolid | ShapeInfo::kNpc;
+    tf[1].footpad_x = tf[1].footpad_y = tf[1].footpad_z = 1;
+    tf[2].flags = tf[3].flags = ShapeInfo::kSolid | ShapeInfo::kFixed;
+    tf[2].footpad_x = tf[2].footpad_y = 16;
+    tf[3].footpad_x = 1;
+    tf[3].footpad_y = 16;
+    tf[3].footpad_z = 8;
+    World w(tf);
+    w.create(2, 0);
+    w.pop_to_coords(255, 255, 0);
+    w.create(3, 0);
+    w.pop_to_coords(125, 255, 0);
+    Item npc;
+    npc.id = 2;
+    npc.shape = 1;
+    npc.x = npc.y = 100;
+    w.add_with_id(npc);
+    w.set_camera(100, 100, 0);
+    w.state.controlled_npc = 0;
+    Kernel k;
+    walk_to(k, w, anims, 2, 0, {200, 100, 0}, 10, 0, false);
+    int dir = -1;
+    for (int f = 0; f < 3 && dir < 0; ++f) {
+        k.advance_time(16667);
+        k.run_slice();
+        k.for_each_process([&](const Process& p) {
+            if (const auto* a = dynamic_cast<const ActorAnimProcess*>(&p); a && a->owner() == 2 && a->action() == 1)
+                dir = a->direction();
+        });
+    }
+    std::printf("path finder test walk: first walk towards %d\n", dir);
+    CHECK(dir == 0 || dir == 8);
+}
+
+// TYPE_1108_0708, activity 3 (walk): an NPC between two walls, blocked ahead
+// then behind, takes activity 7 for shapes 0x2F5, 0x2F6, 0x2F7, 0x344, 0x597
+// and attacks (5) otherwise. The port had it the other way round.
+void test_walk_activity_blocked() {
+    constexpr std::size_t table = AnimDat::kShapes * 4, action = table + AnimDat::kActions * 4;
+    std::vector<std::uint8_t> bytes(action + 4 + 8 * 4 * 8);
+    auto u32 = [&](std::size_t at, std::size_t value) {
+        for (int k = 0; k < 4; ++k) bytes[at + k] = static_cast<std::uint8_t>(value >> (k * 8));
+    };
+    u32(4 * 1, table);
+    u32(4 * 0x2F5, table);
+    u32(table + 4, action);
+    bytes[action] = 4;
+    bytes[action + 1] = 1;
+    bytes[action + 2] = 1;
+    for (std::size_t f = 0; f < 8 * 4; ++f) {
+        bytes[action + 4 + f * 8 + 4] = 4;  // distance 4 * 2 = 8
+        bytes[action + 4 + f * 8 + 5] = 2;  // ground check
+    }
+    const AnimDat anims = AnimDat::parse(bytes);
+    for (const std::uint16_t shape : {std::uint16_t{1}, std::uint16_t{0x2F5}}) {
+        std::vector<ShapeInfo> tf(0x300);
+        tf[shape].flags = ShapeInfo::kSolid | ShapeInfo::kNpc;
+        tf[shape].footpad_x = tf[shape].footpad_y = tf[shape].footpad_z = 1;
+        tf[2].flags = tf[3].flags = ShapeInfo::kSolid | ShapeInfo::kFixed;
+        tf[2].footpad_x = tf[2].footpad_y = 16;
+        tf[3].footpad_x = 1;
+        tf[3].footpad_y = 16;
+        tf[3].footpad_z = 8;
+        World w(tf);
+        w.create(2, 0);
+        w.pop_to_coords(255, 255, 0);
+        w.create(3, 0);
+        w.pop_to_coords(112, 255, 0);  // east wall, x 97..112
+        w.create(3, 0);
+        w.pop_to_coords(80, 255, 0);   // west wall, x 65..80
+        Item npc;
+        npc.id = 2;
+        npc.shape = shape;
+        npc.x = npc.y = 96;            // x 81..96, 1 unit from each wall
+        w.add_with_id(npc);
+        w.set_camera(96, 96, 0);
+        w.state.controlled_npc = 0;
+        w.npc_record(2)[npc::kDirection] = 4;
+        Kernel k;
+        set_activity(k, w, anims, 2, 3);
+        CHECK(w.npc_word(2, npc::kActivity) == 3);
+        int activity = 3;
+        for (int f = 0; f < 600 && activity == 3; ++f) {
+            k.advance_time(16667);
+            k.run_slice();
+            activity = w.npc_word(2, npc::kActivity);
+        }
+        std::printf("walk activity: shape 0x%X between two walls, activity %d\n", shape, activity);
+        CHECK(activity == (shape == 0x2F5 ? 7 : 5));
+    }
+}
+
 void test_walk_alignment() {
     // A two-frame half stride: the first step is clear, the second meets the
     // doorpost. A full-stride probe must choose the free side before walking.
@@ -890,6 +1005,8 @@ int main() {
     test_footprint_intrinsics();
     test_collisions();
     test_walk_alignment();
+    test_pathfinder_test_walk();
+    test_walk_activity_blocked();
     test_scripted_camera();
     test_support_and_fall();
     test_gravity_step();

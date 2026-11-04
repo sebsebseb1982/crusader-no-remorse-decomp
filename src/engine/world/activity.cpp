@@ -124,16 +124,18 @@ protected:
         if (!self || spot_controlled(k, world_, anims_, npc) || actor_busy(k, npc)) return;
         const int dir = world_.npc_direction(npc) & 0xF;
         World::Point pos = world_.location(*self);
-        if (simulate_step(world_, anims_, npc, 1, dir, pos, 0).ok) {
+        if (test_action(world_, anims_, npc, 1, dir, pos).ok) {
             blocked_ = 0;
             const Pid pid = do_anim(k, world_, anims_, npc, 1, kDirCurrent, 0, false);
             if (pid != 0) wait_for(pid);
             return;
         }
         if (++blocked_ > 1) {
+            // Blocked twice: shapes 0x2F5, 0x2F6, 0x2F7, 0x344 and 0x597 take
+            // activity 7, the others attack (5).
             const std::uint16_t s = self->shape;
-            const bool fighter = s == 0x2F5 || s == 0x2F7 || s == 0x2F6 || s == 0x344 || s == 0x597;
-            set_activity(k, world_, anims_, npc, fighter ? 5 : 7);
+            const bool listed = s == 0x2F5 || s == 0x2F7 || s == 0x2F6 || s == 0x344 || s == 0x597;
+            set_activity(k, world_, anims_, npc, listed ? 7 : 5);
             return;
         }
         do_anim(k, world_, anims_, npc, 0, kDirCurrent, 0, false);

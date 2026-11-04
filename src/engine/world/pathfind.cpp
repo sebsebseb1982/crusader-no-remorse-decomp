@@ -67,11 +67,11 @@ int PathfinderProcess::choose_direction(World::Point& pos) {
     const int d = direction_8(pos.x, pos.y, goal_.x, goal_.y) & 0xF;
     const int distance = distance_xy(pos, goal_);
     bool failed = false;
+    // Each direction is tried by a test walk (a whole half stride, ANIMPRIM.C
+    // test mode) aimed at the item, if any.
     if (distance < best_) {
         best_ = distance;
-        World::Point probe = pos;
-        failed = !simulate_step(world_, anims_, npc, action, d, probe, item_).ok;
-        if (!failed) wall_ = false;
+        if (test_action(world_, anims_, npc, action, d, pos, item_).ok) wall_ = false;
     }
 
     std::array<int, 9> candidates{};
@@ -98,10 +98,10 @@ int PathfinderProcess::choose_direction(World::Point& pos) {
             candidate_ = candidates[k + 1];
         }
         rank = k;
-        next = pos;
-        const SimulatedStep step = simulate_step(world_, anims_, npc, action, candidate_, next, item_);
+        const ActionTest step = test_action(world_, anims_, npc, action, candidate_, pos, item_);
+        next = step.end;
         failed = !step.ok;
-        if (solid_goal_ && step.touched_goal) {
+        if (solid_goal_ && step.reached) {
             final_turn_ = true;
             return 0xFF;
         }
