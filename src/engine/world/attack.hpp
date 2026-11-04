@@ -9,8 +9,10 @@
 // AttackProcess (type 0x259) runs its combat tactic (record +0x5C; 0 = the
 // built-in behaviour below, others are COMBAT.DAT scripts, not reproduced).
 //
-// The other activities are in activity.hpp. Not reproduced: COMBAT.DAT
-// tactics. A bark (by shape, at the first round one time in three, and
+// The other activities are in activity.hpp. COMBAT.DAT tactics (AttackProcess
+// 1110:06B9, tactics 1 to 31) are not reproduced: the game only ever sets
+// tactic 0 (Actor_I_createActorCru, MonsterEgg_spawn, and the NPC usecode
+// class through Actor::I_setCombatTactic), so they never run. A bark (by shape, at the first round one time in three, and
 // later for shapes 0x2DF, 0x383) is a sound at the NPC; while it plays, the
 // NPC does not aim or fire.
 

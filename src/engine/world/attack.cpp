@@ -191,7 +191,8 @@ void set_target(Kernel& kernel, World& world, const AnimDat& anims, ObjId id, Ob
     set_word(r, npc::kTarget, target);
 }
 
-// @orig ?: activity restart of NPC.C (segment 10F0), not located
+// The NPC part of Item_I_enterFastArea (ITEM.C 2CA8).
+// @orig 10A8:2B30
 void restart_activity(Kernel& kernel, World& world, const AnimDat& anims, ObjId id) {
     auto r = world.npc_record(id);
     const Item* item = world.get(id);

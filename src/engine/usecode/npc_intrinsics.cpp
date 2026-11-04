@@ -226,8 +226,8 @@ std::vector<std::uint16_t> register_npc_intrinsics(UCMachine& m, World& w, const
     });
     // Actor::I_setUnkByte(npc, value) (10F0:3E18): +0x63, read back by
     // I_getUnkByte (0x00B). Actor::I_setCombatTactic(npc, tactic)
-    // (10F0:3594): +0x5C, which the attack process does not read yet
-    // (COMBAT.DAT tactics are not reproduced, attack.hpp).
+    // (10F0:3594): +0x5C, which the attack process does not read: the
+    // usecode only ever sets 0 (COMBAT.DAT tactics, attack.hpp).
     bind({0x0E6}, [&w](ObjId id, Args a) -> std::uint32_t {
         w.npc_record(id)[npc::kEggQuality] = static_cast<std::uint8_t>(arg16(a, 4));
         return 0;
