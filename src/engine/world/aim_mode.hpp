@@ -88,9 +88,11 @@ void turn_crosshair(Kernel& kernel, World& world, const AnimDat& anims, std::uin
 // shooter's z to the muzzle offset before passing it; low byte kept).
 // Port addition (directional aiming of the controller's right stick): puts the
 // crosshair at `angle` (degrees in the world's x, y plane, like DS:285E) and
-// turns the NPC to face it with its combat stance, when it is not busy. Does
-// nothing out of the aiming mode.
-void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, int angle);
+// turns the NPC to face it with its combat stance, when it is not busy. Out of
+// the aiming mode, a drawn weapon only has to enter the mode; when
+// `draw_when_holstered` is on, a holstered one is drawn first (action 7, as the
+// fire key does).
+void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, int angle, bool draw_when_holstered);
 
 std::optional<World::Point> crosshair_aim(const World& world, int z);
 

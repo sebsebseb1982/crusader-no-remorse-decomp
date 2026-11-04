@@ -2673,6 +2673,46 @@ void test_aim_mode(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
+// Port addition: pushing the aim stick of directional aiming draws the weapon
+// by itself (aim_mode.cpp, aim_at_angle), without the fire key first.
+void test_aim_stick_draws(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save(1);
+    World& w = game.world();
+    GameConfig config = game.config();
+    // SAVEGAME.1 ends on a shot (0x8, a combat stance): stand him up first so
+    // that the weapon is holstered.
+    auto holster = [&] {
+        do_anim(game.kernel(), w, game.animations(), 1, 0, kDirCurrent);
+        settle(game);
+    };
+    holster();
+    const GameState::Aim& aim = w.state.aim;
+    CHECK(!aim.active);
+    CHECK(last_action(game) == 0);
+
+    // Switched off: the stick leaves the holstered weapon alone.
+    config.draw_on_aim = false;
+    game.set_config(config);
+    game.set_aim_stick(true, 0);  // screen east: a direction, no trigger
+    for (int i = 0; i < 10; ++i) game.update(kFrameUs);
+    std::printf("draw on aim off: last action 0x%X, aim mode %d\n", last_action(game), aim.active);
+    CHECK(!aim.active && last_action(game) == 0);
+
+    // Switched on: pushing the stick draws it (action 7, or 0xC remapped).
+    game.set_aim_stick(false, 0);
+    config.draw_on_aim = true;
+    game.set_config(config);
+    game.set_aim_stick(true, 0);
+    settle(game);
+    const std::uint16_t raised = last_action(game);
+    std::printf("draw on aim on: last action 0x%X, aim mode %d\n", raised, aim.active);
+    CHECK(aim.active);
+    // Action 7, left as is by a weapon that keeps the actions, else 0xC.
+    CHECK(raised == 7 || raised == 0xC);
+    CHECK(game.machine().faults().empty());
+}
+
 // A shot towards the crosshair flies level with the muzzle, upstairs too:
 // Item::I_fireWeapon passes the shooter's z + the muzzle offset to
 // SPRITE_1140_0e88 (docs/bugs.md: "tirer sur les caisses", the shot went
@@ -4785,6 +4825,7 @@ int main(int argc, char** argv) {
     test_other_map_npc_hidden(data);
     test_aiming(data);
     test_aim_mode(data);
+    test_aim_stick_draws(data);
     test_crosshair_shot_height(data);
     test_player_combat_flag(data);
     test_leave_surface(data);

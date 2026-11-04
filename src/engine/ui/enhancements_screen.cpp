@@ -11,7 +11,7 @@ namespace {
 
 constexpr int kPanelX0 = 100, kPanelY0 = 84, kPanelX1 = 539, kPanelY1 = 426;
 constexpr int kTitleY = 120, kIconSize = 14, kIconGap = 8;
-constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 158, kRowStep = 30, kRowHeight = 24;
+constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 150, kRowStep = 27, kRowHeight = 24;
 constexpr int kTextDrop = 17, kRowPad = 18;  // glyphs hang from their baseline
 constexpr std::uint8_t kFrameColour = 0x57, kGreen = 0x0C, kDimGreen = 0x75;
 
@@ -91,8 +91,8 @@ void EnhancementsScreen::draw(Surface8& screen) const {
         const int tint = focused ? kGreen : kDimGreen;
         draw_rounded_box(screen, r.x0, r.y0, r.x1, r.y1, -1, static_cast<std::uint8_t>(tint));
         const TextWriter writer(*fonts_, kFont);
-        if (row == kFollowRow || row == kDirectionalRow || row == kAimRow || row == kNativeRow || row == kZoomRow ||
-            row == kAutosaveRow || row == kRunRow) {
+        if (row == kFollowRow || row == kDirectionalRow || row == kAimRow || row == kDrawRow || row == kNativeRow ||
+            row == kZoomRow || row == kAutosaveRow || row == kRunRow) {
             // The name on the left, its state on the right.
             std::string name;
             bool on = false;
@@ -115,9 +115,12 @@ void EnhancementsScreen::draw(Surface8& screen) const {
             } else if (row == kNativeRow) {
                 name = tr("RESOLUTION NATIVE", "NATIVE RESOLUTION");
                 on = config_->native_resolution;
-            } else {
+            } else if (row == kAimRow) {
                 name = tr("VISEE DIRECTIONNELLE", "DIRECTIONAL AIM");
                 on = config_->directional_aim;
+            } else {
+                name = tr("DEGAINE EN VISANT", "DRAW ON AIM");
+                on = config_->draw_on_aim;
             }
             if (row != kZoomRow) value = on ? tr("MARCHE", "ON") : tr("ARRET", "OFF");
             print_tinted(screen, *fonts_, r.x0 + kRowPad, r.y0 + kTextDrop, name, tint);
@@ -150,6 +153,8 @@ void EnhancementsScreen::activate(int row) {
         config_->native_resolution = !config_->native_resolution;
     } else if (row == kAimRow) {
         config_->directional_aim = !config_->directional_aim;
+    } else if (row == kDrawRow) {
+        config_->draw_on_aim = !config_->draw_on_aim;
     } else {
         closed_ = true;
     }

@@ -16,6 +16,7 @@ constexpr int kCrosshairDistance = 200;
 constexpr std::uint32_t kRecheckTicks = 60;
 constexpr std::uint16_t kNoAimShape = 0x576;
 constexpr std::uint16_t kAlsoAimShape = 0x580;
+constexpr std::uint16_t kActionRaise = 7;
 constexpr std::uint8_t kKeyLeft = 0x4B;
 constexpr std::uint8_t kKeyRight = 0x4D;
 
@@ -209,10 +210,21 @@ void turn_crosshair(Kernel& kernel, World& world, const AnimDat& anims, std::uin
 }
 
 // @orig none: port-only directional aiming
-void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, int angle) {
+void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, int angle, bool draw_when_holstered) {
     GameState::Aim& aim = world.state.aim;
     const ObjId id = world.state.controlled_npc;
-    if (!aim.active || aim.no_stand || aim.turns != 0) return;
+    if (id == 0 || aim.no_stand || aim.turns != 0) return;
+    if (!aim.active) {
+        // With the weapon already out (a loaded game), the stick only has to
+        // enter the aim mode. Otherwise it draws the weapon, as the fire key
+        // does (7, remapped by the weapon; an aiming action, so the aim mode
+        // follows), when the option allows it. The stick would otherwise do
+        // nothing until the trigger was pressed first.
+        if (actor_busy(kernel, id)) return;
+        if (in_combat_stance(world, id)) enter_aim_mode(kernel, world, anims);
+        else if (draw_when_holstered) do_anim(kernel, world, anims, id, kActionRaise, kDirCurrent);
+        return;
+    }
     angle = ((angle % 360) + 360) % 360;
     const int current = npc_dir(world, id);
     const Item* npc = world.get(id);

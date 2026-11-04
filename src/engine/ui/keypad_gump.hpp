@@ -14,7 +14,7 @@
 // 74..97, 98..123, numbered from 0 left to right then top to bottom:
 // 0..8 the digits 1..9, 9 backspace, 10 the digit 0, 11 enter. The digits
 // entered (8 at most, +0x44) are drawn (13C8:08F5) with shape 12, frame
-// digit - 1 (9 for 0), from (x + 25, y + 12), each the frame's width + 2
+// digit - 1 (9 for 0), from (x + 25, y + 12), each the frame's width + 1
 // further.
 //
 // Fields: shape +0x34, frame +0x36, digits entered +0x39, value +0x3B
@@ -76,7 +76,7 @@ public:
     static constexpr int kMaxDigits = 8;
     static constexpr int kDigitsX = 25;
     static constexpr int kDigitsY = 12;
-    static constexpr int kDigitSpacing = 2;
+    static constexpr int kDigitSpacing = 1;
     static constexpr std::int32_t kCheatCode = 74697689;
     static constexpr int kSoundBackspace = 0x3A;
     static constexpr int kSoundButton = 0x3B;

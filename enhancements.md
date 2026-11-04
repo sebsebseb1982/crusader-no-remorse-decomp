@@ -51,7 +51,7 @@ The original has nothing like it. This screen gathers every option the port adds
 **Look**
 - The screen is cleared. A double red frame (colour `0x57`, corners cut over 3 pixels like the original buttons) fills (100,84)–(539,426).
 - The title is green (`0x0C`), with the "+" icon.
-- 9 rows, 30 px apart. The focused row is bright green (`0x0C`); the others are dark green (`0x75`).
+- 10 rows, 27 px apart. The focused row is bright green (`0x0C`); the others are dark green (`0x75`).
 - An on/off option shows its name on the left and its value on the right: ON / OFF (French: MARCHE / ARRET).
 
 | # | Row (EN / FR) | Effect | CFG key |
@@ -60,11 +60,12 @@ The original has nothing like it. This screen gathers every option the port adds
 | 1 | CAMERA FOLLOW / SUIVI CAMERA | Toggles camera follow | `followplayer` |
 | 2 | DIRECTIONAL MOVE / MODE DIRECTIONNEL | Toggles directional movement | `directionalmove` |
 | 3 | DIRECTIONAL AIM / VISEE DIRECTIONNELLE | Toggles directional aiming | `directionalaim` |
-| 4 | NATIVE RESOLUTION / RESOLUTION NATIVE | Toggles native resolution | `nativeresolution` |
-| 5 | ZOOM | Cycles AUTO → x1 → … → xN → AUTO | `viewzoom` |
-| 6 | AUTOSAVE / SAUVEGARDE AUTO | Toggles the autosave | `autosave` |
-| 7 | TOGGLE RUN / COURSE PERMANENTE | Toggles toggle-run mode | `togglerun` |
-| 8 | BACK / RETOUR | Closes the screen | — |
+| 4 | DRAW ON AIM / DEGAINE EN VISANT | Draws the weapon when the aim stick is pushed | `drawonaim` |
+| 5 | NATIVE RESOLUTION / RESOLUTION NATIVE | Toggles native resolution | `nativeresolution` |
+| 6 | ZOOM | Cycles AUTO → x1 → … → xN → AUTO | `viewzoom` |
+| 7 | AUTOSAVE / SAUVEGARDE AUTO | Toggles the autosave | `autosave` |
+| 8 | TOGGLE RUN / COURSE PERMANENTE | Toggles toggle-run mode | `togglerun` |
+| 9 | BACK / RETOUR | Closes the screen | — |
 
 **Controls**
 - Up or `8`, down or `2`: moves between rows. The focus stops at the first and last row; it does not wrap.
@@ -199,6 +200,7 @@ The original uses tank controls: up walks forward, left/right turn. With this op
 ## 4. Directional aiming (right stick)
 
 **Option:** DIRECTIONAL AIM (`directionalaim`, off by default)
+**Option:** DRAW ON AIM (`drawonaim`, on by default, used with directional aiming)
 **Files:** `src/platform/sdl_gamepad.cpp`, `src/engine/world/aim_mode.cpp` (`aim_at_angle`)
 
 The right stick puts the crosshair directly in the direction it points.
@@ -206,9 +208,10 @@ The right stick puts the crosshair directly in the direction it points.
 **Rules**
 - In play only. In this mode the right stick **no longer turns** the avatar and **no longer moves the mouse**.
 - On above 16000, off below 10000 (hysteresis).
+- With **DRAW ON AIM** on, pushing the stick while the weapon is holstered **draws it at once** (action `7`, remapped by the weapon), exactly as the fire key does, and the aim mode follows. The trigger no longer has to be pressed first. If the avatar is busy (walking, rolling...) the draw waits until it is free while the stick stays pushed. Switched off, the stick does nothing until the trigger has drawn the weapon, as before.
 - Angle conversion: world angle = `315° − screen angle`, because screen east is 315° in the world.
 - On each update, `aim_at_angle` applies when all of these hold:
-  - aiming (combat) mode is active;
+  - aiming (combat) mode is active, or the weapon is holstered, **DRAW ON AIM** is on and the avatar is free (it is then drawn);
   - standing up is not forbidden and no turn-around is in progress;
   - no modal window or cutscene is open;
   - the player is not in stasis and controls the Silencer (NPC 1).
@@ -435,6 +438,7 @@ The original reads much of its data from the CD and needs it in the drive. The p
 | `followplayer` | false | `true` |
 | `directionalmove` | false | `true` |
 | `directionalaim` | false | `true` |
+| `drawonaim` | true | `false` |
 | `togglerun` | false | `true` |
 | `nativeresolution` | true | `false` |
 | `autosave` | true | `false` |

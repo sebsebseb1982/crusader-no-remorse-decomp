@@ -43,7 +43,7 @@ L'original n'a pas d'équivalent. Cet écran regroupe toutes les options ajouté
 **Aspect**
 - L'écran est effacé. Une fenêtre à double cadre rouge (couleur `0x57`, coins coupés sur 3 pixels comme les boutons d'origine) occupe le centre (100,84)–(539,426).
 - Le titre est en vert (`0x0C`) avec l'icône « + ».
-- 9 lignes séparées de 30 px. La ligne qui a le focus est en vert vif (`0x0C`), les autres en vert sombre (`0x75`).
+- 10 lignes séparées de 27 px. La ligne qui a le focus est en vert vif (`0x0C`), les autres en vert sombre (`0x75`).
 - Une option on/off affiche son nom à gauche et sa valeur à droite (« MARCHE » / « ARRET », EN « ON » / « OFF »).
 
 | # | Ligne (FR / EN) | Effet | Clé CFG |
@@ -52,11 +52,12 @@ L'original n'a pas d'équivalent. Cet écran regroupe toutes les options ajouté
 | 1 | SUIVI CAMERA / CAMERA FOLLOW | Bascule le suivi caméra | `followplayer` |
 | 2 | MODE DIRECTIONNEL / DIRECTIONAL MOVE | Bascule le déplacement directionnel | `directionalmove` |
 | 3 | VISEE DIRECTIONNELLE / DIRECTIONAL AIM | Bascule la visée directionnelle | `directionalaim` |
-| 4 | RESOLUTION NATIVE / NATIVE RESOLUTION | Bascule la résolution native | `nativeresolution` |
-| 5 | ZOOM | Fait défiler AUTO → x1 → … → xN → AUTO | `viewzoom` |
-| 6 | SAUVEGARDE AUTO / AUTOSAVE | Bascule la sauvegarde automatique | `autosave` |
-| 7 | COURSE PERMANENTE / TOGGLE RUN | Bascule le mode course permanente | `togglerun` |
-| 8 | RETOUR / BACK | Ferme l'écran | — |
+| 4 | DEGAINE EN VISANT / DRAW ON AIM | Dégaîne l'arme quand le stick de visée est poussé | `drawonaim` |
+| 5 | RESOLUTION NATIVE / NATIVE RESOLUTION | Bascule la résolution native | `nativeresolution` |
+| 6 | ZOOM | Fait défiler AUTO → x1 → … → xN → AUTO | `viewzoom` |
+| 7 | SAUVEGARDE AUTO / AUTOSAVE | Bascule la sauvegarde automatique | `autosave` |
+| 8 | COURSE PERMANENTE / TOGGLE RUN | Bascule le mode course permanente | `togglerun` |
+| 9 | RETOUR / BACK | Ferme l'écran | — |
 
 **Commandes**
 - Haut ou `8`, bas ou `2` : change de ligne, en butée aux extrémités (pas de bouclage).
@@ -192,6 +193,7 @@ L'original utilise des contrôles « tank » : haut avance, gauche/droite tourne
 ## 4. Visée directionnelle (stick droit)
 
 **Option :** `VISEE DIRECTIONNELLE` (`directionalaim`, désactivée par défaut)
+**Option :** `DEGAINE EN VISANT` (`drawonaim`, activée par défaut, utilisée avec la visée directionnelle)
 **Fichiers :** `src/platform/sdl_gamepad.cpp`, `src/engine/world/aim_mode.cpp` (`aim_at_angle`)
 
 Le stick droit place directement le réticule dans la direction pointée.
@@ -199,9 +201,10 @@ Le stick droit place directement le réticule dans la direction pointée.
 **Règles**
 - Uniquement en jeu. Dans ce mode, le stick droit **ne tourne plus** l'avatar et **ne déplace plus la souris**.
 - Activation au-delà de 16000, désactivation sous 10000 (hystérésis).
+- Avec **DEGAINE EN VISANT** activée, pousser le stick alors que l'arme est rangée la **dégaine aussitôt** (action `7`, remappée par l'arme), comme la touche de tir, et le mode visée suit. Plus besoin d'appuyer d'abord sur la gâchette. Si l'avatar est occupé (marche, roulade...), le dégainage attend qu'il soit libre tant que le stick reste poussé. Désactivée, le stick ne fait rien tant que la gâchette n'a pas dégainé l'arme, comme avant.
 - Conversion d'angle : angle monde = `315° − angle écran`, car l'est de l'écran correspond à 315° dans le monde.
 - À chaque mise à jour, `aim_at_angle` s'applique si toutes ces conditions sont réunies :
-  - le mode visée (combat) est actif ;
+  - le mode visée (combat) est actif, ou l'arme est rangée, **DEGAINE EN VISANT** est activée et l'avatar libre (elle est alors dégainée) ;
   - aucune interdiction de se lever, aucun demi-tour en cours ;
   - aucune fenêtre modale ni cinématique ;
   - le joueur n'est pas en stase et contrôle bien le Silencer (NPC 1).
@@ -421,6 +424,7 @@ Un exécutable d'origine ne gère qu'une seule langue. Le portage accepte les do
 | `followplayer` | false | `true` |
 | `directionalmove` | false | `true` |
 | `directionalaim` | false | `true` |
+| `drawonaim` | true | `false` |
 | `togglerun` | false | `true` |
 | `nativeresolution` | true | `false` |
 | `autosave` | true | `false` |

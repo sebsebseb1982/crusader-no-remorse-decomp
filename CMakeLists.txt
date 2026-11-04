@@ -199,6 +199,10 @@ add_executable(world_tests tests/world_tests.cpp)
 target_link_libraries(world_tests PRIVATE crusader_engine)
 add_test(NAME world_tests COMMAND world_tests)
 
+add_executable(ui_tests tests/ui_tests.cpp)
+target_link_libraries(ui_tests PRIVATE crusader_engine)
+add_test(NAME ui_tests COMMAND ui_tests)
+
 add_executable(audio_tests tests/audio_tests.cpp)
 target_link_libraries(audio_tests PRIVATE crusader_engine)
 add_test(NAME audio_tests COMMAND audio_tests)

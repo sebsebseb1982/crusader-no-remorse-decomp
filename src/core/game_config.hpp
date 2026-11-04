@@ -42,6 +42,10 @@ public:
     // Port addition, written only when set: "directionalaim", the right stick
     // puts the crosshair in the direction it points.
     bool directional_aim = false;
+    // Port addition, written when switched off: "drawonaim", pushing the
+    // directional aim stick draws the weapon when it is holstered, without the
+    // fire key first.
+    bool draw_on_aim = true;
     // Port addition, written when switched off: "nativeresolution", the view
     // takes the whole screen (more scenery around the camera) instead of the
     // original 640 x 480.

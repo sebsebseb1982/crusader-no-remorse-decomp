@@ -677,7 +677,8 @@ void Game::update(std::uint32_t elapsed_us) {
     if (world_) world_->set_follow_player(config_.follow_player);
     if (world_ && aim_stick_ && !modal() && !movie_ && !world_->state.avatar_in_stasis && world_->state.controlled_npc == 1) {
         // Screen east is the world angle 315 degrees, north 225: 315 - screen.
-        aim_at_angle(*kernel_, *world_, anims_, static_cast<int>(std::lround(315.0 - aim_stick_deg_)));
+        aim_at_angle(*kernel_, *world_, anims_, static_cast<int>(std::lround(315.0 - aim_stick_deg_)),
+                     config_.draw_on_aim);
     }
     // Outside the kernel slice: a key repeat can choose a save from within it.
     if (pending_load_) {

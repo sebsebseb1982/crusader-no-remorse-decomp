@@ -56,6 +56,14 @@ void check_config() {
     check(!GameConfig::parse(saving.text()).autosave && saving.text().find("autosave=false") != std::string::npos,
           "config autosave off round trip");
 
+    // "drawonaim" (port addition): on by default, written only when switched off.
+    GameConfig drawing = GameConfig::parse("irq=7\r\n");
+    check(drawing.draw_on_aim && drawing.text().find("drawonaim") == std::string::npos,
+          "config drawonaim default on, not written");
+    drawing.draw_on_aim = false;
+    check(!GameConfig::parse(drawing.text()).draw_on_aim && drawing.text().find("drawonaim=false") != std::string::npos,
+          "config drawonaim off round trip");
+
     // Controller settings (port addition): defaults, not written until changed.
     GameConfig p = GameConfig::parse("irq=7\r\n");
     check(p.pad.is_default() && p.text().find("pad") == std::string::npos, "config pad defaults not written");

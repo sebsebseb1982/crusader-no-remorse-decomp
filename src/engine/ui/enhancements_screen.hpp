@@ -8,7 +8,9 @@
 // directionnel" toggle (GameConfig::directional_move): the controller's left
 // stick walks the NPC where it points instead of the tank controls, and the
 // "visee directionnelle" toggle (GameConfig::directional_aim): the right stick
-// puts the crosshair where it points, and the "resolution native" toggle
+// puts the crosshair where it points, and the "degaine en visant" toggle
+// (GameConfig::draw_on_aim): pushing that stick draws the weapon, and the
+// "resolution native" toggle
 // (GameConfig::native_resolution): the view fills the screen, and its "zoom" row
 // (GameConfig::view_zoom): auto, then pixels of 1 to 4 screen pixels, and the
 // "sauvegarde auto" toggle (GameConfig::autosave): the game saves itself at the
@@ -42,8 +44,8 @@ void draw_plus_icon(Surface8& screen, int x, int y, int size, std::uint8_t colou
 
 class EnhancementsScreen {
 public:
-    static constexpr int kPadRow = 0, kFollowRow = 1, kDirectionalRow = 2, kAimRow = 3, kNativeRow = 4,
-                              kZoomRow = 5, kAutosaveRow = 6, kRunRow = 7, kBackRow = 8, kRows = 9;
+    static constexpr int kPadRow = 0, kFollowRow = 1, kDirectionalRow = 2, kAimRow = 3, kDrawRow = 4,
+                              kNativeRow = 5, kZoomRow = 6, kAutosaveRow = 7, kRunRow = 8, kBackRow = 9, kRows = 10;
     static constexpr int kFont = 14;
 
     struct Rect {
