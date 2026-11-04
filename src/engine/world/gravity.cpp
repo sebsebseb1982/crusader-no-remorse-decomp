@@ -80,6 +80,7 @@ GravityProcess::GravityProcess(World& world, ObjId item, int vx_, int vy_, int v
     : vx(vx_), vy(vy_), vz(vz_), gravity(gravity_), world_(world) {
     set_owner(item);
     set_type(kType);
+    if (Item* i = world_.get(item)) i->flags &= static_cast<std::uint16_t>(~kItemBouncing);
     if (is_npc_id(item)) {
         if (auto r = world_.npc_record(item); !r.empty()) {
             r[npc::kAnimFlags] |= kFalling;

@@ -705,6 +705,24 @@ void test_gravity_step() {
         CHECK(max_x == 124 && c.x < 124 && c.z == 0 && (c.flags & kItemBouncing) && k.process_count() == 0);
     }
 
+    // A new fall clears the "bouncing" flag that the last landing left
+    // (1040:0395): a crate thrown up from the ground does not drop the crate
+    // resting on it at its first step, as one still bouncing would.
+    {
+        World w(tf);
+        w.set_camera(300, 300, 0);
+        const ObjId crate = place(w, 21, 200, 200, 0);
+        const ObjId top = place(w, 21, 200, 200, 16);
+        w.get(crate)->flags |= kItemBouncing;  // as after a landing
+        Kernel k;
+        hurl(k, w, crate, 0, 0, 8, 2);
+        const bool cleared = !(w.get(crate)->flags & kItemBouncing);
+        run(k, 1, 21);  // its first step, after the 20 ticks of sleep
+        const bool top_falls = k.find_process(top, GravityProcess::kType) != nullptr;
+        std::printf("gravity: re-thrown crate bouncing flag cleared %d, crate on top falling %d\n", cleared, top_falls);
+        CHECK(cleared && !top_falls);
+    }
+
     // Slices 4 ticks apart (DS:3A88): each step goes 4 times as far. From z
     // 100 at ticks 20, 36 and 52: 0, then -2 * 4 * 4, then -4 * 4 * 4.
     {
