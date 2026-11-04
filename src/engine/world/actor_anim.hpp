@@ -18,11 +18,11 @@
 //
 // Not yet (compared with the byte-exact C, docs/audit-decomp.md): frame
 // skipping (1908: off-screen NPCs and the frameskip option play two frames
-// per step), combat height tracking (action flag 0x80), the special frames
-// (0x1000, WPNCACHE_1160_01f0), the start fallbacks of 016F for the
-// controlled NPC beyond the walk's sideways nudge (rolls, runs, a walk that
-// fits nowhere turned into standing), the restart of actions flagged 0x40
-// (none in ANIM.DAT), the target of a pathfinder walk passed to the sweep.
+// per step), combat height tracking (action flag 0x80), the start fallbacks
+// of 016F for the controlled NPC beyond the walk's sideways nudge (rolls,
+// runs, a walk that fits nowhere turned into standing), the restart of
+// actions flagged 0x40 (none in ANIM.DAT), the target of a pathfinder walk
+// passed to the sweep. The special frames (0x1000): special_frame.
 
 #include "core/anim_dat.hpp"
 #include "engine/kernel.hpp"
@@ -123,6 +123,16 @@ private:
 //   8 and 0x2A (kneeling) become 0xD and 0x2B, or 0x36 and 0x32 for the player
 //   when the weapon overlay is 0x36E or 0x33B.
 std::uint16_t remap_action(const World& world, ObjId actor, std::uint16_t action);
+
+// WPNCACHE_1160_01f0: a frame flagged 0x1000 in ANIM.DAT. An NPC looking
+// aside (last action 0x1E or 0x1F) that sees the controlled NPC
+// (sees_controlled, looking aside) takes activity 10 one time in four
+// (random_range), else attacks (5). Robots 0x385 and 0x4E6 (their deaths)
+// explode (size 2, splash damage) without being destroyed, then lose the
+// exploded and broken flags (0x40, 0x100). The burning and the electrocuted
+// (0x576, 0x596) scream: one of sounds 101-103 (record +0x5A bit 2 clear) or
+// 11, 10 (set), drawn by rand(), unless one of them plays for the actor.
+void special_frame(Kernel& kernel, World& world, const AnimDat& anims, ObjId actor);
 
 // Actor::I_doAnim: queues `action` facing `dir` (0..15 or kDir*) for `actor`.
 // Refused (0) when the actor is parked (z 254), dead, has no such action, or

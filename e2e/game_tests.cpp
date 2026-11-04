@@ -3821,6 +3821,38 @@ void test_anim_end(const std::filesystem::path& data) {
     }
 }
 
+// WPNCACHE_1160_01f0, the frames flagged 0x1000 in ANIM.DAT, which the port
+// ignored: the robot 0x385 explodes on its death (action 0x12), with the
+// large explosion, and stays; the burning man (0x576) screams as he runs.
+void test_special_frames(const std::filesystem::path& data) {
+    constexpr ObjId kGuard = 4;
+    for (const std::uint16_t shape : {std::uint16_t{0x385}, std::uint16_t{0x576}}) {
+        Game game(data, test_saves(data));
+        game.load_save_file(test_saves(data) / "garde-mort-debout.sav");
+        World& w = game.world();
+        Item* guard = w.get(kGuard);
+        CHECK(guard != nullptr);
+        if (!guard) return;
+        w.set_camera(guard->x, guard->y, guard->z);
+        for (int f = 0; f < 10; ++f) game.update(kFrameUs);
+        guard = w.get(kGuard);
+        if (!guard) return;
+        w.set_shape(*guard, shape);
+        const std::uint16_t action = shape == 0x385 ? 0x12 : 1;
+        CHECK(do_anim(game.kernel(), w, game.animations(), kGuard, action, kDirCurrent, 10000, true) != 0);
+        bool blast = false, scream = false;
+        for (int f = 0; f < 180; ++f) {
+            game.update(kFrameUs);
+            w.for_each([&](const Item& i) { blast = blast || (i.shape >= 0x323 && i.shape <= 0x325); });
+            for (const int s : {101, 102, 103, 11, 10}) scream = scream || game.audio()->sources.is_playing(s, kGuard);
+        }
+        std::printf("special frames: shape 0x%X action 0x%X, large explosion %d, scream %d, still there %d\n",
+                    shape, action, blast, scream, w.get(kGuard) != nullptr);
+        if (shape == 0x385) CHECK(blast && w.get(kGuard));
+        else CHECK(scream);
+    }
+}
+
 void test_death_out_of_fast_area(const std::filesystem::path& data) {
     constexpr ObjId kGuard = 4;
     Game game(data, test_saves(data));
@@ -4426,6 +4458,7 @@ int main(int argc, char** argv) {
     test_firing(data);
     test_auto_firer(data);
     test_anim_end(data);
+    test_special_frames(data);
     test_stations(data);
     test_scenery_use(data);
     test_computer(data);

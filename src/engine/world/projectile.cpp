@@ -432,7 +432,7 @@ void apply_damage(Kernel& kernel, World& world, const AnimDat& anims, ObjId targ
                 const int falls = crt_rnd(world, 3) + 1;
                 for (int i = 0; i < falls; ++i) do_anim(kernel, world, anims, target, 0x14, kDirCurrent, 10000, false);
                 do_anim(kernel, world, anims, target, 0x17, kDirCurrent, 10000, false);
-                // WPNCACHE_1160_01f0 (frame effects) and the scream: not reproduced.
+                // Its screams come from the special frames of shape 0x576 (special_frame).
                 world.set_broken(*item);
                 record[npc::kFlags13] |= 0x01;
                 return;

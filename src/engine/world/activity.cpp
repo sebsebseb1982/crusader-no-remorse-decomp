@@ -239,18 +239,31 @@ protected:
 }  // namespace
 
 // @orig 1108:00C2
-bool sees_controlled(const World& world, const AnimDat& anims, ObjId npc) {
+bool sees_controlled(const World& world, const AnimDat& anims, ObjId npc, bool look_turn) {
     const ObjId controlled = world.state.controlled_npc;
     const Item* self = world.get(npc);
     const Item* other = world.get(controlled);
     if (controlled == 0 || !self || !other || !world.is_mostly_on_screen(*self)) return false;
-    const int facing = world.npc_direction(npc) & 0xF;
+    int facing = world.npc_direction(npc) & 0xF;
+    if (look_turn) {
+        // Looking left or right (actions 0x1E, 0x1F) from its third frame,
+        // the NPC sees four directions aside.
+        const auto r = world.npc_record(npc);
+        const int last = r[npc::kLastAnim] | r[npc::kLastAnim + 1] << 8;
+        if ((last == 0x1E || last == 0x1F) && r[npc::kAnimFrame] >= 2) {
+            const bool south = facing == 8 || facing == 10 || facing == 12;
+            const bool back = last == 0x1E ? !south : south;
+            facing = (facing + (back ? -4 : 4)) & 0xF;
+        }
+    }
     const int d = direction_8(self->x, self->y, other->x, other->y) & 0xF;
     bool near = false;
     for (int k = -2; k <= 2; ++k) near = near || facing == ((d + k) & 0xF);
     if (!near) return false;
+    // The line of fire is looked for towards the controlled NPC, whatever
+    // the facing within the two directions.
     bool muzzle_found = false;
-    if (fire_distance(world, anims, npc, controlled, facing, 0, 0, 0, &muzzle_found) != 0) return true;
+    if (fire_distance(world, anims, npc, controlled, d, 0, 0, 0, &muzzle_found) != 0) return true;
     return !muzzle_found && range_if_visible(world, npc, controlled) != 0;
 }
 

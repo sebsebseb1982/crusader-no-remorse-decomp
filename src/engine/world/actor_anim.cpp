@@ -1,11 +1,14 @@
 #include "engine/world/actor_anim.hpp"
 
 #include "core/dtable.hpp"
+#include "core/random.hpp"
 #include "engine/audio/audio.hpp"
+#include "engine/world/activity.hpp"
 #include "engine/world/aim_mode.hpp"
 #include "engine/world/attack.hpp"
 #include "engine/world/collision.hpp"
 #include "engine/world/gravity.hpp"
+#include "engine/world/item_damage.hpp"
 #include "engine/world/item_selection.hpp"
 #include "engine/usecode/item_intrinsics.hpp"
 
@@ -72,6 +75,47 @@ void align_walk(Kernel& kernel, World& world, const AnimAction& a, ObjId actor, 
 }
 
 }  // namespace
+
+// @orig 1160:01F0
+void special_frame(Kernel& kernel, World& world, const AnimDat& anims, ObjId actor) {
+    const Item* item = world.get(actor);
+    const auto r = world.npc_record(actor);
+    if (!item || r.empty()) return;
+    const int last = r[npc::kLastAnim] | r[npc::kLastAnim + 1] << 8;
+    if (last == 0x1E || last == 0x1F) {
+        // Looking aside: seeing the controlled NPC, the NPC takes activity
+        // 10 one time in four, else attacks (5).
+        if (sees_controlled(world, anims, actor, true)) {
+            set_activity(kernel, world, anims, actor, random_range(world.state.random_state, 4) == 0 ? 10 : 5);
+        }
+        return;
+    }
+    switch (item->shape) {
+    case 0x385:  // robots 901 and 1254, dying: a large explosion with splash damage, which they survive
+    case 0x4E6:
+        explode(kernel, world, anims, actor, 2, false, true);
+        if (Item* i = world.get(actor)) i->flags &= static_cast<std::uint16_t>(~0x0140);
+        return;
+    case 0x576:  // the burning and the electrocuted: a scream, unless one plays
+    case 0x596: {
+        // DS:2B12 (record +0x5A bit 2 clear) and DS:2B1A.
+        static constexpr int kScreams[] = {101, 102, 103};
+        static constexpr int kOtherScreams[] = {11, 10};
+        const bool other = r[0x5A] & 0x04;
+        const std::span<const int> table = other ? std::span<const int>(kOtherScreams) : std::span<const int>(kScreams);
+        const int sfx = table[static_cast<std::size_t>(crt_rand_below(world.state.crt_rand_state, static_cast<int>(table.size())))];
+        Audio* audio = world.audio();
+        if (!audio) return;
+        for (const int s : table) {
+            if (audio->sources.is_playing(s, actor)) return;
+        }
+        audio->sources.play(world, sfx, actor);
+        return;
+    }
+    default:
+        return;
+    }
+}
 
 // @orig 1158:0000
 ActorAnimProcess::ActorAnimProcess(World& world, const AnimDat& anims, ObjId actor, std::uint16_t action, int dir,
@@ -282,6 +326,11 @@ bool ActorAnimProcess::step() {
     // of their deaths. The script runs later, as a new process.
     if (f->event && world_.hooks().start_event) {
         world_.hooks().start_event(owner(), kCalledFromAnimEvent);
+        if (!world_.get(owner()) || terminated()) return false;
+    }
+    // Flag 0x1000: the special frames (WPNCACHE_1160_01f0).
+    if (f->special) {
+        special_frame(kernel(), world_, anims_, owner());
         if (!world_.get(owner()) || terminated()) return false;
     }
     if (f->fires_weapon() && world_.hooks().fire_weapon) {

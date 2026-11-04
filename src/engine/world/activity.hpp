@@ -27,9 +27,12 @@
 namespace crusader {
 
 // TYPE_1108_00c2: the NPC, mostly on screen, facing within two directions of
-// the controlled NPC, has a line of fire to it, or (without firing frames)
-// sees it within range (Item::I_getRangeIfVisible).
-bool sees_controlled(const World& world, const AnimDat& anims, ObjId npc);
+// the controlled NPC, has a line of fire to it in the direction of the
+// controlled NPC, or (without firing frames) sees it within range
+// (Item::I_getRangeIfVisible). With `look_turn` (the special frames,
+// WPNCACHE_1160_01f0), an NPC looking aside (actions 0x1E, 0x1F, from frame
+// 2) faces four directions away from its direction.
+bool sees_controlled(const World& world, const AnimDat& anims, ObjId npc, bool look_turn = false);
 
 // Item::I_getRangeIfVisible (1130:1C01): a sweep with `item`'s shape from
 // it to `other` (raised by (footpad height - 1) * 8) meets `other` first:
