@@ -16,10 +16,10 @@
 // clears the half-stride bit, and an action flagged in ANIM.DAT (byte 3
 // bit 7) destroys the actor; failed by the kernel's fail_all, it does nothing.
 //
-// Not yet (compared with the byte-exact C, docs/audit-decomp.md): the restart of
-// actions flagged 0x40 (none in ANIM.DAT), the target of a pathfinder walk
-// passed to the sweep. The special frames (0x1000): special_frame; the
-// start test of the controlled NPC's moves (016F): fit_start.
+// Not yet (compared with the byte-exact C, docs/audit-decomp.md): restart of
+// actions flagged 0x40 (none in ANIM.DAT). Pathfinder trial walks pass their
+// goal to test_action and its sweeps; real walks do not, as in the original.
+// Special frames (0x1000): special_frame; start test (016F): fit_start.
 
 #include "core/anim_dat.hpp"
 #include "engine/kernel.hpp"

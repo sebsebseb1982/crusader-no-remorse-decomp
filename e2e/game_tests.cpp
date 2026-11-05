@@ -4858,6 +4858,10 @@ int main(int argc, char** argv) {
         test_animation_frameskip(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--floor-pad") {
+        test_floor_pad(data);
+        return failures ? 1 : 0;
+    }
     test_load_and_run(data);
     test_alert(data);
     test_player_walks(data);
