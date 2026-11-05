@@ -12,7 +12,8 @@
 //
 // A video frame is cut into horizontal strips of height / strips rows (the
 // rest at the bottom is never drawn): 5 strips for RRV1 and JYV1, 15 for
-// RRV2 (13 when played as an overlay). The chunk starts with one u32 offset
+// RRV2 (13 when played as an overlay; the US overlays are JYV1: 5). The chunk
+// starts with one u32 offset
 // per strip, from the chunk start. A strip is:
 //   u32  n: size of the run codes, 0 when the strip did not change
 //   n bytes of run codes, then the pixels to copy
@@ -69,7 +70,7 @@ public:
     std::uint32_t codec() const { return codec_; }
     // RRV1 / RRV2 (DS:0048 of the player): "00db" frames are at half width.
     bool rrv() const { return codec_ == fourcc("RRV1") || codec_ == fourcc("RRV2"); }
-    // Strips per frame: RRV2 15, others 5 (the overlay forces 13).
+    // Strips per frame: RRV2 15, others 5 (an RRV2 overlay forces 13).
     int strips() const { return codec_ == fourcc("RRV2") ? 15 : 5; }
     // Video frames in the stream (the video "strh" length).
     std::uint32_t frame_count() const { return frame_count_; }

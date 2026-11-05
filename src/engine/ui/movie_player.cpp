@@ -56,7 +56,7 @@ MoviePlayer::MoviePlayer(AviMovie movie, MovieKind kind, std::vector<MovieSubtit
       kept_palette_(dac),
       gumps_(&gumps),
       fonts_(&fonts),
-      strips_(kind == MovieKind::kOverlay ? kOverlayStrips : movie_.strips()),
+      strips_(kind == MovieKind::kOverlay && movie_.codec() == fourcc("RRV2") ? kOverlayStrips : movie_.strips()),
       frame_buffer_(movie_.width(), movie_.height()) {
     // 1468:2188: centred.
     const int scale = doubled_ ? 2 : 1;

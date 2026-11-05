@@ -10,6 +10,7 @@
 #include "engine/ui/message_gump.hpp"
 #include "engine/ui/weasel_gump.hpp"
 #include "engine/usecode/intrinsic_numbering.hpp"
+#include "engine/world/inventory.hpp"
 #include "engine/world/player_commands.hpp"
 #include "engine/world/teleport.hpp"
 #include "game/game.hpp"
@@ -165,6 +166,31 @@ void test_new_game(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
+// U (the controller's d-pad up): the energy cube, then the datalink, whose
+// overlay movie MVA01 is JYV1 here (5 strips), not RRV2 (13) as in French.
+void test_use_datalink(const std::filesystem::path& data) {
+    Game game(data, saves_dir());
+    game.new_game(0);
+    World& w = game.world();
+    game.update(kFrameUs);
+    game.key(0x01, false, true, 0, 0x1B);
+    for (int i = 0; game.movie() && i < 200; ++i) game.update(kFrameUs);
+    game.key(0x01, false, false, 0);
+    for (int i = 0; i < 60; ++i) game.update(kFrameUs);
+    for (int i = 0; i < 600 && w.state.avatar_in_stasis; ++i) game.update(kFrameUs);
+    CHECK(player_may_act(w));
+    bool overlay_seen = false;
+    for (int n = 0; n < 2; ++n) {
+        press(game, 0x16, false, 'u');
+        for (int i = 0; i < 1200; ++i) {
+            game.update(kFrameUs);
+            overlay_seen = overlay_seen || (game.movie() && game.movie()->kind() == MovieKind::kOverlay);
+        }
+    }
+    CHECK(overlay_seen && !game.movie());
+    CHECK(game.machine().faults().empty());
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -180,6 +206,7 @@ int main(int argc, char** argv) {
     test_detection(data);
     test_english_texts(data);
     test_new_game(data);
+    test_use_datalink(data);
     if (failures) std::fprintf(stderr, "%d failure(s)\n", failures);
     else std::printf("all US data tests passed\n");
     return failures ? 1 : 0;

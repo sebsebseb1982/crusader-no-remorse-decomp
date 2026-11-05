@@ -42,7 +42,8 @@
 //     rows below the movie or 470 at most.
 // Big movies ("bigvideo=true", DS:68CE) are drawn twice as wide and high,
 // unless 640 wide or 480 high. An overlay keeps the game palette, has no
-// subtitles, does not pause the music and uses 13 strips.
+// subtitles, does not pause the music and, when RRV2 (the French data), uses
+// 13 strips; the US overlays are JYV1 with 5.
 //
 // Closing (1468:3D7A, 3C23): the sound stopped, the music resumed, the keys
 // forgotten; except for an overlay, the screen cleared and the kept palette
