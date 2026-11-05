@@ -187,12 +187,12 @@ L'original utilise des contrôles « tank » : haut avance, gauche/droite tourne
 - **Changement de secteur** : la nouvelle touche est enfoncée **avant** de relâcher l'ancienne, pour que l'avatar pivote sans s'arrêter.
 - L'action **COURIR** devient **Maj seule**, maintenue avec la touche de déplacement, au lieu de Maj + ↑.
 - Au changement de mode, tout ce que l'ancien mode maintenait enfoncé est relâché.
-- **Arme sortie** : tant que le NPC contrôlé a son arme sortie (dégainée par les actions 7 / 0xC, rangée par 0xB / 0x10), le stick donne les déplacements lents de l'original au lieu des directions absolues du pavé. Ils sont relatifs à l'orientation du NPC (sa visée) :
-  - haut : la **flèche haut**, qui avance (action `1`), ou court avec **COURIR** (Maj + haut). Elle quitte le mode visée, comme la marche dans l'original ;
-  - bas : la **flèche bas**, qui recule lentement (action `2`, `0x2D` avec une arme qui ne garde pas les actions) ;
-  - gauche / droite : **pas de côté**, `Alt + gauche / droite` (actions `0x1C` / `0x1D`) ;
-  - les diagonales prennent la flèche avant ou arrière : l'original n'a pas de déplacement lent en diagonale. Gauche et droite purs donnent les pas de côté.
-- En passant des directions absolues à ces déplacements, l'ancienne touche et Alt sont relâchés **avant** d'enfoncer la nouvelle, pour qu'aucune touche ne parte avec le mauvais modificateur.
+- **Strafe en visant** : tant que le stick droit vise (visée directionnelle) et que le NPC contrôlé a son arme sortie (dégainée par les actions 7 / 0xC, rangée par 0xB / 0x10), le stick strafe au lieu de donner les directions absolues du pavé. Sa direction est prise par rapport à la visée, en 4 secteurs de 90° (conservés jusqu'à 60° de leur axe), et donne les déplacements Alt de l'original, qui gardent le mode visée :
+  - vers la visée : `Alt + haut`, avance lente (action `0x24`, `0x2C` avec une arme qui ne garde pas les actions) ;
+  - à l'opposé : `Alt + bas`, recul lent (action `2`, ou `0x2D`) ;
+  - à sa gauche / droite : **pas de côté**, `Alt + gauche / droite` (actions `0x1C` / `0x1D`).
+- Sans viser, le stick garde les directions absolues, arme sortie ou non.
+- En passant des directions absolues aux strafes, l'ancienne touche et Alt sont relâchés **avant** d'enfoncer la nouvelle, pour qu'aucune touche ne parte avec le mauvais modificateur.
 
 ---
 
@@ -217,7 +217,7 @@ Le stick droit place directement le réticule dans la direction pointée.
 - Le réticule est repositionné quand l'angle change.
 - Si l'avatar ne fait pas face au réticule (direction sur 16 calculée depuis ses pieds) et n'est pas occupé, il pivote avec son animation de garde : `0x2E` à genoux, `4` debout.
 - Si la désignation de cible est active, la recherche de cible est relancée après le pivot.
-- **Quitter le mode visée** : relâcher le stick ne le quitte pas, comme dans l'original. Avancer le quitte aussitôt (arme sortie, le haut du stick gauche donne la marche, action `1`) ; un **pas de côté** ou une **roulade** le quitte le temps de l'animation. Pour ranger l'arme, double-clic **bouton droit** de la souris ; à la manette, l'action **saut** (B par défaut) range d'abord une arme dégainée, puis saute.
+- **Quitter le mode visée** : relâcher le stick ne le quitte pas, comme dans l'original. Marcher avec le stick gauche (sans viser) le quitte aussitôt ; un **pas de côté** ou une **roulade** le quitte le temps de l'animation. Pour ranger l'arme, double-clic **bouton droit** de la souris ; à la manette, l'action **saut** (B par défaut) range d'abord une arme dégainée, puis saute.
 
 ---
 

@@ -2740,48 +2740,47 @@ void test_crosshair_shot_height(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
-// Port addition: with the weapon out, the controller's left stick sends the
-// original's slow moves relative to the NPC: the up arrow (walk forward), the
-// down arrow (retreat) and Alt + left / right (side steps). This checks the
-// actions those keys give the player, and that walking forward leaves the
-// aiming mode (the gamepad layer's mapping is in input_tests.cpp).
+// Port addition: while the right stick aims with the weapon out, the
+// controller's left stick strafes with the original's Alt moves (the gamepad
+// layer's mapping is in input_tests.cpp). This checks the actions Alt + arrows
+// give the player, and that the forward one keeps the aiming mode.
 void test_weapon_out_movement(const std::filesystem::path& data) {
     Game game(data, test_saves(data));
     game.load_save(13);
     settle(game);
     CHECK(game.weapon_out());
-    auto hold = [&](std::uint8_t scancode, bool alt) {
-        if (alt) game.key(kScAlt, false, true, 0);
-        const std::uint16_t flags = alt ? kLeftAlt | kAlt : 0;
-        game.key(scancode, true, true, flags);
+    auto hold = [&](std::uint8_t scancode) {
+        game.key(kScAlt, false, true, 0);
+        game.key(scancode, true, true, kLeftAlt | kAlt);
         for (int i = 0; i < 12; ++i) game.update(kFrameUs);
         const std::uint16_t action = last_action(game);
-        game.key(scancode, true, false, flags);
-        if (alt) game.key(kScAlt, false, false, 0);
+        game.key(scancode, true, false, kLeftAlt | kAlt);
+        game.key(kScAlt, false, false, 0);
         settle(game);
         return action;
     };
-    // SAVEGAME.13's weapon does not keep the actions, so 2 becomes 0x2D; a
-    // weapon that keeps them would play 2. The walk 1 is not remapped.
-    const std::uint16_t forward = hold(0x48, false);
-    const std::uint16_t backward = hold(0x50, false);
-    const std::uint16_t left = hold(0x4B, true);
-    const std::uint16_t right = hold(0x4D, true);
-    std::printf("weapon out: forward 0x%X, backward 0x%X, left 0x%X, right 0x%X\n", forward, backward, left, right);
-    CHECK(forward == 1);
+    // SAVEGAME.13's weapon does not keep the actions, so 0x24 becomes 0x2C and
+    // 2 becomes 0x2D; a weapon that keeps them would play 0x24 and 2.
+    const std::uint16_t forward = hold(0x48);
+    const std::uint16_t backward = hold(0x50);
+    const std::uint16_t left = hold(0x4B);
+    const std::uint16_t right = hold(0x4D);
+    std::printf("strafe: forward 0x%X, backward 0x%X, left 0x%X, right 0x%X\n", forward, backward, left, right);
+    CHECK(forward == 0x24 || forward == 0x2C);
     CHECK(backward == 2 || backward == 0x2D);
     CHECK(left == 0x1C);
     CHECK(right == 0x1D);
 
-    // Walking forward leaves the aiming mode (action 1 is not an aiming
-    // action), so the stick is a way out of it.
+    // The forward strafe is an aiming action: the aim mode stays on.
     do_anim(game.kernel(), game.world(), game.animations(), 1, 4, kDirCurrent);
     settle(game);
     CHECK(game.world().state.aim.active);
-    game.key(0x48, true, true, 0);
+    game.key(kScAlt, false, true, 0);
+    game.key(0x48, true, true, kLeftAlt | kAlt);
     for (int i = 0; i < 5; ++i) game.update(kFrameUs);
-    CHECK(!game.world().state.aim.active);
-    game.key(0x48, true, false, 0);
+    CHECK(game.world().state.aim.active);
+    game.key(0x48, true, false, kLeftAlt | kAlt);
+    game.key(kScAlt, false, false, 0);
     settle(game);
     CHECK(game.machine().faults().empty());
 }

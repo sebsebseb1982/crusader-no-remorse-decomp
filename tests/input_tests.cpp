@@ -427,81 +427,82 @@ void test_gamepad() {
     CHECK(keys.size() == 1 && keys[0].scancode == 0x4B && !keys[0].pressed);
 }
 
-// Directional movement with the weapon out: the left stick gives the original's
-// slow moves relative to the NPC (up / down arrows, Alt + side steps) instead of
-// the keypad's absolute screen directions.
+// Directional movement: the left stick keeps the keypad's absolute screen
+// directions with the weapon out, and strafes (Alt + arrow, relative to the
+// aim) only while the right stick aims.
 void test_gamepad_directional_weapon_out() {
     Gamepad pad;
     pad.set_directional(true);
+    pad.set_directional_aim(true);
     pad.set_weapon_out(true);
 
-    // Up: the plain up arrow, which walks forward and leaves the aiming mode.
+    // Not aiming: up is the keypad's 8, as without the weapon.
     pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, -30000));
     auto keys = pad.take_keys();
     CHECK(keys.size() == 1);
-    CHECK(keys[0].scancode == 0x48 && keys[0].extended && keys[0].pressed && !keys[0].alt());
+    CHECK(keys[0].scancode == 0x48 && !keys[0].extended && keys[0].pressed && !keys[0].alt());
 
-    // Letting go releases it.
-    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, 0));
+    // Aiming east: up is to the left of the aim, a side step (Alt + left).
+    // The modifier changes, so the keypad key goes up before Alt goes down.
+    pad.feed(axis(SDL_CONTROLLER_AXIS_RIGHTX, 30000));
     keys = pad.take_keys();
-    CHECK(keys.size() == 1);
-    CHECK(keys[0].scancode == 0x48 && !keys[0].pressed && !keys[0].alt());
+    CHECK(keys.size() == 3);
+    CHECK(keys[0].scancode == 0x48 && !keys[0].extended && !keys[0].pressed);
+    CHECK(keys[1].scancode == 0x38 && keys[1].pressed && keys[1].alt());
+    CHECK(keys[2].scancode == 0x4B && keys[2].extended && keys[2].pressed && keys[2].alt());
 
-    // Right: a side step, Alt + right arrow.
+    // Aiming north (via north-east, still a left step): up is forward (Alt +
+    // up); the new key goes down first.
+    pad.feed(axis(SDL_CONTROLLER_AXIS_RIGHTY, -30000));
+    CHECK(pad.take_keys().empty());
+    pad.feed(axis(SDL_CONTROLLER_AXIS_RIGHTX, 0));
+    keys = pad.take_keys();
+    CHECK(keys.size() == 2);
+    CHECK(keys[0].scancode == 0x48 && keys[0].extended && keys[0].pressed && keys[0].alt());
+    CHECK(keys[1].scancode == 0x4B && keys[1].extended && !keys[1].pressed && keys[1].alt());
+
+    // Down while aiming north: backward (Alt + down).
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, 30000));
+    keys = pad.take_keys();
+    CHECK(keys.size() == 2);
+    CHECK(keys[0].scancode == 0x50 && keys[0].extended && keys[0].pressed && keys[0].alt());
+    CHECK(keys[1].scancode == 0x48 && !keys[1].pressed);
+
+    // Right while aiming north: a side step to the right.
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, 0));
+    pad.take_keys();
     pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, 30000));
     keys = pad.take_keys();
     CHECK(keys.size() == 2);
     CHECK(keys[0].scancode == 0x38 && keys[0].pressed && keys[0].alt());
     CHECK(keys[1].scancode == 0x4D && keys[1].extended && keys[1].pressed && keys[1].alt());
 
-    // North-east: a diagonal has no move of its own, it walks forward. The
-    // modifier changes, so the old arrow and Alt are released first.
-    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, -30000));
+    // Letting go of the aim: back to the keypad's 6, Alt released first.
+    pad.feed(axis(SDL_CONTROLLER_AXIS_RIGHTY, 0));
     keys = pad.take_keys();
     CHECK(keys.size() == 3);
-    CHECK(keys[0].scancode == 0x4D && !keys[0].pressed && keys[0].alt());
+    CHECK(keys[0].scancode == 0x4D && keys[0].extended && !keys[0].pressed && keys[0].alt());
     CHECK(keys[1].scancode == 0x38 && !keys[1].pressed && !keys[1].alt());
-    CHECK(keys[2].scancode == 0x48 && keys[2].extended && keys[2].pressed && !keys[2].alt());
+    CHECK(keys[2].scancode == 0x4D && !keys[2].extended && keys[2].pressed && !keys[2].alt());
 
-    // South-east walks slowly backward (plain down arrow).
-    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, 30000));
-    keys = pad.take_keys();
-    CHECK(keys.size() == 2);
-    CHECK(keys[0].scancode == 0x50 && keys[0].extended && keys[0].pressed && !keys[0].alt());
-    CHECK(keys[1].scancode == 0x48 && !keys[1].pressed && !keys[1].alt());
-
-    // Pure west: left arrow with Alt.
-    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, 0));
-    pad.take_keys();
-    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, -30000));
-    keys = pad.take_keys();
-    CHECK(keys.size() == 2);
-    CHECK(keys[0].scancode == 0x4B && keys[0].extended && keys[0].pressed && keys[0].alt());
-    CHECK(keys[1].scancode == 0x4D && !keys[1].pressed && keys[1].alt());
-
-    // Weapon back in: the stick returns to the keypad's absolute directions.
-    // The old arrow and Alt are released first, so the new key is not sent
-    // with the side-step modifier.
+    // Aiming with the weapon holstered keeps the keypad moves.
     pad.set_weapon_out(false);
-    keys = pad.take_keys();
-    CHECK(keys.size() == 3);
-    CHECK(keys[0].scancode == 0x4B && !keys[0].pressed && keys[0].alt());
-    CHECK(keys[1].scancode == 0x38 && !keys[1].pressed && !keys[1].alt());
-    CHECK(keys[2].scancode == 0x4B && !keys[2].extended && keys[2].pressed && !keys[2].alt());
+    pad.feed(axis(SDL_CONTROLLER_AXIS_RIGHTY, -30000));
+    CHECK(pad.take_keys().empty());
 
-    // And back out while the stick is still held: the moves are redone.
+    // The weapon comes out while aiming: the strafe starts.
     pad.set_weapon_out(true);
     keys = pad.take_keys();
     CHECK(keys.size() == 3);
-    CHECK(keys[0].scancode == 0x4B && !keys[0].pressed && !keys[0].alt());
+    CHECK(keys[0].scancode == 0x4D && !keys[0].extended && !keys[0].pressed);
     CHECK(keys[1].scancode == 0x38 && keys[1].pressed && keys[1].alt());
-    CHECK(keys[2].scancode == 0x4B && keys[2].extended && keys[2].pressed && keys[2].alt());
+    CHECK(keys[2].scancode == 0x4D && keys[2].extended && keys[2].pressed && keys[2].alt());
 
     // Capturing an input (the controller screen) lets go of the move key too.
     pad.set_capture(true);
     keys = pad.take_keys();
     CHECK(keys.size() == 2);
-    CHECK(keys[0].scancode == 0x4B && !keys[0].pressed && keys[0].alt());
+    CHECK(keys[0].scancode == 0x4D && !keys[0].pressed && keys[0].alt());
     CHECK(keys[1].scancode == 0x38 && !keys[1].pressed && !keys[1].alt());
 }
 

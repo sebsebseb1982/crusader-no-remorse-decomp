@@ -160,7 +160,7 @@ public:
     }
     bool mouse_in_play() const { return !modal() && !movie_; }
     // True in play while the controlled NPC has its weapon out. The controller
-    // then gives the original's combat-stance moves on the left stick.
+    // then strafes with the left stick while the right stick aims.
     bool weapon_out() const;
     const WorldMouse& world_mouse() const { return *world_mouse_; }
 

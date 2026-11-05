@@ -31,25 +31,23 @@ constexpr std::uint8_t kArrows[4] = {0x48, 0x50, 0x4B, 0x4D};  // up, down, left
 constexpr std::uint8_t kMoveKeys[8] = {0x4D, 0x49, 0x48, 0x47, 0x4B, 0x4F, 0x50, 0x51};
 constexpr double kMoveHold = 30.0;  // degrees from the held sector's axis before the stick changes it
 
-// With the weapon out the stick gives the original's slow moves relative to the
-// NPC, not the keypad's screen directions: forward walks (up arrow), backward
-// retreats (down arrow) and left / right step aside (Alt + arrow). There is no
-// diagonal combat move, so a diagonal sector takes the forward or backward
-// arrow; the pure left and right sectors keep the side steps.
-struct CombatMove {
-    int arrow = 0;  // index in kArrows: up, down, left, right
-    bool alt = false;
-};
-CombatMove combat_move(int sector) {
-    switch (sector) {
-        case 0: return {3, true};   // east: step right
-        case 2: return {0, false};  // north: walk forward
-        case 4: return {2, true};   // west: step left
-        case 6: return {1, false};  // south: walk backward
-        case 1:                     // north-east
-        case 3: return {0, false};  // north-west
-        default: return {1, false};  // south-east / south-west
+// While aiming, the stick's direction relative to the aim picks one of the
+// original's Alt moves, which keep the aim: forward, left, backward, right
+// (indices in kArrows), counter-clockwise from the aim.
+constexpr int kStrafeArrows[4] = {0, 2, 1, 3};
+constexpr double kStrafeHold = 60.0;
+
+// The sector of `angle` among `count` equal ones (0 centred on angle 0), kept
+// on `held` while the angle stays within `hold` degrees of its axis.
+int sector_of(double angle, int count, int held, double hold) {
+    const double width = 360.0 / count;
+    int want = ((static_cast<int>(std::lround(angle / width)) % count) + count) % count;
+    if (held >= 0) {
+        double off = std::fmod(std::fabs(angle - held * width), 360.0);
+        if (off > 180.0) off = 360.0 - off;
+        if (off < hold) want = held;
     }
+    return want;
 }
 
 }  // namespace
@@ -249,11 +247,12 @@ void Gamepad::sync_right_stick() {
 void Gamepad::update_aim() {
     if (!aim_directional_active()) {
         aim_on_ = false;
-        return;
+    } else {
+        const double len = std::hypot(static_cast<double>(right_x_), static_cast<double>(right_y_));
+        aim_on_ = len > (aim_on_ ? kStickOff : kStickOn);
+        if (aim_on_) aim_deg_ = std::atan2(-static_cast<double>(right_y_), static_cast<double>(right_x_)) * 180.0 / 3.14159265358979;
     }
-    const double len = std::hypot(static_cast<double>(right_x_), static_cast<double>(right_y_));
-    aim_on_ = len > (aim_on_ ? kStickOff : kStickOn);
-    if (aim_on_) aim_deg_ = std::atan2(-static_cast<double>(right_y_), static_cast<double>(right_x_)) * 180.0 / 3.14159265358979;
+    if (directional_active()) update_move();  // the strafe follows the aim
 }
 
 // The left stick is either four arrow-like directions or one keypad move; when
@@ -273,30 +272,24 @@ void Gamepad::sync_left_stick() {
 
 // The key of the stick's 8-way sector, down while the stick is past its
 // threshold. A new sector goes down before the old one goes up, so the
-// avatar turns on the spot instead of stopping in between. With the weapon
-// out the sector gives a slow move relative to the NPC instead.
+// avatar turns on the spot instead of stopping in between. While aiming with
+// the weapon out, the stick strafes instead: an Alt move relative to the aim.
 void Gamepad::update_move() {
-    int want = -1;
-    if (directional_active()) {
-        const double len = std::hypot(static_cast<double>(left_x_), static_cast<double>(left_y_));
-        if (len > (move_dir_ >= 0 ? kStickOff : kStickOn)) {
-            const double angle = std::atan2(-static_cast<double>(left_y_), static_cast<double>(left_x_)) * 180.0 / 3.14159265358979;
-            want = (static_cast<int>(std::lround(angle / 45.0)) + 8) % 8;
-            if (move_dir_ >= 0) {
-                double off = std::fmod(std::fabs(angle - move_dir_ * 45.0), 360.0);
-                if (off > 180.0) off = 360.0 - off;
-                if (off < kMoveHold) want = move_dir_;
-            }
-        }
-    }
-    move_dir_ = want;
-    if (want < 0) {
+    const double len = std::hypot(static_cast<double>(left_x_), static_cast<double>(left_y_));
+    if (!directional_active() || len <= (move_scancode_ != 0 ? kStickOff : kStickOn)) {
+        move_dir_ = strafe_dir_ = -1;
         set_move_key(0, false, false);
-    } else if (weapon_out_) {
-        const CombatMove move = combat_move(want);
-        set_move_key(kArrows[move.arrow], true, move.alt);
+        return;
+    }
+    const double angle = std::atan2(-static_cast<double>(left_y_), static_cast<double>(left_x_)) * 180.0 / 3.14159265358979;
+    if (weapon_out_ && aim_on_) {
+        move_dir_ = -1;
+        strafe_dir_ = sector_of(angle - aim_deg_, 4, strafe_dir_, kStrafeHold);
+        set_move_key(kArrows[kStrafeArrows[strafe_dir_]], true, true);
     } else {
-        set_move_key(kMoveKeys[want], false, false);
+        strafe_dir_ = -1;
+        move_dir_ = sector_of(angle, 8, move_dir_, kMoveHold);
+        set_move_key(kMoveKeys[move_dir_], false, false);
     }
 }
 
