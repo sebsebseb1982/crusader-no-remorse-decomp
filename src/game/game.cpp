@@ -713,7 +713,7 @@ void Game::update(std::uint32_t elapsed_us) {
         return;
     }
     dispatch_mouse();
-    if (!modal()) world_->update_follow_camera();
+    if (!modal()) world_->update_follow_camera(elapsed_us);
     const std::uint32_t before = kernel_->ticks();
     kernel_->advance_time(elapsed_us);
     kernel_->run_slice();

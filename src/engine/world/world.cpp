@@ -6,6 +6,7 @@
 #include "engine/audio/audio.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <set>
 #include <stdexcept>
@@ -1024,7 +1025,7 @@ void World::shift_camera(int dx, int dy) {
 }
 
 // @orig none: port-only camera follow
-void World::update_follow_camera() {
+void World::update_follow_camera(std::uint32_t elapsed_us) {
     if (!follow_player_ || !follow_active_ || state.camera_target == 0 ||
         state.camera_target != state.controlled_npc) return;
     const auto ux = static_cast<std::int16_t>(follow_goal_[0]), uy = static_cast<std::int16_t>(follow_goal_[1]);
@@ -1033,14 +1034,29 @@ void World::update_follow_camera() {
                                              (follow_goal_[2] & 0xFF));
     int dx = sx - (state.screen_right + 1) / 2;
     int dy = sy - ((state.screen_bottom + 1) / 2 + 0x28);
-    if (dx == 0 && dy == 0) return;
-    // The NPC moves by steps: the view eases towards it (about a tenth of the
-    // gap per frame) instead of jumping with each step; a teleport or a map
-    // change far away is taken at once.
+    if (dx == 0 && dy == 0) {
+        follow_frac_[0] = follow_frac_[1] = follow_vel_[0] = follow_vel_[1] = 0;
+        return;
+    }
+    // The NPC moves by steps: the view follows it like a critically damped
+    // spring, so its speed changes smoothly between steps whatever the frame
+    // rate; a teleport or a map change far away is taken at once.
     if (std::abs(dx) <= 200 && std::abs(dy) <= 150) {
-        const auto ease = [](int d) { return d == 0 ? 0 : (std::abs(d) < 10 ? (d > 0 ? 1 : -1) : d / 10); };
-        dx = ease(dx);
-        dy = ease(dy);
+        const double dt = std::min(elapsed_us, 50000u) / 1e6;
+        constexpr double kOmega = 7.0;
+        const auto track = [dt](int d, double& vel, double& frac) {
+            vel += (kOmega * kOmega * d - 2 * kOmega * vel) * dt;
+            const double want = vel * dt + frac;
+            int step = static_cast<int>(want);  // towards zero
+            if (d > 0 ? step > d : step < d) step = d, vel = 0;
+            frac = want - step;
+            return step;
+        };
+        dx = track(dx, follow_vel_[0], follow_frac_[0]);
+        dy = track(dy, follow_vel_[1], follow_frac_[1]);
+        if (dx == 0 && dy == 0) return;
+    } else {
+        follow_frac_[0] = follow_frac_[1] = follow_vel_[0] = follow_vel_[1] = 0;
     }
     shift_camera(dx, dy);
 }

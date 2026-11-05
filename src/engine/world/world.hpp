@@ -566,8 +566,9 @@ public:
         follow_player_ = on;
         if (!on) follow_active_ = false;
     }
-    // Once a frame: moves the view a step towards the followed NPC.
-    void update_follow_camera();
+    // Once a frame: moves the view towards the followed NPC, by an amount
+    // that depends on the time since the last call.
+    void update_follow_camera(std::uint32_t elapsed_us = 16667);
 
     // Item::I_isPartlyOnScreen: the item's frame overlaps the screen. Uses
     // the item's own x/y/z, like the original.
@@ -687,6 +688,8 @@ private:
     bool follow_player_ = false;
     bool follow_active_ = false;  // follow_goal_ is set
     std::int32_t follow_goal_[3] = {0, 0, 0};
+    double follow_frac_[2] = {0, 0};  // sub-pixel remainder of the movement
+    double follow_vel_[2] = {0, 0};   // view speed, pixels per second
     bool expanding_glob_ = false;  // no fast area entry while set (glob far from the drawn area)
     // GLOB.C 039C: the drawn area's corner (DS:2CF1, 2CF3) as the last move
     // left it, 128-pixel aligned; reset to the new view after clear_fast_area.

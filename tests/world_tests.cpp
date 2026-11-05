@@ -770,7 +770,7 @@ void test_scripted_camera() {
     w.set_follow_player(true);
     w.set_camera(1000, 1000, 0);
     w.track_camera_target(1100, 1100, 0);
-    w.update_follow_camera();
+    for (int f = 0; f < 10; ++f) w.update_follow_camera();
     CHECK(w.state.camera_x != 1000 || w.state.camera_y != 1000);
     w.move_camera_to(3000, 4000, 0, 0);
     for (int f = 0; f < 100; ++f) w.update_follow_camera();
