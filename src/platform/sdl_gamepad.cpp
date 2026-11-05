@@ -31,6 +31,27 @@ constexpr std::uint8_t kArrows[4] = {0x48, 0x50, 0x4B, 0x4D};  // up, down, left
 constexpr std::uint8_t kMoveKeys[8] = {0x4D, 0x49, 0x48, 0x47, 0x4B, 0x4F, 0x50, 0x51};
 constexpr double kMoveHold = 30.0;  // degrees from the held sector's axis before the stick changes it
 
+// With the weapon out the stick gives the original's slow moves relative to the
+// NPC, not the keypad's screen directions: forward walks (up arrow), backward
+// retreats (down arrow) and left / right step aside (Alt + arrow). There is no
+// diagonal combat move, so a diagonal sector takes the forward or backward
+// arrow; the pure left and right sectors keep the side steps.
+struct CombatMove {
+    int arrow = 0;  // index in kArrows: up, down, left, right
+    bool alt = false;
+};
+CombatMove combat_move(int sector) {
+    switch (sector) {
+        case 0: return {3, true};   // east: step right
+        case 2: return {0, false};  // north: walk forward
+        case 4: return {2, true};   // west: step left
+        case 6: return {1, false};  // south: walk backward
+        case 1:                     // north-east
+        case 3: return {0, false};  // north-west
+        default: return {1, false};  // south-east / south-west
+    }
+}
+
 }  // namespace
 
 Gamepad::~Gamepad() {
@@ -192,6 +213,12 @@ void Gamepad::set_directional(bool on) {
     sync_left_stick();
 }
 
+void Gamepad::set_weapon_out(bool on) {
+    if (weapon_out_ == on) return;
+    weapon_out_ = on;
+    if (directional_active()) update_move();
+}
+
 void Gamepad::set_directional_aim(bool on) {
     if (directional_aim_ == on) return;
     directional_aim_ = on;
@@ -246,7 +273,8 @@ void Gamepad::sync_left_stick() {
 
 // The key of the stick's 8-way sector, down while the stick is past its
 // threshold. A new sector goes down before the old one goes up, so the
-// avatar turns on the spot instead of stopping in between.
+// avatar turns on the spot instead of stopping in between. With the weapon
+// out the sector gives a slow move relative to the NPC instead.
 void Gamepad::update_move() {
     int want = -1;
     if (directional_active()) {
@@ -261,11 +289,33 @@ void Gamepad::update_move() {
             }
         }
     }
-    if (want == move_dir_) return;
-    const int old = move_dir_;
     move_dir_ = want;
-    if (want >= 0) press_key(kMoveKeys[want], false, true);
-    if (old >= 0) press_key(kMoveKeys[old], false, false);
+    if (want < 0) {
+        set_move_key(0, false, false);
+    } else if (weapon_out_) {
+        const CombatMove move = combat_move(want);
+        set_move_key(kArrows[move.arrow], true, move.alt);
+    } else {
+        set_move_key(kMoveKeys[want], false, false);
+    }
+}
+
+void Gamepad::set_move_key(int scancode, bool extended, bool alt) {
+    if (scancode == move_scancode_ && extended == move_extended_ && alt == move_alt_) return;
+    if (alt != move_alt_) {
+        // The modifier changes: let go of the old key before Alt, then press
+        // Alt before the new key, so each key carries the right flags.
+        if (move_scancode_ != 0) press_key(static_cast<std::uint8_t>(move_scancode_), move_extended_, false);
+        if (move_alt_) press_key(kScAlt, false, false);
+        if (alt) press_key(kScAlt, false, true);
+        if (scancode != 0) press_key(static_cast<std::uint8_t>(scancode), extended, true);
+    } else {
+        if (scancode != 0) press_key(static_cast<std::uint8_t>(scancode), extended, true);
+        if (move_scancode_ != 0) press_key(static_cast<std::uint8_t>(move_scancode_), move_extended_, false);
+    }
+    move_scancode_ = scancode;
+    move_extended_ = extended;
+    move_alt_ = alt;
 }
 
 void Gamepad::trigger(int index, bool on) {

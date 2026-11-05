@@ -427,6 +427,84 @@ void test_gamepad() {
     CHECK(keys.size() == 1 && keys[0].scancode == 0x4B && !keys[0].pressed);
 }
 
+// Directional movement with the weapon out: the left stick gives the original's
+// slow moves relative to the NPC (up / down arrows, Alt + side steps) instead of
+// the keypad's absolute screen directions.
+void test_gamepad_directional_weapon_out() {
+    Gamepad pad;
+    pad.set_directional(true);
+    pad.set_weapon_out(true);
+
+    // Up: the plain up arrow, which walks forward and leaves the aiming mode.
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, -30000));
+    auto keys = pad.take_keys();
+    CHECK(keys.size() == 1);
+    CHECK(keys[0].scancode == 0x48 && keys[0].extended && keys[0].pressed && !keys[0].alt());
+
+    // Letting go releases it.
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, 0));
+    keys = pad.take_keys();
+    CHECK(keys.size() == 1);
+    CHECK(keys[0].scancode == 0x48 && !keys[0].pressed && !keys[0].alt());
+
+    // Right: a side step, Alt + right arrow.
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, 30000));
+    keys = pad.take_keys();
+    CHECK(keys.size() == 2);
+    CHECK(keys[0].scancode == 0x38 && keys[0].pressed && keys[0].alt());
+    CHECK(keys[1].scancode == 0x4D && keys[1].extended && keys[1].pressed && keys[1].alt());
+
+    // North-east: a diagonal has no move of its own, it walks forward. The
+    // modifier changes, so the old arrow and Alt are released first.
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, -30000));
+    keys = pad.take_keys();
+    CHECK(keys.size() == 3);
+    CHECK(keys[0].scancode == 0x4D && !keys[0].pressed && keys[0].alt());
+    CHECK(keys[1].scancode == 0x38 && !keys[1].pressed && !keys[1].alt());
+    CHECK(keys[2].scancode == 0x48 && keys[2].extended && keys[2].pressed && !keys[2].alt());
+
+    // South-east walks slowly backward (plain down arrow).
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, 30000));
+    keys = pad.take_keys();
+    CHECK(keys.size() == 2);
+    CHECK(keys[0].scancode == 0x50 && keys[0].extended && keys[0].pressed && !keys[0].alt());
+    CHECK(keys[1].scancode == 0x48 && !keys[1].pressed && !keys[1].alt());
+
+    // Pure west: left arrow with Alt.
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, 0));
+    pad.take_keys();
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, -30000));
+    keys = pad.take_keys();
+    CHECK(keys.size() == 2);
+    CHECK(keys[0].scancode == 0x4B && keys[0].extended && keys[0].pressed && keys[0].alt());
+    CHECK(keys[1].scancode == 0x4D && !keys[1].pressed && keys[1].alt());
+
+    // Weapon back in: the stick returns to the keypad's absolute directions.
+    // The old arrow and Alt are released first, so the new key is not sent
+    // with the side-step modifier.
+    pad.set_weapon_out(false);
+    keys = pad.take_keys();
+    CHECK(keys.size() == 3);
+    CHECK(keys[0].scancode == 0x4B && !keys[0].pressed && keys[0].alt());
+    CHECK(keys[1].scancode == 0x38 && !keys[1].pressed && !keys[1].alt());
+    CHECK(keys[2].scancode == 0x4B && !keys[2].extended && keys[2].pressed && !keys[2].alt());
+
+    // And back out while the stick is still held: the moves are redone.
+    pad.set_weapon_out(true);
+    keys = pad.take_keys();
+    CHECK(keys.size() == 3);
+    CHECK(keys[0].scancode == 0x4B && !keys[0].pressed && !keys[0].alt());
+    CHECK(keys[1].scancode == 0x38 && keys[1].pressed && keys[1].alt());
+    CHECK(keys[2].scancode == 0x4B && keys[2].extended && keys[2].pressed && keys[2].alt());
+
+    // Capturing an input (the controller screen) lets go of the move key too.
+    pad.set_capture(true);
+    keys = pad.take_keys();
+    CHECK(keys.size() == 2);
+    CHECK(keys[0].scancode == 0x4B && !keys[0].pressed && keys[0].alt());
+    CHECK(keys[1].scancode == 0x38 && !keys[1].pressed && !keys[1].alt());
+}
+
 }  // namespace
 
 int main() {
@@ -436,6 +514,7 @@ int main() {
     test_mouse();
     test_mouse_queue();
     test_gamepad();
+    test_gamepad_directional_weapon_out();
     std::printf(failures ? "%d failure(s)\n" : "all input checks passed\n", failures);
     return failures ? 1 : 0;
 }

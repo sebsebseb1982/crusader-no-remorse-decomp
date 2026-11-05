@@ -159,6 +159,9 @@ public:
         aim_stick_deg_ = screen_deg;
     }
     bool mouse_in_play() const { return !modal() && !movie_; }
+    // True in play while the controlled NPC has its weapon out. The controller
+    // then gives the original's combat-stance moves on the left stick.
+    bool weapon_out() const;
     const WorldMouse& world_mouse() const { return *world_mouse_; }
 
     // In-game menu (Escape, WORLD_13e8_10c3). Closing it with "quit" sets

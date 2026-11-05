@@ -304,6 +304,7 @@ int main(int argc, char** argv) {
             gamepad.set_capture(game.waiting_for_pad());
             gamepad.set_directional(game.config().directional_move);
             gamepad.set_directional_aim(game.config().directional_aim);
+            gamepad.set_weapon_out(game.weapon_out());
             double aim_deg = 0;
             const bool aim_pushed = gamepad.aim_stick(&aim_deg);  // (argument order is unspecified)
             game.set_aim_stick(aim_pushed, aim_deg);

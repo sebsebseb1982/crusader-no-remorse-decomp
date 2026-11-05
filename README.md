@@ -16,7 +16,7 @@ This repository contains **no game files**: you need your own copy of the origin
 - Added an **Enhancements** menu to the Options menu, with:
   - Gamepad remapping
   - A camera that follows the player
-  - Directional movement: the controller's left stick walks the Silencer where it points, as an alternative to the original tank controls
+  - Directional movement: the controller's left stick walks the Silencer where it points, as an alternative to the original tank controls; with the weapon out it gives the original's slow forward, side steps and slow backward
   - Directional aiming: the right stick puts the crosshair where it points
   - Native resolution: the view fills your screen (in whole-number pixel multiples, never stretched), showing more of the surroundings; the menus and cutscenes stay 640×480, centred
   - Zoom: choose the pixel size of the native view (Auto, or ×1 to ×4); ×1 gives the finest picture and the widest view

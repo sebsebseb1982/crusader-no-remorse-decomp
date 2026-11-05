@@ -23,6 +23,11 @@
 // the right stick no longer moves the mouse that way. In menus, message boxes
 // and screens A, B and Start are Enter, Esc and Esc, and the directions keep
 // their roles (arrows, mouse), whatever they are bound to.
+//
+// Directional movement (an enhancement) turns the left stick into the numeric
+// keypad's absolute screen directions. While the controlled NPC's weapon is
+// out, it gives the original's slow moves relative to the NPC instead: forward
+// and backward (up / down arrows) and side steps (Alt + left / right).
 
 #include "core/pad_config.hpp"
 #include "platform/sdl_input.hpp"
@@ -67,6 +72,10 @@ public:
     // left stick sends the keypad's screen directions (8 ways, the original's
     // absolute moves) instead of its tank bindings, and "run" is Shift alone.
     void set_directional(bool on);
+    // The controlled NPC has its weapon out: directional movement then gives
+    // the original's slow moves relative to the NPC instead of the absolute
+    // screen directions: forward / backward arrows and Alt + side steps.
+    void set_weapon_out(bool on);
     // Directional aiming: in play, the right stick no longer turns or moves the
     // mouse; aim_stick() gives the direction it points, for the engine to put
     // the crosshair there.
@@ -99,6 +108,11 @@ private:
     bool directional_active() const { return directional_ && !menu_ && !capture_; }
     void sync_left_stick();  // after a change of mode: the stick as arrows or as keypad moves
     void update_move();
+    // The move key currently held, with Alt first for the side steps. A new key
+    // goes down before the old one goes up, unless the modifier changes: then
+    // the old one and Alt are released first, so that the new key is not sent
+    // with the wrong flags.
+    void set_move_key(int scancode, bool extended, bool alt);
     bool aim_directional_active() const { return directional_aim_ && !menu_ && !capture_; }
     void sync_right_stick();
     void update_aim();
@@ -125,9 +139,13 @@ private:
     int left_x_ = 0, left_y_ = 0;
     bool directional_ = false;
     bool directional_aim_ = false;
-    bool aim_on_ = false;  // right stick past its threshold
+    bool weapon_out_ = false;  // directional movement uses the combat stance moves
+    bool aim_on_ = false;      // right stick past its threshold
     double aim_deg_ = 0;
-    int move_dir_ = -1;  // keypad direction held (index in kMoveKeys), or -1
+    int move_dir_ = -1;  // sector of the stick held (index in kMoveKeys), or -1
+    int move_scancode_ = 0;    // the move key actually down (0: none)
+    bool move_extended_ = false;
+    bool move_alt_ = false;    // and Alt, held with it for a side step
     double rem_x_ = 0, rem_y_ = 0;
     std::uint16_t flags_ = 0;  // modifiers held (Ctrl, Alt, Shift)
     std::vector<KeyEvent> keys_;

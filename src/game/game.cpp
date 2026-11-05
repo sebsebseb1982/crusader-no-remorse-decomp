@@ -384,6 +384,12 @@ void Game::key(std::uint8_t scancode, bool extended, bool pressed, std::uint16_t
     keyboard_.key(scancode, extended, pressed, flags, ascii, kernel_->ticks());
 }
 
+bool Game::weapon_out() const {
+    if (!mouse_in_play() || !world_) return false;
+    const ObjId npc = world_->state.controlled_npc;
+    return npc != 0 && weapon_drawn(*world_, npc);
+}
+
 // @orig none: the slot's file in the save directory
 void Game::load_save(int slot) { load_save_file(save_dir_ / ("SAVEGAME." + std::to_string(slot))); }
 

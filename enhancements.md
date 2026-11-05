@@ -194,6 +194,12 @@ The original uses tank controls: up walks forward, left/right turn. With this op
 - **Sector change**: the new key is pressed **before** the old one is released, so the avatar turns without stopping.
 - The **RUN** action becomes **Shift alone**, held with the movement key, instead of Shift + ↑.
 - When the mode changes, everything the previous mode held down is released.
+- **Weapon out**: while the controlled NPC has its weapon out (draw actions 7 / 0xC, holstered by 0xB / 0x10), the stick gives the original's slow moves instead of the absolute keypad directions. They are relative to the way the NPC faces (its aim):
+  - up: the **up arrow**, which walks forward (action `1`), or runs with **RUN** (Shift + up). It leaves the aiming mode, as walking does in the original;
+  - down: the **down arrow**, which walks slowly backward (action `2`, `0x2D` with a weapon that does not keep the actions);
+  - left / right: **side steps**, `Alt + left / right` (actions `0x1C` / `0x1D`);
+  - the diagonals take the forward or backward arrow: the original has no diagonal slow move. Pure left and right give the side steps.
+- Changing between the absolute directions and these moves releases the old key and Alt **before** pressing the new one, so no key is sent with the wrong modifier.
 
 ---
 
@@ -218,6 +224,7 @@ The right stick puts the crosshair directly in the direction it points.
 - The crosshair is moved when the angle changes.
 - If the avatar does not face the crosshair (16-way direction measured from its feet) and is not busy, it turns with its guard animation: `0x2E` kneeling, `4` standing.
 - If target designation is active, the target search runs again after the turn.
+- **Leaving the aiming mode**: releasing the stick does not leave it, as in the original. Walk forward (with the weapon out the left stick's up gives the walk, action `1`), which leaves it at once; a **side step** or a **roll** leaves it for the duration of the animation. To put the weapon away, double-click the **right mouse button**; on the controller, the **jump** action (B by default) holsters a drawn weapon first, then jumps.
 
 ---
 
