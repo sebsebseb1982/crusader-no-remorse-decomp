@@ -16,9 +16,7 @@
 // clears the half-stride bit, and an action flagged in ANIM.DAT (byte 3
 // bit 7) destroys the actor; failed by the kernel's fail_all, it does nothing.
 //
-// Not yet (compared with the byte-exact C, docs/audit-decomp.md): frame
-// skipping (1908: off-screen NPCs and the frameskip option play two frames
-// per step), the restart of
+// Not yet (compared with the byte-exact C, docs/audit-decomp.md): the restart of
 // actions flagged 0x40 (none in ANIM.DAT), the target of a pathfinder walk
 // passed to the sweep. The special frames (0x1000): special_frame; the
 // start test of the controlled NPC's moves (016F): fit_start.
@@ -93,7 +91,7 @@ protected:
 
 private:
     const AnimAction* start();  // nullptr: nothing to play
-    bool step();  // false when the animation is over
+    bool step(bool skip_frames, bool& skipped_frames);  // false when the animation is over
     bool fall_if_unsupported(const World::Point& from, const World::Point& to);
     const ActorAnimProcess* next_queued() const;
 

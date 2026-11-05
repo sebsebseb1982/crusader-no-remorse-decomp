@@ -3988,6 +3988,53 @@ void test_combat_height(const std::filesystem::path& data) {
     CHECK(top > z0 && top <= z0 + 40);
 }
 
+// ANIMPRIM.C 1906: a non-controlled actor's second animation step advances
+// from frame 0 to frame 2 when frameskip is enabled.
+void test_animation_frameskip(const std::filesystem::path& data) {
+    constexpr ObjId kGuard = 4;
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "garde-mort-debout.sav");
+    World& w = game.world();
+    Item* guard = w.get(kGuard);
+    CHECK(guard != nullptr);
+    if (!guard) return;
+    w.set_camera(guard->x, guard->y, guard->z);
+    for (int f = 0; f < 10; ++f) game.update(kFrameUs);
+    guard = w.get(kGuard);
+    if (!guard) return;
+    GameConfig config = game.config();
+    config.frameskip = 3;
+    game.set_config(config);
+    std::uint16_t action_number = 0;
+    std::uint16_t animation_shape = 0;
+    const AnimAction* action = nullptr;
+    for (std::uint16_t shape = 1; shape < 0x800 && !action; ++shape) {
+        for (action_number = 0; action_number < AnimDat::kActions; ++action_number) {
+            const AnimAction* candidate = game.animations().action(shape, action_number);
+            if (!candidate || candidate->frame_count() < 5 || (candidate->flags() & 0x01) ||
+                candidate->destroys_actor()) continue;
+            bool simple = true;
+            for (std::size_t frame = 0; frame < candidate->frame_count(); ++frame) {
+                const AnimFrame* f = candidate->frame(8, frame);
+                if (!f || f->special || f->event || f->fires_weapon()) simple = false;
+            }
+            if (simple) {
+                action = candidate;
+                animation_shape = shape;
+                break;
+            }
+        }
+    }
+    CHECK(action != nullptr);
+    if (!action) return;
+    w.set_shape(*guard, animation_shape);
+    w.npc_record(kGuard)[npc::kLastAnim] = 0xFF;
+    w.npc_record(kGuard)[npc::kLastAnim + 1] = 0xFF;
+    CHECK(do_anim(game.kernel(), w, game.animations(), kGuard, action_number, kDirCurrent, 10000, true) != 0);
+    for (int f = 0; f < 120 && w.npc_record(kGuard)[npc::kAnimFrame] != 2; ++f) game.update(kFrameUs);
+    CHECK(w.npc_record(kGuard)[npc::kAnimFrame] == 2);
+}
+
 // ATTACK_1110_2259 (the end of a shot of a burst): the burst ends when the
 // target is dead or when the shot animation listened to failed (its flag
 // 0x20). The port only looked at the target: a shot cut short (an animation
@@ -4802,6 +4849,10 @@ int main(int argc, char** argv) {
         test_keypad(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--animation-frameskip") {
+        test_animation_frameskip(data);
+        return failures ? 1 : 0;
+    }
     test_load_and_run(data);
     test_alert(data);
     test_player_walks(data);
@@ -4823,6 +4874,7 @@ int main(int argc, char** argv) {
     test_anim_end(data);
     test_special_frames(data);
     test_combat_height(data);
+    test_animation_frameskip(data);
     test_burst_cut(data);
     test_death_silence(data);
     test_leave_fast_area(data);

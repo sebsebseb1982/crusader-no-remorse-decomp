@@ -231,6 +231,7 @@ void Game::fire_frame(ObjId actor, int a, int b, int z) {
 // @orig none: applying the port's settings
 void Game::set_config(GameConfig config) {
     config_ = std::move(config);
+    if (world_) world_->state.frameskip = config_.frameskip;
     // ass_init: the volumes and the filter of the configuration.
     if (audio_) {
         audio_->mixer.set_music_volume(config_.music_volume);
@@ -254,6 +255,7 @@ void Game::reset_world() {
     machine_ = std::make_unique<UCMachine>(*kernel_, usecode_);
     machine_->set_intrinsic_numbering(intrinsic_numbering_);
     world_ = std::make_unique<World>(typeflags_);
+    world_->state.frameskip = config_.frameskip;
     world_->state.target_designation = target_designation;
     world_->set_damage_table(damage_);
     world_->state.game_palette = palette_;
@@ -860,6 +862,7 @@ void Game::next_start_up_movie() {
 
 // @orig 1020:0C7F
 void Game::save_config() {
+    if (world_) world_->state.frameskip = config_.frameskip;
     if (config_file_.empty()) return;
     try {
         config_.save(config_file_);

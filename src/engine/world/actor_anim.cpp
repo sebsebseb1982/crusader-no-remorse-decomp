@@ -27,6 +27,11 @@ bool action_fits(const World& world, const AnimDat& anims, std::uint16_t action,
 
 bool is_roll(std::uint16_t action) { return action == 0x17 || action == 0x18 || action == 0x3D || action == 0x3E; }
 
+bool skips_frames(const World& world, ObjId actor, const Item& item) {
+    if (actor == world.state.controlled_npc) return world.state.frameskip == 3;
+    return world.state.frameskip >= 2 || !world.is_partly_on_screen(item);
+}
+
 // The actions that the controlled NPC tests before playing them (016F).
 // @orig 1158:016F
 bool tested_at_start(std::uint16_t action) {
@@ -213,7 +218,7 @@ const AnimAction* ActorAnimProcess::start() {
         if (!(record[npc::kAnimFlags] & 0x04)) index = count >> 1;
         else index = (flags & 0x04) ? static_cast<std::uint8_t>(count - 1) : 0;
     } else if ((flags & 0x04) && last == action_) {
-        index = 1;  // 2 when off screen (frame skipping, not reproduced)
+        index = skips_frames(world_, owner(), *item) ? 2 : 1;
     } else {
         index = 0;
     }
@@ -246,25 +251,32 @@ void ActorAnimProcess::run() {
     // there, its steps found no floor (the glob items only exist in the fast
     // area): a guard shot out of it stumbled on the first frame of its death
     // and stayed standing for good (TEST15, docs/bugs.md).
-    if (const Item* item = world_.get(owner()); item && !(item->flags & kItemFastArea)) return;
+    const Item* item = world_.get(owner());
+    if (!item) {
+        terminate();
+        return;
+    }
+    if (!(item->flags & kItemFastArea)) return;
     // ANIMPRIM.C 1908: nothing happens while the actor falls.
     if (auto r = world_.npc_record(owner()); !r.empty() && (r[npc::kAnimFlags] & 0x02)) {
         sleep(1);
         return;
     }
-    if (!step()) {
+    bool skipped_frames = false;
+    if (!step(skips_frames(world_, owner(), *item), skipped_frames)) {
         // A blocked step fails the process (vfunc +0x2C, 1158:2F21).
         if (blocked_) fail();
         else terminate();
         return;
     }
-    const Item* item = world_.get(owner());
+    item = world_.get(owner());
     const AnimAction* a = item ? anims_.action(item->shape, action_) : nullptr;
-    sleep(a ? std::max<std::uint8_t>(a->ticks_per_frame(), 1) : 1);
+    sleep((a ? std::max<std::uint8_t>(a->ticks_per_frame(), 1) : 1) * (skipped_frames ? 2 : 1));
 }
 
 // @orig 1158:1908
-bool ActorAnimProcess::step() {
+bool ActorAnimProcess::step(bool skip_frames, bool& skipped_frames) {
+    skipped_frames = false;
     Item* item = world_.get(owner());
     if (!item) return false;
     auto record = world_.npc_record(owner());
@@ -281,6 +293,22 @@ bool ActorAnimProcess::step() {
     const std::uint8_t flags = a->flags();
     const int count = static_cast<int>(a->frame_count());
     int index = record[npc::kAnimFrame] + (first ? 0 : 1);
+    const AnimFrame* intermediate = nullptr;
+    if (skip_frames) {
+        if (first) {
+            if (index == 2) {
+                intermediate = a->frame(dir_, 1);
+                skipped_frames = intermediate != nullptr;
+            }
+        } else {
+            const int next = index + 1;
+            if (next != count - 1 && next != count - 2 && action_ != 58 && !world_.state.avatar_in_stasis) {
+                index = next;
+                intermediate = a->frame(dir_, static_cast<std::size_t>(index - 1));
+                skipped_frames = intermediate != nullptr;
+            }
+        }
+    }
 
     // ANIMPRIM.C 1908: half strides of looping actions.
     if (flags & 0x01) {
@@ -294,7 +322,8 @@ bool ActorAnimProcess::step() {
                 }
             }
         } else {
-            if ((index == count / 2 && count != 3) || (index == 2 && count == 3)) {
+            if (((index == count / 2 || (skipped_frames && index == count / 2 - 1)) && count != 3) ||
+                (index == 2 && count == 3)) {
                 anim_flags &= ~0x04;
                 return false;
             }
@@ -316,10 +345,16 @@ bool ActorAnimProcess::step() {
     const World::Point start{item->x, item->y, item->z};
     World::Point reached = start;
     const int move_dir = a->turned() ? (dir_ + 4) & 0xF : dir_;
-    const int d = f->distance * 2;
-    if (!in_place_ && (d != 0 || f->delta_z != 0)) {
+    int distance = f->distance + (intermediate ? intermediate->distance : 0);
+    if (distance > 255) distance -= 512;
+    else if (distance < -256) distance += 512;
+    int delta_z = f->delta_z + (intermediate ? intermediate->delta_z : 0);
+    if (delta_z > 127) delta_z -= 256;
+    else if (delta_z < -128) delta_z += 256;
+    const int d = distance * 2;
+    if (!in_place_ && (d != 0 || delta_z != 0)) {
         World::Point target{item->x + kDirectionDx[move_dir] * d, item->y + kDirectionDy[move_dir] * d,
-                            std::max(0, item->z + f->delta_z)};
+                            std::max(0, item->z + delta_z)};
         // In combat, an action flagged 0x80 (shape 0x33C) goes one unit up or
         // down per step towards its target's height (z wraps as a byte).
         if ((flags & 0x80) && in_combat(world_, owner())) {
@@ -369,26 +404,26 @@ bool ActorAnimProcess::step() {
     world_.set_frame(*item, f->frame);
     if (f->mirrored) item->flags |= 0x0020;
     else item->flags &= static_cast<std::uint16_t>(~0x0020);
-    // The frame's sound, restarted on the actor's voice (I_playSFXCru 0x045).
-    if (f->sfx != 0) {
-        if (Audio* audio = world_.audio()) audio->sources.retrigger(world_, f->sfx, owner());
-    }
-    // Flag 0x4000: usecode event 0x0E (calledFromAnim, 10A8:2B01) of the
-    // actor's class; the NPC classes start NPCDEATH from it on the last frame
-    // of their deaths. The script runs later, as a new process.
-    if (f->event && world_.hooks().start_event) {
-        world_.hooks().start_event(owner(), kCalledFromAnimEvent);
-        if (!world_.get(owner()) || terminated()) return false;
-    }
-    // Flag 0x1000: the special frames (WPNCACHE_1160_01f0).
-    if (f->special) {
-        special_frame(kernel(), world_, anims_, owner());
-        if (!world_.get(owner()) || terminated()) return false;
-    }
-    if (f->fires_weapon() && world_.hooks().fire_weapon) {
-        world_.hooks().fire_weapon(owner(), f->muzzle_a, f->muzzle_b, f->muzzle_z, dir_);
-        if (!world_.get(owner())) return false;
-    }
+    const auto play_frame_effects = [&](const AnimFrame& frame) {
+        if (frame.sfx != 0) {
+            if (Audio* audio = world_.audio()) audio->sources.retrigger(world_, frame.sfx, owner());
+        }
+        if (frame.event && world_.hooks().start_event) {
+            world_.hooks().start_event(owner(), kCalledFromAnimEvent);
+            if (!world_.get(owner()) || terminated()) return false;
+        }
+        if (frame.special) {
+            special_frame(kernel(), world_, anims_, owner());
+            if (!world_.get(owner()) || terminated()) return false;
+        }
+        if (frame.fires_weapon() && world_.hooks().fire_weapon) {
+            world_.hooks().fire_weapon(owner(), frame.muzzle_a, frame.muzzle_b, frame.muzzle_z, dir_);
+            if (!world_.get(owner())) return false;
+        }
+        return true;
+    };
+    if (intermediate && !play_frame_effects(*intermediate)) return false;
+    if (!play_frame_effects(*f)) return false;
     if (f->ground_check && fall_if_unsupported(start, reached)) return false;
     return true;
 }
