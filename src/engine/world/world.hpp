@@ -567,8 +567,8 @@ public:
         follow_player_ = on;
         if (!on) follow_active_ = false;
     }
-    // Once a frame: moves the view towards the followed NPC, by an amount
-    // that depends on the time since the last call.
+    // Once a frame: the view follows the NPC's position averaged over about a
+    // stride, so the uneven steps of the walk cycle scroll at an even speed.
     void update_follow_camera(std::uint32_t elapsed_us = 16667);
 
     // Item::I_isPartlyOnScreen: the item's frame overlaps the screen. Uses
@@ -686,11 +686,17 @@ private:
     int current_map_ = -1;
     FastArea fast_area_;
     void shift_camera(int dx, int dy);  // the view moves by (dx, dy) pixels
+    void set_camera_view(std::int32_t x, std::int32_t y, std::int32_t z, int left, int top);
     bool follow_player_ = false;
     bool follow_active_ = false;  // follow_goal_ is set
     std::int32_t follow_goal_[3] = {0, 0, 0};
-    double follow_frac_[2] = {0, 0};  // sub-pixel remainder of the movement
-    double follow_vel_[2] = {0, 0};   // view speed, pixels per second
+    struct FollowSample {
+        std::int64_t at_us;
+        int left, top;  // view that centres the NPC, from at_us on
+    };
+    std::deque<FollowSample> follow_history_;
+    std::int64_t follow_clock_us_ = 0;
+    double follow_view_[2] = {0, 0};
     bool expanding_glob_ = false;  // no fast area entry while set (glob far from the drawn area)
     // GLOB.C 039C: the drawn area's corner (DS:2CF1, 2CF3) as the last move
     // left it, 128-pixel aligned; reset to the new view after clear_fast_area.

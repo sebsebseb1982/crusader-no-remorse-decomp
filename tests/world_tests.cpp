@@ -783,6 +783,65 @@ void test_scripted_camera() {
     w.state.camera_target = 1;
     w.update_follow_camera();
     CHECK(w.state.camera_x != 3000 || w.state.camera_y != 4000);
+
+    // The walk cycle's uneven steps (2 ticks each, then a pause, as in the
+    // player's walk): the view scrolls at an even speed, at every frame rate.
+    for (const std::uint32_t frame_us : {16667u, 6944u}) {
+        w.set_follow_player(false);
+        w.set_camera(1000, 1000, 0);
+        w.set_follow_player(true);
+        std::int32_t x = 1000, y = 1000;
+        w.track_camera_target(x, y, 0);
+        w.update_follow_camera(1'000'000);
+        static constexpr int kSteps[] = {12, 8, 2, 4, 4, 10, 0, 0};
+        int min_move = 1000, max_move = 0, prev = w.state.view_left;
+        std::uint64_t clock = 0;
+        for (int tick = 0; tick < 600; ++tick) {
+            if (tick % 2 == 0) {
+                x += kSteps[(tick / 2) % 8];
+                y -= kSteps[(tick / 2) % 8];
+                w.track_camera_target(x, y, 0);
+            }
+            const std::uint64_t until = (tick + 1) * 16667ull;
+            for (; clock + frame_us <= until; clock += frame_us) w.update_follow_camera(frame_us);
+            if (tick >= 120 && tick % 2 == 1) {
+                // 40 pixels per 16 ticks: 5 per 2 ticks.
+                min_move = std::min(min_move, w.state.view_left - prev);
+                max_move = std::max(max_move, w.state.view_left - prev);
+            }
+            if (tick % 2 == 1) prev = w.state.view_left;
+        }
+        std::printf("follow camera at %u us a frame: %d to %d pixels per 2 ticks\n", frame_us, min_move, max_move);
+        CHECK(min_move >= 4 && max_move <= 6);
+        // A teleport is taken at once.
+        const int left = w.state.view_left;
+        w.track_camera_target(x + 2000, y - 2000, 0);
+        w.update_follow_camera(frame_us);
+        CHECK(w.state.view_left - left > 1950);
+    }
+    // Within the first window after start-up too, small steps make small moves.
+    World fresh;
+    fresh.state.controlled_npc = fresh.state.camera_target = 1;
+    fresh.set_follow_player(true);
+    fresh.set_camera(1000, 1000, 0);
+    fresh.track_camera_target(1000, 1000, 0);
+    int largest = 0;
+    for (int f = 0; f < 30; ++f) {
+        const int before = fresh.state.view_left;
+        fresh.track_camera_target(1000 + 4 * f, 1000 - 4 * f, 0);
+        fresh.update_follow_camera(16667);
+        largest = std::max(largest, std::abs(fresh.state.view_left - before));
+    }
+    CHECK(largest <= 30);
+
+    Item target;
+    target.id = 1;
+    target.x = target.y = 1000;
+    fresh.add_with_id(target);
+    fresh.move_camera_to(1008, 1008, 0, 0);
+    fresh.move_item(1, 1000, 1000, 0);
+    for (int frame = 0; frame < 60; ++frame) fresh.update_follow_camera(16667);
+    CHECK(fresh.state.camera_x == 1008 && fresh.state.camera_y == 1008);
 }
 
 void test_support_and_fall() {

@@ -839,6 +839,12 @@ void World::set_camera(std::int32_t x, std::int32_t y, std::int32_t z) {
     // 16-bit arithmetic of ANIMCACH.C: halves and quarters are taken before
     // the sum or difference.
     const std::uint16_t ux = static_cast<std::uint16_t>(x), uy = static_cast<std::uint16_t>(y);
+    set_camera_view(x, y, z, (ux >> 1) - (uy >> 1) - view_origin_x(),
+                    (ux >> 2) + (uy >> 2) - (z & 0xFF) - view_origin_y());
+}
+
+void World::set_camera_view(std::int32_t x, std::int32_t y, std::int32_t z, int left, int top) {
+    const std::uint16_t ux = static_cast<std::uint16_t>(x), uy = static_cast<std::uint16_t>(y);
     // ANIMCACH.C 0CBA moves the drawn area after the fast area.
     if (!drawn_reset_) {
         drawn_left_ = state.view_left & ~127;
@@ -847,8 +853,8 @@ void World::set_camera(std::int32_t x, std::int32_t y, std::int32_t z) {
     state.camera_x = ux;
     state.camera_y = uy;
     state.camera_z = z & 0xFF;
-    state.view_left = static_cast<std::int16_t>((ux >> 1) - (uy >> 1) - view_origin_x());
-    state.view_top = static_cast<std::int16_t>((ux >> 2) + (uy >> 2) - state.camera_z - view_origin_y());
+    state.view_left = static_cast<std::int16_t>(left);
+    state.view_top = static_cast<std::int16_t>(top);
     // A rebuilt fast area stands for the saved one, whose globs were placed
     // around the view of the time.
     if (drawn_reset_) {
@@ -963,7 +969,9 @@ std::uint8_t World::npc_direction(ObjId id) const {
 // @orig ?: camera follow of CameraProcess (segment 1188), not located
 void World::track_camera_target(std::int32_t x, std::int32_t y, std::int32_t z) {
     if (follow_player_) {
-        // Port addition: update_follow_camera() glides there, frame by frame.
+        const Item* target = get(state.camera_target);
+        if (target && target->x == x && target->y == y && target->z == z) return;
+        if (!follow_active_) follow_history_.clear();
         follow_goal_[0] = x;
         follow_goal_[1] = y;
         follow_goal_[2] = z;
@@ -1005,23 +1013,7 @@ void World::shift_camera(int dx, int dy) {
         set_camera(base_x, base_y, state.camera_z);
         return;
     }
-    // set_camera truncates halves and quarters separately, so the exact point
-    // can land a pixel or two off the wanted view; with small, eased steps that
-    // made the view jitter back and forth. Pick the nearby camera position whose
-    // view is closest to the wanted one, and stay put if none beats the current.
-    const int want_left = state.view_left + dx, want_top = state.view_top + dy;
-    int best_x = base_x, best_y = base_y, best_err = std::abs(dx) + std::abs(dy);
-    for (int oy = -3; oy <= 3; ++oy) {
-        for (int ox = -3; ox <= 3; ++ox) {
-            const auto px = static_cast<std::uint16_t>(base_x + ox), py = static_cast<std::uint16_t>(base_y + oy);
-            const int left = static_cast<std::int16_t>((px >> 1) - (py >> 1) - view_origin_x());
-            const int top = static_cast<std::int16_t>((px >> 2) + (py >> 2) - state.camera_z - view_origin_y());
-            const int err = std::abs(left - want_left) + std::abs(top - want_top);
-            if (err < best_err) best_err = err, best_x = px, best_y = py;
-        }
-    }
-    if (best_x == base_x && best_y == base_y && best_err == std::abs(dx) + std::abs(dy)) return;
-    set_camera(best_x, best_y, state.camera_z);
+    set_camera_view(base_x, base_y, state.camera_z, state.view_left + dx, state.view_top + dy);
 }
 
 // @orig none: port-only camera follow
@@ -1032,33 +1024,40 @@ void World::update_follow_camera(std::uint32_t elapsed_us) {
     const int sx = static_cast<std::int16_t>(((ux - uy) >> 1) - state.view_left);
     const int sy = static_cast<std::int16_t>((static_cast<std::uint16_t>(ux + uy) >> 2) - state.view_top -
                                              (follow_goal_[2] & 0xFF));
-    int dx = sx - (state.screen_right + 1) / 2;
-    int dy = sy - ((state.screen_bottom + 1) / 2 + 0x28);
-    if (dx == 0 && dy == 0) {
-        follow_frac_[0] = follow_frac_[1] = follow_vel_[0] = follow_vel_[1] = 0;
-        return;
+    const int left = sx - (state.screen_right + 1) / 2 + state.view_left;
+    const int top = sy - ((state.screen_bottom + 1) / 2 + 0x28) + state.view_top;
+    // About half a stride of the walk: the steps' uneven lengths average out.
+    constexpr std::int64_t kWindowUs = 300000;
+    constexpr double kSmoothUs = 60000;
+    follow_clock_us_ += elapsed_us;
+    const std::int64_t start = follow_clock_us_ - kWindowUs;
+    if (follow_history_.empty()) {
+        follow_history_.push_back({start, state.view_left, state.view_top});
+        follow_view_[0] = state.view_left;
+        follow_view_[1] = state.view_top;
     }
-    // The NPC moves by steps: the view follows it like a critically damped
-    // spring, so its speed changes smoothly between steps whatever the frame
-    // rate; a teleport or a map change far away is taken at once.
-    if (std::abs(dx) <= 200 && std::abs(dy) <= 150) {
-        const double dt = std::min(elapsed_us, 50000u) / 1e6;
-        constexpr double kOmega = 7.0;
-        const auto track = [dt](int d, double& vel, double& frac) {
-            vel += (kOmega * kOmega * d - 2 * kOmega * vel) * dt;
-            const double want = vel * dt + frac;
-            int step = static_cast<int>(want);  // towards zero
-            if (d > 0 ? step > d : step < d) step = d, vel = 0;
-            frac = want - step;
-            return step;
-        };
-        dx = track(dx, follow_vel_[0], follow_frac_[0]);
-        dy = track(dy, follow_vel_[1], follow_frac_[1]);
-        if (dx == 0 && dy == 0) return;
-    } else {
-        follow_frac_[0] = follow_frac_[1] = follow_vel_[0] = follow_vel_[1] = 0;
+    const FollowSample& last = follow_history_.back();
+    if (std::abs(left - last.left) > 200 || std::abs(top - last.top) > 150) {
+        // A teleport or a map change far away is taken at once.
+        follow_history_.assign(1, {start, left, top});
+        follow_view_[0] = left;
+        follow_view_[1] = top;
+    } else if (left != last.left || top != last.top) {
+        follow_history_.push_back({follow_clock_us_, left, top});
     }
-    shift_camera(dx, dy);
+    while (follow_history_.size() > 1 && follow_history_[1].at_us <= start) follow_history_.pop_front();
+    double sum[2] = {0, 0};
+    for (std::size_t i = 0; i < follow_history_.size(); ++i) {
+        const std::int64_t from = std::max(follow_history_[i].at_us, start);
+        const std::int64_t to = i + 1 < follow_history_.size() ? follow_history_[i + 1].at_us : follow_clock_us_;
+        sum[0] += static_cast<double>(follow_history_[i].left) * static_cast<double>(to - from);
+        sum[1] += static_cast<double>(follow_history_[i].top) * static_cast<double>(to - from);
+    }
+    const double k = 1 - std::exp(-static_cast<double>(elapsed_us) / kSmoothUs);
+    for (int a = 0; a < 2; ++a) follow_view_[a] += (sum[a] / kWindowUs - follow_view_[a]) * k;
+    const int dx = static_cast<int>(std::lround(follow_view_[0])) - state.view_left;
+    const int dy = static_cast<int>(std::lround(follow_view_[1])) - state.view_top;
+    if (dx != 0 || dy != 0) shift_camera(dx, dy);
 }
 
 // @orig 10A8:40CE

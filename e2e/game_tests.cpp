@@ -4849,6 +4849,11 @@ int main(int argc, char** argv) {
         test_keypad(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--camera-follow") {
+        test_new_game(data);
+        test_camera_follows(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--animation-frameskip") {
         test_animation_frameskip(data);
         return failures ? 1 : 0;
