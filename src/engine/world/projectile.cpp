@@ -394,9 +394,14 @@ void apply_damage(Kernel& kernel, World& world, const AnimDat& anims, ObjId targ
         }
     }
     if (record[npc::kFlags13] & 0x02) damage = 0;  // immortal (NPC_10f0_214b)
-    const int hp = std::max(0, static_cast<int>(world.npc_hp(target)) - damage);
+    const int old_hp = world.npc_hp(target);
+    const int hp = std::max(0, old_hp - damage);
     record[0] = static_cast<std::uint8_t>(hp);
     record[1] = static_cast<std::uint8_t>(hp >> 8);
+    const int dealt = old_hp - hp;
+    if (dealt > 0 && target == world.state.controlled_npc && world.hooks().player_damaged) {
+        world.hooks().player_damaged(dealt);
+    }
     if (hp != 0) {
         // Hurt: humans (and the player by fire type 8) cry out, 0x8F or 0xD8
         // for a woman.

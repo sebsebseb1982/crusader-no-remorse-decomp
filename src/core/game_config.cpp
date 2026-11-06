@@ -58,6 +58,8 @@ GameConfig GameConfig::parse(std::string_view text) {
         else if (key == "directionalaim") c.directional_aim = value == "true";
         else if (key == "drawonaim") c.draw_on_aim = value != "false";
         else if (key == "togglerun") c.toggle_run = value == "true";
+        else if (key == "vibration") c.vibration = value != "false";
+        else if (key == "vibrationintensity") c.vibration_intensity = std::clamp(number(value), 0, 100);
         else if (key == "padaim") c.pad.aim = std::clamp(number(value), 1, PadSettings::kAimLevels);
         else if (key == "paddeadzone") c.pad.dead_zone = std::clamp(number(value), 0, PadSettings::kDeadZoneLevels - 1);
         else if (key == "padmap") {
@@ -108,6 +110,10 @@ std::string GameConfig::text() const {
     else out.erase("drawonaim");
     if (toggle_run) out.set("togglerun", "true");
     else out.erase("togglerun");
+    if (!vibration) out.set("vibration", "false");
+    else out.erase("vibration");
+    if (vibration_intensity != 100) out.set("vibrationintensity", std::to_string(vibration_intensity));
+    else out.erase("vibrationintensity");
     // The controller settings: only when they differ from the defaults.
     // ("padbuttons" was an earlier format, dropped.)
     out.erase("padbuttons");

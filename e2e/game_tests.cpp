@@ -3268,19 +3268,28 @@ void test_enemies(const std::filesystem::path& data) {
         Game game(data, test_saves(data));
         game.load_save(13);
         World& w = game.world();
+        int player_damage_events = 0;
+        int last_player_damage = 0;
+        WorldHooks hooks = w.hooks();
+        hooks.player_damaged = [&](int damage) {
+            ++player_damage_events;
+            last_player_damage = damage;
+        };
+        w.set_hooks(std::move(hooks));
         auto r = w.npc_record(1);
         r[0x66] = 1;
         r[0x67] = 0;
         const int hp = w.npc_hp(1), energy = w.npc_mana(1);
         apply_damage(game.kernel(), w, game.animations(), 1, 2, 0, 20, 11);
         std::printf("enemies: shield: hp %d -> %u, energy %d -> %u\n", hp, w.npc_hp(1), energy, w.npc_mana(1));
-        CHECK(w.npc_hp(1) == hp && w.npc_mana(1) == energy - 80);
+        CHECK(w.npc_hp(1) == hp && w.npc_mana(1) == energy - 80 && player_damage_events == 0);
         apply_damage(game.kernel(), w, game.animations(), 1, 2, 0, 20, 11);  // 50 left: not enough
-        CHECK(w.npc_hp(1) == hp - 4 && w.npc_mana(1) == energy - 80);   // 20 / 5 at difficulty 1
+        CHECK(w.npc_hp(1) == hp - 4 && w.npc_mana(1) == energy - 80 && player_damage_events == 1 &&
+              last_player_damage == 4);   // 20 / 5 at difficulty 1
         r[0x66] = 0;
         r[npc::kFlags13] |= 0x02;
         apply_damage(game.kernel(), w, game.animations(), 1, 2, 0, 20, 11);
-        CHECK(w.npc_hp(1) == hp - 4);
+        CHECK(w.npc_hp(1) == hp - 4 && player_damage_events == 1);
     }
 }
 

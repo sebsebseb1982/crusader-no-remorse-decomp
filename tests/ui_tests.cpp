@@ -3,7 +3,9 @@
 #include "core/flex.hpp"
 #include "core/shape.hpp"
 #include "core/surface.hpp"
+#include "engine/ui/enhancements_screen.hpp"
 #include "engine/ui/keypad_gump.hpp"
+#include "engine/ui/gump_keys.hpp"
 #include "engine/world/render.hpp"
 
 #include <cstdint>
@@ -107,10 +109,32 @@ void test_keypad_digit_spacing() {
     CHECK(second - first == 4 + 1);
 }
 
+void test_vibration_settings() {
+    FontSet fonts;
+    GameConfig config;
+    int pad_focus = 0;
+    int previews = 0;
+    EnhancementsScreen screen(fonts, config, pad_focus, [&] { ++previews; });
+
+    for (int i = 0; i < EnhancementsScreen::kVibrationIntensityRow; ++i) screen.key(gump_key::kDown);
+    screen.key(gump_key::kLeft);
+    CHECK(config.vibration_intensity == 90 && previews == 1);
+    screen.key(gump_key::kEnter);
+    CHECK(config.vibration_intensity == 100 && previews == 2);
+    screen.key(gump_key::kRight);
+    CHECK(config.vibration_intensity == 100 && previews == 2);
+
+    EnhancementsScreen toggle(fonts, config, pad_focus);
+    for (int i = 0; i < EnhancementsScreen::kVibrationRow; ++i) toggle.key(gump_key::kDown);
+    toggle.key(gump_key::kEnter);
+    CHECK(!config.vibration);
+}
+
 }  // namespace
 
 int main() {
     test_keypad_digit_spacing();
+    test_vibration_settings();
     if (failures == 0) std::printf("all ui checks passed\n");
     return failures == 0 ? 0 : 1;
 }

@@ -4,14 +4,15 @@
 #include "engine/ui/gump_keys.hpp"
 
 #include <algorithm>
+#include <utility>
 
 namespace crusader {
 
 namespace {
 
-constexpr int kPanelX0 = 100, kPanelY0 = 84, kPanelX1 = 539, kPanelY1 = 426;
-constexpr int kTitleY = 120, kIconSize = 14, kIconGap = 8;
-constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 150, kRowStep = 27, kRowHeight = 24;
+constexpr int kPanelX0 = 100, kPanelY0 = 50, kPanelX1 = 539, kPanelY1 = 455;
+constexpr int kTitleY = 82, kIconSize = 14, kIconGap = 8;
+constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 108, kRowStep = 28, kRowHeight = 24;
 constexpr int kTextDrop = 17, kRowPad = 18;  // glyphs hang from their baseline
 constexpr std::uint8_t kFrameColour = 0x57, kGreen = 0x0C, kDimGreen = 0x75;
 
@@ -61,8 +62,9 @@ void draw_plus_icon(Surface8& screen, int x, int y, int size, std::uint8_t colou
     fill_rect(screen, mid - 1, midy - arm, mid, midy + arm, colour);
 }
 
-EnhancementsScreen::EnhancementsScreen(const FontSet& fonts, GameConfig& config, int& pad_focus)
-    : fonts_(&fonts), config_(&config), pad_focus_(&pad_focus) {}
+EnhancementsScreen::EnhancementsScreen(const FontSet& fonts, GameConfig& config, int& pad_focus,
+                                       std::function<void()> vibration_preview)
+    : fonts_(&fonts), config_(&config), pad_focus_(&pad_focus), vibration_preview_(std::move(vibration_preview)) {}
 
 EnhancementsScreen::Rect EnhancementsScreen::row_rect(int row) const {
     const int y = kRowY0 + kRowStep * row;
@@ -92,7 +94,8 @@ void EnhancementsScreen::draw(Surface8& screen) const {
         draw_rounded_box(screen, r.x0, r.y0, r.x1, r.y1, -1, static_cast<std::uint8_t>(tint));
         const TextWriter writer(*fonts_, kFont);
         if (row == kFollowRow || row == kDirectionalRow || row == kAimRow || row == kDrawRow || row == kNativeRow ||
-            row == kZoomRow || row == kAutosaveRow || row == kRunRow) {
+            row == kZoomRow || row == kAutosaveRow || row == kRunRow || row == kVibrationRow ||
+            row == kVibrationIntensityRow) {
             // The name on the left, its state on the right.
             std::string name;
             bool on = false;
@@ -112,6 +115,12 @@ void EnhancementsScreen::draw(Surface8& screen) const {
             } else if (row == kRunRow) {
                 name = tr("COURSE PERMANENTE", "TOGGLE RUN");
                 on = config_->toggle_run;
+            } else if (row == kVibrationRow) {
+                name = tr("VIBRATIONS", "VIBRATION");
+                on = config_->vibration;
+            } else if (row == kVibrationIntensityRow) {
+                name = tr("INTENSITE", "INTENSITY");
+                value = std::to_string(config_->vibration_intensity) + "%";
             } else if (row == kNativeRow) {
                 name = tr("RESOLUTION NATIVE", "NATIVE RESOLUTION");
                 on = config_->native_resolution;
@@ -122,7 +131,8 @@ void EnhancementsScreen::draw(Surface8& screen) const {
                 name = tr("DEGAINE EN VISANT", "DRAW ON AIM");
                 on = config_->draw_on_aim;
             }
-            if (row != kZoomRow) value = on ? tr("MARCHE", "ON") : tr("ARRET", "OFF");
+            if (row != kZoomRow && row != kVibrationIntensityRow)
+                value = on ? tr("MARCHE", "ON") : tr("ARRET", "OFF");
             print_tinted(screen, *fonts_, r.x0 + kRowPad, r.y0 + kTextDrop, name, tint);
             print_tinted(screen, *fonts_, r.x1 + 1 - kRowPad - writer.measure(value).width, r.y0 + kTextDrop, value,
                          tint);
@@ -155,6 +165,11 @@ void EnhancementsScreen::activate(int row) {
         config_->directional_aim = !config_->directional_aim;
     } else if (row == kDrawRow) {
         config_->draw_on_aim = !config_->draw_on_aim;
+    } else if (row == kVibrationRow) {
+        config_->vibration = !config_->vibration;
+    } else if (row == kVibrationIntensityRow) {
+        config_->vibration_intensity = (config_->vibration_intensity + 10) % 110;
+        if (vibration_preview_) vibration_preview_();
     } else {
         closed_ = true;
     }
@@ -171,6 +186,24 @@ void EnhancementsScreen::key(std::uint16_t code) {
     switch (code) {
     case gump_key::kEscape: closed_ = true; break;
     case gump_key::kEnter: activate(focus_); break;
+    case gump_key::kLeft:
+    case '4':
+        if (focus_ == kVibrationIntensityRow) {
+            if (config_->vibration_intensity > 0) {
+                config_->vibration_intensity -= 10;
+                if (vibration_preview_) vibration_preview_();
+            }
+        }
+        break;
+    case gump_key::kRight:
+    case '6':
+        if (focus_ == kVibrationIntensityRow) {
+            if (config_->vibration_intensity < 100) {
+                config_->vibration_intensity += 10;
+                if (vibration_preview_) vibration_preview_();
+            }
+        }
+        break;
     case gump_key::kUp:
     case '8': focus_ = std::max(focus_ - 1, 0); break;
     case gump_key::kDown:

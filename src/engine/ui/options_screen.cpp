@@ -5,6 +5,7 @@
 #include "engine/ui/gump_keys.hpp"
 
 #include <string>
+#include <utility>
 
 
 namespace crusader {
@@ -94,8 +95,10 @@ bool step(int& s, bool up) {
 }  // namespace
 
 // @orig 13D0:0ECE
-OptionsScreen::OptionsScreen(ShapeCache& gumps, GameConfig& config, Audio* audio, int& focus, const FontSet* fonts)
-    : gumps_(&gumps), config_(&config), audio_(audio), focus_(&focus), fonts_(fonts) {
+OptionsScreen::OptionsScreen(ShapeCache& gumps, GameConfig& config, Audio* audio, int& focus, const FontSet* fonts,
+                             std::function<void()> vibration_preview)
+    : gumps_(&gumps), config_(&config), audio_(audio), focus_(&focus), fonts_(fonts),
+      vibration_preview_(std::move(vibration_preview)) {
     for (int i = 0; i < kWidgets; ++i) {
         const Placement& p = (us_version() ? kPlacementsUs : kPlacements)[i];
         const Shape* s = gumps_->get(p.shape);
@@ -214,7 +217,7 @@ void OptionsScreen::draw_pad_button(Surface8& screen) const {
 
 void OptionsScreen::open_enhancements() {
     if (!fonts_) return;
-    enh_ = std::make_unique<EnhancementsScreen>(*fonts_, *config_, pad_focus_);
+    enh_ = std::make_unique<EnhancementsScreen>(*fonts_, *config_, pad_focus_, vibration_preview_);
 }
 
 // @orig 13D0:20B7

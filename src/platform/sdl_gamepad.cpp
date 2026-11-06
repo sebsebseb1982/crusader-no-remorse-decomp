@@ -61,6 +61,13 @@ void Gamepad::init() {
     for (int i = 0; i < SDL_NumJoysticks() && !controller_; ++i) open(i);
 }
 
+void Gamepad::rumble(std::uint16_t low_frequency, std::uint16_t high_frequency, std::uint32_t duration_ms) {
+    if (controller_) {
+        SDL_GameControllerRumble(reinterpret_cast<SDL_GameController*>(controller_), low_frequency, high_frequency,
+                                 duration_ms);
+    }
+}
+
 void Gamepad::open(int device_index) {
     if (controller_ || !SDL_IsGameController(device_index)) return;
     SDL_GameController* c = SDL_GameControllerOpen(device_index);

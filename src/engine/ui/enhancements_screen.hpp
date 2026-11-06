@@ -11,18 +11,18 @@
 // puts the crosshair where it points, and the "degaine en visant" toggle
 // (GameConfig::draw_on_aim): pushing that stick draws the weapon, and the
 // "resolution native" toggle
-// (GameConfig::native_resolution): the view fills the screen, and its "zoom" row
-// (GameConfig::view_zoom): auto, then pixels of 1 to 4 screen pixels, and the
-// "sauvegarde auto" toggle (GameConfig::autosave): the game saves itself at the
-// key moments of a mission (Game::autosave), and the "course toggle" toggle
-// (GameConfig::toggle_run): Shift switches running on and off at each press.
+// (GameConfig::native_resolution): the view fills the screen, and its "zoom"
+// row (GameConfig::view_zoom): auto, then pixels of 1 to 4 screen pixels, and
+// the "sauvegarde auto" toggle (GameConfig::autosave): the game saves itself
+// at the key moments of a mission, "course toggle" (GameConfig::toggle_run),
+// and controller vibration (GameConfig::vibration / vibration_intensity).
 //
 // Look: the screen cleared, a small red framed window (colour 0x57) in the
 // middle, the title with the "+" icon in green, and one row per entry
 // ("manette", "retour") outlined as the controller screen's rows. Keys: up /
-// '8' and down / '2' change row, Enter opens or closes, Escape closes. Mouse:
-// pressing a row focuses and activates it. While the controller screen is
-// open it gets every event until it closes.
+// '8' and down / '2' change row, Enter opens or closes, Escape closes. Left /
+// right adjust vibration intensity. Mouse: pressing a row focuses and
+// activates it. While the controller screen is open it gets every event.
 
 #include "core/font.hpp"
 #include "core/game_config.hpp"
@@ -30,6 +30,7 @@
 #include "engine/ui/gamepad_screen.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -45,7 +46,8 @@ void draw_plus_icon(Surface8& screen, int x, int y, int size, std::uint8_t colou
 class EnhancementsScreen {
 public:
     static constexpr int kPadRow = 0, kFollowRow = 1, kDirectionalRow = 2, kAimRow = 3, kDrawRow = 4,
-                              kNativeRow = 5, kZoomRow = 6, kAutosaveRow = 7, kRunRow = 8, kBackRow = 9, kRows = 10;
+                         kNativeRow = 5, kZoomRow = 6, kAutosaveRow = 7, kRunRow = 8, kVibrationRow = 9,
+                         kVibrationIntensityRow = 10, kBackRow = 11, kRows = 12;
     static constexpr int kFont = 14;
 
     struct Rect {
@@ -54,7 +56,8 @@ public:
     };
 
     // `pad_focus` is the controller screen's row, kept by the caller.
-    EnhancementsScreen(const FontSet& fonts, GameConfig& config, int& pad_focus);
+    EnhancementsScreen(const FontSet& fonts, GameConfig& config, int& pad_focus,
+                       std::function<void()> vibration_preview = {});
 
     void draw(Surface8& screen) const;
     void key(std::uint16_t code);
@@ -76,6 +79,7 @@ private:
     const FontSet* fonts_;
     GameConfig* config_;
     int* pad_focus_;
+    std::function<void()> vibration_preview_;
     int focus_ = 0;
     bool closed_ = false;
     std::unique_ptr<GamepadScreen> pad_;

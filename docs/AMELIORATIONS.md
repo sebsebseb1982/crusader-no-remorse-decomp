@@ -74,6 +74,7 @@ L'original n'a pas d'équivalent. Cet écran regroupe toutes les options ajouté
 **Fichiers :** `src/core/pad_config.hpp`, `src/platform/sdl_gamepad.*`, `src/engine/ui/gamepad_screen.*`
 
 L'original ne gère que le joystick PC, que le portage ne reproduit pas. Le portage prend en charge toute manette reconnue par `SDL_GameController` (Xbox et compatibles), avec branchement et débranchement à chaud.
+Dans la fenêtre Améliorations, les vibrations des manettes peuvent être activées ou désactivées et leur intensité réglée par pas de 10 % avec les flèches gauche/droite (ou un clic sur la ligne). La manette vibre brièvement pour illustrer chaque niveau choisi. Les explosions sont modulées selon leur taille ; le tir du lance-roquettes provoque une vibration soutenue, légèrement moins forte qu'une grosse explosion. Une vibration accompagne aussi les dégâts réellement reçus par le personnage contrôlé, mais pas ceux absorbés par un bouclier.
 
 ### 2.1 Principe
 Chaque entrée de la manette est **traduite en touche (ou combinaison de touches) des contrôles d'origine**. Le moteur reçoit donc des événements clavier ou souris ordinaires et n'a rien de spécifique à la manette.

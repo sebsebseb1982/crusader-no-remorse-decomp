@@ -297,6 +297,10 @@ struct WorldHooks {
     // An actor's animation reached a frame that fires its weapon
     // (WPNCACHE_1160_005f): muzzle offsets of the frame, direction.
     std::function<void(ObjId actor, int muzzle_a, int muzzle_b, int muzzle_z, int dir)> fire_weapon;
+    // An explosion occurred: size is 0 (small), 1 (medium) or 2 (large).
+    std::function<void(int size)> explosion;
+    // The currently controlled NPC lost hit points; `damage` is the actual loss.
+    std::function<void(int damage)> player_damaged;
     // A living NPC entered the fast area (Item::I_enterFastArea, ITEM.C
     // 2CA8): its activity starts again.
     std::function<void(ObjId npc)> npc_entered_fast_area;

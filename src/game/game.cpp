@@ -92,8 +92,9 @@ constexpr std::uint32_t kMenuRepeatDelay = 20;
 // The options screen and the load screen of the menu, opened by F2 / F8.
 class OptionsGump : public ModalGump {
 public:
-    OptionsGump(ShapeCache& gumps, GameConfig& config, Audio* audio, int& focus, const FontSet& fonts)
-        : s_(gumps, config, audio, focus, &fonts) {}
+    OptionsGump(ShapeCache& gumps, GameConfig& config, Audio* audio, int& focus, const FontSet& fonts,
+                std::function<void()> vibration_preview)
+        : s_(gumps, config, audio, focus, &fonts, std::move(vibration_preview)) {}
     void draw(Surface8& screen) const override { s_.draw(screen); }
     void key(std::uint16_t code) override { s_.key(code); }
     void mouse_down(int x, int y) override { s_.mouse_down(x, y); }
@@ -213,6 +214,12 @@ void Game::fire_frame(ObjId actor, int a, int b, int z) {
     const Item* source = world_->get(item != 0 && last == 13 ? item : world_->active_weapon(actor));
     if (!source) return;
     const int type = dtable::weapon(source->shape).fire_type();
+    const Item* equipped_weapon = world_->get(world_->active_weapon(actor));
+    const auto is_rocket_launcher = [](std::uint16_t shape) { return shape == 0x333 || shape == 0x334; };
+    const bool rocket_launcher =
+        is_rocket_launcher(source->shape) || (equipped_weapon && is_rocket_launcher(equipped_weapon->shape));
+    if (actor == world_->state.controlled_npc && (rocket_launcher || type == 9 || type == 10))
+        vibrate(60000, 56000, 180);
     if (actor == 1 && type == 6) {
         if (world_->state.auto_firer != 0) {
             if (!world_->state.fire_held) stop_auto_firer(*kernel_, *world_);
@@ -330,6 +337,18 @@ void Game::reset_world() {
     kernel_->spawn<DumbTimer>(*world_, anims_);
     WorldHooks hooks = world_->hooks();
     hooks.fire_weapon = [this](ObjId actor, int a, int b, int z, int) { fire_frame(actor, a, b, z); };
+    hooks.explosion = [this](int size) {
+        static constexpr std::uint16_t kLowFrequency[] = {32000, 50000, 65535};
+        static constexpr std::uint16_t kHighFrequency[] = {24000, 42000, 65535};
+        static constexpr std::uint32_t kDurationMs[] = {90, 140, 200};
+        const auto level = static_cast<std::size_t>(std::clamp(size, 0, 2));
+        vibrate(kLowFrequency[level], kHighFrequency[level], kDurationMs[level]);
+    };
+    hooks.player_damaged = [this](int damage) {
+        const auto strength = static_cast<std::uint16_t>(std::clamp(18000 + damage * 900, 18000, 52000));
+        const auto duration = static_cast<std::uint32_t>(std::clamp(65 + damage * 3, 65, 150));
+        vibrate(strength, strength / 2, duration);
+    };
     // NPCs entering the fast area start their activity again. The controlled
     // NPC is left alone: the port rebuilds the fast area when loading a game
     // where the original restores the saved state, and the reset would undo
@@ -368,6 +387,20 @@ void Game::reset_world() {
     screen_process_ = nullptr;
     sprites_suspended_ = false;
     autosave_pending_ = false;
+}
+
+void Game::vibrate(std::uint16_t low_frequency, std::uint16_t high_frequency, std::uint32_t duration_ms,
+                   bool preview) {
+    if ((!config_.vibration && !preview) || !vibration_handler_) return;
+    const int intensity = std::clamp(config_.vibration_intensity, 0, 100);
+    const auto scale = [intensity](std::uint16_t strength) {
+        return static_cast<std::uint16_t>(static_cast<std::uint32_t>(strength) * intensity / 100);
+    };
+    vibration_handler_(scale(low_frequency), scale(high_frequency), duration_ms);
+}
+
+void Game::preview_vibration() {
+    vibrate(65535, 65535, 240, true);
 }
 
 // @orig none: the controller screen's "press a button"
@@ -1156,7 +1189,8 @@ bool Game::function_key(std::uint16_t code) {
         world_->state.screen_palette = menu_palette_;
         cursor_.reset(MouseCursor::kMenuArrow);
         cursor_.show();
-        open_screen(std::make_unique<OptionsGump>(gumps_, config_, audio_.get(), menu_shared_.options_focus, fonts_),
+        open_screen(std::make_unique<OptionsGump>(gumps_, config_, audio_.get(), menu_shared_.options_focus, fonts_,
+                                                  [this] { preview_vibration(); }),
                     [this](const ModalGump&) {
                         save_config();
                         cursor_.reset(MouseCursor::kArrow);

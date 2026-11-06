@@ -60,6 +60,10 @@ public:
     // (whole multiple) of the native view; 0 takes the biggest that fits the
     // window, 1 gives the finest picture.
     int view_zoom = 0;
+    // Port addition, written when changed: controller rumble and its strength
+    // (0..100 percent).
+    bool vibration = true;
+    int vibration_intensity = 100;
     // Not saved: the biggest pixel size the window allows (set by the platform
     // layer), where the zoom choices stop.
     int view_zoom_limit = 4;

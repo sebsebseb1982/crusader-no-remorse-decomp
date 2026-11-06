@@ -256,6 +256,9 @@ int main(int argc, char** argv) {
         bool relative_mouse = false;
         Gamepad gamepad;
         gamepad.init();
+        game.set_vibration_handler([&gamepad](std::uint16_t low, std::uint16_t high, std::uint32_t duration) {
+            gamepad.rumble(low, high, duration);
+        });
         const bool pad_debug = std::getenv("CRUSADER_PAD_DEBUG") != nullptr;  // see sdl_gamepad.cpp
         if (pad_debug) std::setvbuf(stdout, nullptr, _IOLBF, 0);
         gamepad.set_settings(&game.config().pad);

@@ -50,6 +50,8 @@ public:
 
     // Initialises the SDL subsystem and opens the controllers already plugged in.
     void init();
+    // Starts a vibration on the connected controller, if it supports rumble.
+    void rumble(std::uint16_t low_frequency, std::uint16_t high_frequency, std::uint32_t duration_ms);
 
     // The settings in use (read at every event); the default ones until set.
     void set_settings(const PadSettings* settings) { settings_ = settings ? settings : &defaults_; }

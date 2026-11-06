@@ -132,6 +132,10 @@ void impact_sprite(Kernel& kernel, World& world, int fire_type, World::Point at)
     case 0xF: shape = 0x59B; sound = kElectric[rnd(world, 2)]; break;
     default: break;
     }
+    if (world.hooks().explosion) {
+        if (fire_type == 3) world.hooks().explosion(1);
+        else if (fire_type == 4 || fire_type == 10) world.hooks().explosion(2);
+    }
     int first = 0, last = 0x27;
     switch (shape) {
     case 0x56B: first = rnd(world, 3) * 6; last = first + 5; break;

@@ -56,6 +56,18 @@ void check_config() {
     check(!GameConfig::parse(saving.text()).autosave && saving.text().find("autosave=false") != std::string::npos,
           "config autosave off round trip");
 
+    GameConfig rumble = GameConfig::parse("irq=7\r\n");
+    check(rumble.vibration && rumble.vibration_intensity == 100, "config vibration defaults");
+    rumble.vibration = false;
+    rumble.vibration_intensity = 60;
+    const GameConfig rumble_round_trip = GameConfig::parse(rumble.text());
+    check(!rumble_round_trip.vibration && rumble_round_trip.vibration_intensity == 60,
+          "config vibration settings round trip");
+    const GameConfig rumble_clamped =
+        GameConfig::parse("vibration=false\r\nvibrationintensity=120\r\n");
+    check(!rumble_clamped.vibration && rumble_clamped.vibration_intensity == 100,
+          "config vibration intensity clamped");
+
     // "drawonaim" (port addition): on by default, written only when switched off.
     GameConfig drawing = GameConfig::parse("irq=7\r\n");
     check(drawing.draw_on_aim && drawing.text().find("drawonaim") == std::string::npos,

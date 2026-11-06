@@ -150,6 +150,11 @@ public:
     // the platform gives with pad_button() instead of sending its key.
     bool waiting_for_pad() const;
     void pad_button(int button);
+    // Installs the platform's rumble handler for gameplay events.
+    void set_vibration_handler(std::function<void(std::uint16_t, std::uint16_t, std::uint32_t)> handler) {
+        vibration_handler_ = std::move(handler);
+    }
+    void preview_vibration();
     // In play (no menu, screen, message box or movie), the game view puts the
     // mouse back at (320, 200) after each move: only relative motion counts.
     // Directional aiming: the right stick's direction on the screen (degrees,
@@ -259,6 +264,8 @@ public:
 
 private:
     void fire_frame(ObjId actor, int muzzle_a, int muzzle_b, int muzzle_z);
+    void vibrate(std::uint16_t low_frequency, std::uint16_t high_frequency, std::uint32_t duration_ms,
+                 bool preview = false);
     void reset_world();
     // The usecode globals (0x42 bytes in this version), the rest cleared.
     void set_globals(std::span<const std::uint8_t> bytes);
@@ -340,6 +347,7 @@ private:
     GameConfig config_;
     std::filesystem::path config_file_;
     std::unique_ptr<Audio> audio_;  // kept across loads, as the sound driver
+    std::function<void(std::uint16_t, std::uint16_t, std::uint32_t)> vibration_handler_;
     bool audio_device_ = false;
     bool credits_music_ = false;
     bool capture_ = false;

@@ -61,6 +61,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <memory>
 
 namespace crusader {
@@ -92,7 +93,8 @@ public:
     };
 
     // `focus` is DS:5BEA; `audio` may be null (no sound).
-    OptionsScreen(ShapeCache& gumps, GameConfig& config, Audio* audio, int& focus, const FontSet* fonts = nullptr);
+    OptionsScreen(ShapeCache& gumps, GameConfig& config, Audio* audio, int& focus, const FontSet* fonts = nullptr,
+                  std::function<void()> vibration_preview = {});
 
     void draw(Surface8& screen) const;
 
@@ -154,6 +156,7 @@ private:
     std::uint32_t next_repeat_ = 0;
     bool closed_ = false;
     const FontSet* fonts_ = nullptr;
+    std::function<void()> vibration_preview_;
     Rect pad_rect_{352, 318, 503, 339};
     bool pad_pressed_ = false;  // the mouse holds the enhancements button
     int pad_focus_ = 0;         // the controller screen's row, kept between openings
