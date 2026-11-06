@@ -8,7 +8,7 @@
 //   left stick          up / down: forward / backward, left / right: step aside   RT  fire (Space)
 //   right stick         up / down: aim (mouse)     right stick left / right  turn left / right
 //   A / B / X / Y       select (S) / jump / confirm / next weapon
-//   LB / RB             roll left / right          L3 / R3  run (Shift + up) / kneel or stand (Ctrl + down)
+//   LB / RB             roll left / right          L3 / R3  run (Shift) / kneel or stand (Ctrl + down)
 //   d-pad               use item / medkit / previous item / next item
 //   Start               menu
 // The actions of the inputs, and the right stick's speed and dead zone, come

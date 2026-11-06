@@ -47,6 +47,7 @@ private:
     World& world_;
     const AnimDat& anims_;
     const Keyboard& keyboard_;
+    bool drawn_before_run_ = false;  // the weapon was out when the run began
 };
 
 // CRUSADER.C 0F8D: actions whose direction may change while they run; a

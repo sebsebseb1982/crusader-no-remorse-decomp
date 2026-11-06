@@ -341,8 +341,9 @@ void Gamepad::press_slot(int slot, bool pressed) {
         }
         if (menu_ && slot >= kPadFirstDirection) return;
         if (action < 0 || action >= kPadActionCount) return;  // the default role, or nothing
-        // Directional movement: run is Shift held with the move key, not Shift + up.
-        if (action == kPadRun && directional_active()) action = kPadShift;
+        // Run is Shift held with the move key (stick or d-pad), never Shift + up: that Up would be
+        // released with the stick and stop the run while the button is still held.
+        if (action == kPadRun) action = kPadShift;
         const PadAction& a = kPadActions[action];
         if (a.scancode == 0) return;
         sent_[slot] = &a;

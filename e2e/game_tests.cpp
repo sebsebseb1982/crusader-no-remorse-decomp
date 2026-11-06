@@ -2995,6 +2995,31 @@ void test_player_combat_flag(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
+// Issue #8, port addition: a run begun with the weapon holstered ends holstered
+// (the armed run shows the weapon); begun with it out, it stays out.
+void test_run_stop_holsters(const std::filesystem::path& data) {
+    for (const bool drawn : {false, true}) {
+        Game game(data, test_saves(data));
+        game.load_save(3);
+        game.config().toggle_run = false;
+        World& w = game.world();
+        for (int i = 0; i < 5; ++i) game.update(kFrameUs);
+        do_anim(game.kernel(), w, game.animations(), 1, drawn ? 4 : 0, kDirCurrent);
+        settle(game);
+        CHECK(in_combat(w, 1) == drawn);
+        game.key(kScShift, false, true, kLeftShift);
+        game.key(0x48, true, true, kLeftShift);
+        for (int i = 0; i < 40; ++i) game.update(kFrameUs);
+        game.key(0x48, true, false, kLeftShift);  // the stop, run button still held
+        settle(game);
+        std::printf("run stop, weapon out before %d: last action 0x%X, in combat %d\n", drawn, last_action(game),
+                    in_combat(w, 1));
+        CHECK(in_combat(w, 1) == drawn);
+        game.key(kScShift, false, false, 0);
+        CHECK(game.machine().faults().empty());
+    }
+}
+
 // ITEM.C 2970: before a move, what rests on the mover falls and what it rests
 // on gets event 9 ("release"). Telepad 3319 of SAVEGAME.1 (TELEPAD) clears
 // the "teleporting" flag in it once nobody stands on it any more.
@@ -5082,6 +5107,10 @@ int main(int argc, char** argv) {
         test_animation_frameskip(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--run-stop") {
+        test_run_stop_holsters(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--floor-pad") {
         test_floor_pad(data);
         return failures ? 1 : 0;
@@ -5161,6 +5190,7 @@ int main(int argc, char** argv) {
     test_aim_stick_draws(data);
     test_crosshair_shot_height(data);
     test_player_combat_flag(data);
+    test_run_stop_holsters(data);
     test_weapon_out_movement(data);
     test_leave_surface(data);
     test_enemies(data);

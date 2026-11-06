@@ -110,8 +110,12 @@ bool AvatarMover::handle_key(const GameKeyEvent& e) {
         else if (!side_step) action = !upright && (a_id == 1 || (last != 2 && last != 0x2D)) ? 4 : 0;
         if (action == kNone) return false;
         do_anim(kernel_, world_, anims_, a_id, static_cast<std::uint16_t>(action), kDirCurrent);
+        // Port addition: a run that began holstered ends holstered (the armed run shows the weapon).
+        if (action == 0x27 && has_weapon && !drawn_before_run_) do_anim(kernel_, world_, anims_, a_id, 0xB, kDirCurrent);
         return true;
     }
+
+    if (!running && !run_start) drawn_before_run_ = not_moving;
 
     // Pressed or repeated: target direction.
     int d = dir;

@@ -242,9 +242,9 @@ void test_gamepad() {
     pad.feed(button(SDL_CONTROLLERBUTTONDOWN, SDL_CONTROLLER_BUTTON_LEFTSTICK));
     pad.feed(button(SDL_CONTROLLERBUTTONUP, SDL_CONTROLLER_BUTTON_LEFTSTICK));
     keys = pad.take_keys();
-    CHECK(keys.size() == 8);
+    CHECK(keys.size() == 6);
     CHECK(keys[0].scancode == 0x1D && keys[1].scancode == 0x4B && keys[1].extended && keys[1].ctrl());
-    CHECK(keys[4].scancode == 0x2A && keys[5].scancode == 0x48 && keys[5].shift() && !keys[5].ctrl());
+    CHECK(keys[4].scancode == 0x2A && keys[4].pressed && keys[4].shift() && keys[5].scancode == 0x2A && !keys[5].pressed);
     PadSettings aside = legacy;
     aside.buttons[kPadY] = kPadStepRight;
     pad.set_settings(&aside);
