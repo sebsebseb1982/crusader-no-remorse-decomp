@@ -754,9 +754,21 @@ void Game::update(std::uint32_t elapsed_us) {
     dispatch_mouse();
     if (!modal()) world_->update_follow_camera(elapsed_us);
     const std::uint32_t before = kernel_->ticks();
-    kernel_->advance_time(elapsed_us);
-    kernel_->run_slice();
-    animate_scenery();
+    // Port: a frame spanning several ticks (slow drawing of a large view) gets
+    // one pass per tick, up to 4, instead of the game slowing down.
+    constexpr int kMaxPasses = 4;
+    constexpr std::uint32_t kTickUs = (1'000'000 + Kernel::kTicksPerSecond - 1) / Kernel::kTicksPerSecond;
+    std::uint32_t left = elapsed_us;
+    for (int pass = 1;; ++pass) {
+        const std::uint32_t to_tick = kernel_->us_to_next_tick();
+        const bool more = pass < kMaxPasses && left >= to_tick + kTickUs;
+        const std::uint32_t step = more ? to_tick : left;
+        kernel_->advance_time(step);
+        kernel_->run_slice();
+        animate_scenery();
+        left -= step;
+        if (!more || movie_ || kernel_->slice_interrupted()) break;
+    }
     if (autosave_pending_ && kernel_->ticks() >= autosave_due_ && !modal() && player_may_act(*world_)) {
         autosave_pending_ = false;
         autosave();

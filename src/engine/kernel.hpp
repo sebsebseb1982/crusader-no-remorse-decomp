@@ -77,6 +77,10 @@ public:
     // Advances the clock by real elapsed time and feeds timed processes.
     void advance_time(std::uint32_t elapsed_us);
     std::uint32_t ticks() const { return ticks_; }
+    // Microseconds that advance_time needs to reach the next tick.
+    std::uint32_t us_to_next_tick() const {
+        return static_cast<std::uint32_t>((1'000'000 - tick_remainder_ + kTicksPerSecond - 1) / kTicksPerSecond);
+    }
 
     // One scheduling pass over the table.
     void run_slice();
