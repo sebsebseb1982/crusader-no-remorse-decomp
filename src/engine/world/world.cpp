@@ -834,6 +834,13 @@ void World::set_broken(Item& item) {
     item.flags |= kItemBroken;
 }
 
+// @orig 10A8:260F
+void World::clear_broken(Item& item) {
+    if (!(item.flags & kItemBroken)) return;
+    track(item.id);
+    item.flags &= static_cast<std::uint16_t>(~kItemBroken);
+}
+
 // @orig 1188:0CBA
 void World::set_camera(std::int32_t x, std::int32_t y, std::int32_t z) {
     // 16-bit arithmetic of ANIMCACH.C: halves and quarters are taken before
@@ -843,6 +850,7 @@ void World::set_camera(std::int32_t x, std::int32_t y, std::int32_t z) {
                     (ux >> 2) + (uy >> 2) - (z & 0xFF) - view_origin_y());
 }
 
+// @orig 1188:0CBA
 void World::set_camera_view(std::int32_t x, std::int32_t y, std::int32_t z, int left, int top) {
     const std::uint16_t ux = static_cast<std::uint16_t>(x), uy = static_cast<std::uint16_t>(y);
     // ANIMCACH.C 0CBA moves the drawn area after the fast area.

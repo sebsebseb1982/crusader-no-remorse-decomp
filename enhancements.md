@@ -512,7 +512,7 @@ These differences are deliberate or not yet resolved. They are documented in the
 - A reused item slot does not keep its old coordinates.
 - During a cutscene, the timed processes are frozen, and the sound plays as one buffer.
 - US data: the reset of the player and inventory between missions that the US executable does is not reproduced.
-- Cheats are out of scope, except the keypad cheat code, which the original keypad handles itself.
+- Cheats: the typed code, `-laurie`, F10, Ctrl+F10, `~`, T, f, Ctrl+Q, Ctrl+L, Ctrl+M and Weasel's free level work as in the original; its debugging displays (bounding boxes of f, F7, Alt+F7, Ctrl+F7), the "hack mover" (H) and the memory status (Ctrl+V) are not reproduced (`src/engine/world/cheats.hpp`).
 
 ---
 

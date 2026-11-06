@@ -45,6 +45,10 @@ bool add_item_cru(World& world, ObjId item, bool show);
 // `shape`, 0 if none.
 ObjId carried(const World& world, std::uint16_t shape);
 
+// NPC_10f0_2b03 / 2b2d / 2b62: the first empty slot of the player's slots
+// first..first+count-1 (weapons 1, 5; ammunition 6, 5; items 11, 15), 0 if none.
+int free_equip_slot(const World& world, int first, int count);
+
 // WORLD_13e8_00c8 (only for Weasel's shop): whether the player could take an
 // item of `shape` (the original is given an item and reads its shape and
 // family): the credits 0x4ED while those carried stay below 60000, or with a

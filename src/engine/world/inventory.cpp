@@ -78,6 +78,11 @@ bool add_one(World& world, ObjId item, ObjId carried_id, int limit, bool show) {
 
 }  // namespace
 
+// @orig 10F0:2B03 10F0:2B2D 10F0:2B62
+int free_equip_slot(const World& world, int first, int count) {
+    return free_slot(world, first, count);
+}
+
 // @orig 13E8:0330 10A8:2AD2
 void set_quality_and_combine(World& world, ObjId item, std::uint16_t quality) {
     Item* it = world.get(item);

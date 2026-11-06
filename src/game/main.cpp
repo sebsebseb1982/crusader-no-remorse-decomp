@@ -1,7 +1,7 @@
 // crusader: runs the game from a saved game (milestone 1: the world runs, the
 // camera moves with the arrow keys).
 //
-//   crusader [data | game.iso | GAME.GOG] [--save N | --new-game]  (neither: the start-up movies, then the menu) [--movie NAME | --movie-overlay NAME] [--frames N [--scroll DX DY] [--walk] [--fire] [--use ID] [--menu | --menu-load | --menu-credits | --menu-options | --menu-gamepad | --menu-new] --png out.png [--wav out.wav]]
+//   crusader [data | game.iso | GAME.GOG] [--save N | --new-game] [-laurie]  (neither: the start-up movies, then the menu) [--movie NAME | --movie-overlay NAME] [--frames N [--scroll DX DY] [--walk] [--fire] [--use ID] [--menu | --menu-load | --menu-credits | --menu-options | --menu-gamepad | --menu-new] --png out.png [--wav out.wav]]
 //
 // With --png, runs N frames of 1/60 s without a window, moving the camera by
 // (DX, DY) usecode units per frame or making the player walk, and writes the
@@ -99,6 +99,7 @@ int main(int argc, char** argv) {
     bool new_game = false, save_given = false, fullscreen = false, debug_title = false;
     int png_width = Game::kScreenWidth, png_height = Game::kScreenHeight;
     bool classic = false;  // --classic: the original 640 x 480 view, stretched to the window
+    bool laurie = false;
     double gamma = 1.0;
     std::int32_t scroll_x = 0, scroll_y = 0;
     bool walk = false, fire = false, menu = false, menu_load = false, menu_credits = false, menu_options = false, menu_gamepad = false,
@@ -141,6 +142,7 @@ int main(int argc, char** argv) {
             scroll_x = std::stoi(argv[++i]);
             scroll_y = std::stoi(argv[++i]);
         }
+        else if (std::strncmp(argv[i], "-laurie", 7) == 0) laurie = true;  // CRUSYS_1050_093D: the cheats enabled
         else if (std::filesystem::path p = argv[i]; is_disc_image(p)) iso = p;
         else data = argv[i];
     }
@@ -155,6 +157,7 @@ int main(int argc, char** argv) {
         }
         Game game(data);
         game.set_port_version(CRUSADER_VERSION);
+        if (laurie) game.enable_cheats();
         // No game asked for: the start-up, as when the original is launched
         // (the movies, then the menu). The tools (--png, --movie) keep
         // loading save 1.

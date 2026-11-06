@@ -169,6 +169,15 @@ struct GameState {
     // DS:2889: target designation, on at start-up (data segment), toggled by
     // R. The original keeps it for the whole session, loads included.
     bool target_designation = true;
+    // The cheats (cheats.hpp), kept for the whole session as in the original.
+    struct Cheats {
+        bool enabled = false;          // DS:08F0: typed code or "-laurie"
+        bool on = false;               // DS:5FF5: F10 works (~ toggles it)
+        bool hack_mover_allowed = false;  // DS:8C3A: set by the typed code
+        int typed = 0;                 // DS:28C7: letters of the code typed so far
+        bool cd_transfer_display = false;  // DS:5FFF (Ctrl+Q)
+        bool bounding_boxes = false;   // DS:2D7C (f): not drawn by the port
+    } cheats;
     // The aiming mode of the controlled NPC and the designated target
     // (aim_mode.hpp). The original resets it when the Controller starts
     // (1138:3181), as the port does with every new game state.
@@ -546,6 +555,8 @@ public:
     void set_shape(Item& item, std::uint16_t shape);
     // Item::I_setBroken: status 0x8000, out of the tracked list.
     void set_broken(Item& item);
+    // ITEM_10a8_260f: status 0x8000 cleared, tracked again.
+    void clear_broken(Item& item);
 
     // CameraProcess::I_moveTo: camera position, view corner and fast area,
     // then the looping sounds' volumes (1450:0809). The view corner keeps the

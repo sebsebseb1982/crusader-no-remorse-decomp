@@ -69,7 +69,6 @@ bool AvatarMover::kneeling() const {
 bool AvatarMover::handle_key(const GameKeyEvent& e) {
     const ObjId a_id = actor();
     if (a_id == 0 || world_.is_dead(a_id) || !world_.get(a_id)) return false;
-    auto record = world_.npc_record(a_id);
 
     const std::uint16_t last = last_anim();
     const int dir = world_.npc_direction(a_id) & 0xF;
@@ -79,7 +78,8 @@ bool AvatarMover::handle_key(const GameKeyEvent& e) {
     const bool side_step = in(last, {0x1C, 0x1D});
     const bool upright = in(last, {0, 1, 0x3A, 0x37, 0xB, 0x10, 0x20, 0x3B});
     const bool not_moving = stance_not_moving(world_, a_id);
-    const bool has_weapon = !record.empty() && (record[npc::kWeapon] | record[npc::kWeapon + 1]) != 0;
+    // The weapon itself (Actor::getActiveWeapon): its slot may be left empty.
+    const bool has_weapon = world_.active_weapon(a_id) != 0;
     const int run = has_weapon ? 0x30 : 3;
     const bool shift = e.flags & (kLeftShift | kRightShift);
     const bool walk_only = (e.flags & kCapsLock) ? shift : !shift;  // local_1f

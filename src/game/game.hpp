@@ -254,6 +254,9 @@ public:
     // the build; empty hides the line) and the version of the game data
     // detected in CRUSADER.EXE ("CRUSADER:  No Remorse Vx.yy"), with its language.
     void set_port_version(std::string version) { port_version_ = std::move(version); }
+    // CRUSYS_1050_093D: the "-laurie" argument enables the cheats (DS:08F0),
+    // without turning them on (cheats.hpp).
+    void enable_cheats() { world_->state.cheats.enabled = true; }
     const std::string& port_version() const { return port_version_; }
     // "" when CRUSADER.EXE is missing or has no version string.
     const std::string& data_version() const { return data_version_; }

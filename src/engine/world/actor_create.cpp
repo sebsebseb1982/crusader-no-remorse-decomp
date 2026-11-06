@@ -110,7 +110,8 @@ ObjId make_actor(Kernel& kernel, World& world, const AnimDat& anims, const dtabl
         return 0;
     }
     auto r = world.npc_record(npc);
-    set_word(r, 0x00, types.max_hp(spec.type));  // NPC_10f0_2610
+    // NPC_10f0_2610: the first record of the shape, not necessarily `type`.
+    set_word(r, 0x00, types.max_hp(types.index(shape)));
     if (shape == 0x597 || shape == 0x3AC) r[npc::kStance] |= 0x04;
     set_word(r, npc::kTactic, 0);
     r[0x0C] = static_cast<std::uint8_t>(spec.facing * 2);

@@ -1367,6 +1367,38 @@ void test_inventory_keys(const std::filesystem::path& data) {
     CHECK(game.machine().unbound_intrinsic_calls().empty());
 }
 
+// Ctrl+D with a single weapon: the next weapon is the same slot, which the
+// drop then empties; the weapon slot index stays. The Controller picks its
+// run from the weapon itself (1138:12D6, Actor::getActiveWeapon): 3, not the
+// armed run 0x30.
+void test_run_after_last_weapon_dropped(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save(13);
+    game.config().toggle_run = false;
+    World& w = game.world();
+    settle(game);
+    const int slot = w.npc_word(1, kNpcActiveWeapon);
+    CHECK(slot != 0);
+    for (int s = 1; s <= 5; ++s) {
+        if (s != slot && w.npc_equip(1, s)) w.unequip(1, w.npc_equip(1, s));
+    }
+    game.key(0x20, false, true, kCtrl, 4);
+    game.key(0x20, false, false, kCtrl, 0);
+    for (int i = 0; i < 120 && actor_busy(game.kernel(), 1); ++i) game.update(kFrameUs);
+    CHECK(w.npc_word(1, kNpcActiveWeapon) == slot && w.active_weapon(1) == 0);
+
+    bool plain_run = false, armed_run = false;
+    game.key(0x48, true, true, kLeftShift);
+    for (int i = 0; i < 90; ++i) {
+        game.update(kFrameUs);
+        plain_run = plain_run || last_action(game) == 3;
+        armed_run = armed_run || last_action(game) == 0x30;
+    }
+    game.key(0x48, true, false, 0);
+    std::printf("run after the last weapon dropped: run 3 %d, run 0x30 %d\n", plain_run, armed_run);
+    CHECK(plain_run && !armed_run);
+}
+
 // Milestone 6.2: the item selection mode (item_selection.hpp).
 void test_item_selection(const std::filesystem::path& data) {
     {
@@ -1493,6 +1525,114 @@ void test_message_box(const std::filesystem::path& data) {
     press(game, 0x1C, false, 0x0D);
     game.load_save(1);
     CHECK(!game.world().state.target_designation);
+    CHECK(game.machine().faults().empty());
+}
+
+// The cheats (cheats.hpp): the typed code, F10, Ctrl+F10, ~, Ctrl+L.
+void test_cheats(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save(1);
+    settle(game);
+    const auto close_box = [&game] {
+        press(game, 0x1C, false, 0x0D);
+        game.update(kFrameUs);
+    };
+    const auto f10 = [&game](std::uint16_t flags) {
+        game.key(0x44, false, true, flags, 0);
+        game.key(0x44, false, false, flags, 0);
+    };
+    // Disabled: F10 and ~ do nothing.
+    const std::uint16_t energy = game.world().npc_mana(1);
+    game.world().set_npc_word(1, 0x57, 0);
+    f10(0);
+    press(game, 0x29, false, '~');
+    CHECK(!game.message() && game.world().npc_mana(1) == 0 && !game.world().state.cheats.on);
+    game.world().set_npc_word(1, 0x57, energy);
+    // "JA" then "J": the code starts again at its second letter.
+    const std::uint8_t typed[] = {0x24, 0x1E, 0x24, 0x1E, 0x1F, 0x1F, 0x17, 0x2E, 0x1E, 0x02, 0x07};
+    const char ascii[] = "jajassica16";
+    for (std::size_t i = 0; i < sizeof typed; ++i) {
+        CHECK(!game.message());
+        press(game, typed[i], false, static_cast<std::uint8_t>(ascii[i]));
+    }
+    const GameState::Cheats& c = game.world().state.cheats;
+    CHECK(c.enabled && c.on && c.hack_mover_allowed && c.typed == 0);
+    CHECK(game.message() && game.message()->text() == "Cheats are now active.");
+    close_box();
+    // The S of the code started the item selection (as in the original): Escape ends it.
+    CHECK(game.world().state.selection.active);
+    press(game, 0x01, false, 0x1B);
+    CHECK(!game.world().state.selection.active && !game.menu());
+
+    // F10: the player gets the weapons of the table, the stacks, the ammunition and full energy.
+    World& w = game.world();
+    std::vector<std::uint16_t> stacks_not_carried;
+    for (const std::uint16_t shape : {std::uint16_t{0x560}, std::uint16_t{0x39A}, std::uint16_t{0x55F}, std::uint16_t{0x351}}) {
+        if (carried(w, shape) == 0) stacks_not_carried.push_back(shape);
+    }
+    w.set_npc_word(1, 0x57, 0);
+    f10(0);
+    for (const int weapon : {0x386, 0x38A, 0x38E, 0x388, 0x334}) {
+        CHECK(carried(w, static_cast<std::uint16_t>(weapon)) != 0 || free_equip_slot(w, 1, 5) == 0);
+    }
+    CHECK(w.npc_mana(1) == max_energy(w, 1) && w.npc_mana(1) != 0);
+    for (const int shape : {0x560, 0x39A, 0x55F, 0x351, 0x33D, 0x33F, 0x340, 0x341, 0x33E}) {
+        CHECK(carried(w, static_cast<std::uint16_t>(shape)) != 0);
+    }
+    const ObjId medikits = carried(w, 0x351);
+    std::printf("cheats: F10 medikits %d, weapons", medikits ? static_cast<int>(w.get(medikits)->quality) : -1);
+    for (int slot = 1; slot <= 5; ++slot) {
+        const Item* item = w.get(w.npc_equip(1, slot));
+        std::printf(" %03X", item ? item->shape : 0);
+    }
+    std::printf("\n");
+    // Picked up until refused: 20 of 0x560, 10 of the others.
+    CHECK(!stacks_not_carried.empty());
+    for (const std::uint16_t shape : stacks_not_carried) {
+        const ObjId stack = carried(w, shape);
+        CHECK(stack && w.get(stack)->quality == (shape == 0x560 ? 20 : 10));
+    }
+    CHECK(!game.message());
+
+    // Ctrl+F10: immortality on, then off.
+    f10(kCtrl);
+    CHECK((w.npc_record(1)[npc::kFlags13] & 0x02) && game.message() && game.message()->text() == "Immortality enabled.");
+    close_box();
+    f10(kCtrl);
+    CHECK(!(w.npc_record(1)[npc::kFlags13] & 0x02) && game.message() &&
+          game.message()->text() == "Immortality disabled.");
+    close_box();
+
+    // F10 brings a dead player back, with the hit points of his type and his shape 1.
+    Item* player = w.get(1);
+    w.set_broken(*player);
+    w.npc_record(1)[npc::kFlags13] |= 0x01;
+    w.set_npc_word(1, 0x00, 0);
+    f10(0);
+    CHECK(!w.is_dead(1) && !(player->flags & kItemBroken) && player->shape == 1 && w.npc_hp(1) != 0);
+    std::printf("cheats: brought back with %d hit points\n", w.npc_hp(1));
+
+    // Ctrl+L: the player's coordinates.
+    char where[64];
+    std::snprintf(where, sizeof where, "X: %u\nY: %u\nZ: %u", static_cast<unsigned>(player->x & 0xFFFF),
+                  static_cast<unsigned>(player->y & 0xFFFF), static_cast<unsigned>(player->z & 0xFF));
+    game.key(0x26, false, true, kCtrl, 0);
+    game.key(0x26, false, false, kCtrl, 0);
+    CHECK(game.message() && game.message()->text() == where);
+    close_box();
+
+    // ~ turns them off (F10 does nothing), and on again; they outlive a load.
+    press(game, 0x29, false, '~');
+    CHECK(!c.on && c.enabled && game.message() && game.message()->text() == "CHEATS OFF");
+    close_box();
+    w.set_npc_word(1, 0x57, 0);
+    f10(0);
+    CHECK(w.npc_mana(1) == 0);
+    press(game, 0x29, false, '~');
+    CHECK(c.on && game.message() && game.message()->text() == "CHEATS ON");
+    close_box();
+    game.load_save(1);
+    CHECK(game.world().state.cheats.enabled && game.world().state.cheats.on);
     CHECK(game.machine().faults().empty());
 }
 
@@ -3172,6 +3312,19 @@ void test_enemies(const std::filesystem::path& data) {
         CHECK(w.npc_word(npc, 6) == 8 && w.npc_word(npc, 8) == 1 && w.npc_word(npc, 10) == 5 && w.active_weapon(npc) != 0);
         for (int f = 0; f < 60; ++f) game.update(kFrameUs);
         CHECK(game.machine().faults().empty());
+
+        // The hit points come from the first record of the NPC's shape
+        // (NPC_10f0_2610, DTABLE_1120_010a): type 32 shares shape 0x528 with
+        // type 22 but has 0 hit points of its own.
+        const ObjId kind32 = w.create(0x1, 0);
+        w.pop_to_coords(0, 0, 0);
+        w.get(kind32)->npc_number = 32;
+        const ObjId npc32 = create_actor(game.kernel(), w, game.animations(), types, egg, kind32);
+        const int first = types.index(0x528);
+        std::printf("create: type 32 -> shape 0x%X, hp %u (record %d: %u)\n", w.get(npc32) ? w.get(npc32)->shape : 0,
+                    w.npc_hp(npc32), first, types.max_hp(first));
+        CHECK(w.get(npc32) && w.get(npc32)->shape == 0x528 && first != 32 && types.max_hp(32) == 0);
+        CHECK(w.npc_hp(npc32) == types.max_hp(first) && w.npc_hp(npc32) != 0);
     }
     // 14. A monster egg (shape 0x24F, family 7) brought into the fast area
     // makes its NPC once: type of shape 765 (template inside the egg),
@@ -4852,6 +5005,15 @@ int main(int argc, char** argv) {
     }
     if (argc > 2 && std::string(argv[2]) == "--inventory-keys") {
         test_inventory_keys(data);
+        test_run_after_last_weapon_dropped(data);
+        return failures ? 1 : 0;
+    }
+    if (argc > 2 && std::string(argv[2]) == "--enemies") {
+        test_enemies(data);
+        return failures ? 1 : 0;
+    }
+    if (argc > 2 && std::string(argv[2]) == "--cheats") {
+        test_cheats(data);
         return failures ? 1 : 0;
     }
     if (argc > 2 && std::string(argv[2]) == "--keypad") {
@@ -4912,8 +5074,10 @@ int main(int argc, char** argv) {
     test_walk_down_steps(data);
     test_conveyor_passenger(data);
     test_inventory_keys(data);
+    test_run_after_last_weapon_dropped(data);
     test_item_selection(data);
     test_message_box(data);
+    test_cheats(data);
     test_function_keys(data);
     test_mouse_in_play(data);
     test_hard_landing(data);

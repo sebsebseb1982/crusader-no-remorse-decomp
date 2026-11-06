@@ -10,6 +10,7 @@
 #include "engine/world/actor_create.hpp"
 #include "engine/world/aim_mode.hpp"
 #include "engine/world/attack.hpp"
+#include "engine/world/cheats.hpp"
 #include "engine/world/auto_firer.hpp"
 #include "engine/world/gravity.hpp"
 #include "core/data_info.hpp"
@@ -255,8 +256,9 @@ void Game::reset_world() {
         audio_->sources.clear();
     }
     machine_.reset();
-    // DS:2889 is not part of a game.
+    // DS:2889 and the cheats are not part of a game.
     const bool target_designation = world_ ? world_->state.target_designation : true;
+    const GameState::Cheats cheats = world_ ? world_->state.cheats : GameState::Cheats{};
     world_.reset();
     kernel_ = std::make_unique<Kernel>();
     machine_ = std::make_unique<UCMachine>(*kernel_, usecode_);
@@ -264,6 +266,7 @@ void Game::reset_world() {
     world_ = std::make_unique<World>(typeflags_);
     world_->state.frameskip = config_.frameskip;
     world_->state.target_designation = target_designation;
+    world_->state.cheats = cheats;
     world_->set_damage_table(damage_);
     world_->state.game_palette = palette_;
     world_->state.screen_palette = palette_;
@@ -389,6 +392,7 @@ void Game::reset_world() {
     autosave_pending_ = false;
 }
 
+// @orig none: port-only gamepad vibration
 void Game::vibrate(std::uint16_t low_frequency, std::uint16_t high_frequency, std::uint32_t duration_ms,
                    bool preview) {
     if ((!config_.vibration && !preview) || !vibration_handler_) return;
@@ -1015,6 +1019,11 @@ void Game::on_key(const GameKeyEvent& e) {
             return;
         }
     }
+    // CRUSADER_1138_0896: F10, while the cheats are on (cheats.hpp).
+    if (cheat_f10(*kernel_, *world_, npc_types_, e, data_version_ == "1.23")) return;
+    // CRUSADER_1138_2B03, at the head of the Controller's keys: the typed
+    // cheat code, which sees every key (Shift too).
+    cheat_code_key(*world_, e);
     // Port addition (GameConfig::toggle_run): a Shift press flips running, and
     // the Controller sees Shift held exactly while it is on.
     GameKeyEvent ev = e;
@@ -1044,6 +1053,7 @@ void Game::on_key(const GameKeyEvent& e) {
         else open_menu();
     }
     if (code && !world_->state.selection.active && function_key(code)) return;
+    if (code && !world_->state.selection.active && cheat_command(*world_, code, data_version_ == "1.23")) return;
     if (code) player_command(*kernel_, *world_, anims_, code);
 }
 
@@ -1276,7 +1286,8 @@ bool Game::function_key(std::uint16_t code) {
         return true;
     }
     default:
-        // F7 and the other keys of World_on_key are cheats (docs/interface.md).
+        // F7, Alt+F7, Ctrl+F7 (debugging displays) and H are not reproduced
+        // (cheats.hpp); the other cheat keys are cheat_command's.
         return false;
     }
 }
@@ -1374,7 +1385,8 @@ void Game::show_weasel(int level) {
     hooks.random = [this](int n) {
         return static_cast<int>(random_range(world_->state.random_state, static_cast<std::uint16_t>(n)));
     };
-    auto gump = std::make_unique<WeaselGump>(*world_, gumps_, fonts_, std::move(stuff), level, weasel_intro_played_,
+    auto gump = std::make_unique<WeaselGump>(*world_, gumps_, fonts_, std::move(stuff),
+                                             world_->state.cheats.enabled ? 0 : level, weasel_intro_played_,
                                              !config_.no_weasel, std::move(hooks), kScreenWidth, kScreenHeight);
     // The dtor (13E0:0435): WORLD_13e8_0ef9.
     open_screen(std::move(gump), [this](const ModalGump&) { leave_menu_mode(); });

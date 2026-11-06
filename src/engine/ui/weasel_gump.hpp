@@ -33,7 +33,7 @@
 // The items (13E0:0B39): STATIC/STUFF.DAT, blocks of 0x142 bytes, one per
 // level: a count, then 20 records of 16 bytes (+0 a name, "W01"..., +8 the
 // shape, +0xA the price, +0xC and +0xE unused here). Level 0 (all free) when
-// cheating (DS:08F0), 1 for the ammunition. In the ammunition, 0x341 is
+// cheating (DS:08F0, Game::show_weasel), 1 for the ammunition. In the ammunition, 0x341 is
 // left out before level 5 and 0x340 before level 6 (the level kept at +0x36,
 // -1 for the weapons). The current item (+0x144) is the first one with a
 // shape; previous and next (13E0:19A8, 1956) go round, skipping those without.
@@ -84,7 +84,6 @@
 // (buy), Tab (weapons at level 1, else ammunition) while browsing.
 //
 // Not reproduced:
-//   - the free level 0 of the cheats (DS:08F0, no cheats in the port);
 //   - DS:5E82, which picks 18D/18E/18F instead of 18A/18B/18C: it is never set
 //     (13E0:0000 writes back the value it reads);
 //   - buying makes a temporary item (Item_I_create, popToCoords, then
