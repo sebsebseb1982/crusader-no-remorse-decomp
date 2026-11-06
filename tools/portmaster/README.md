@@ -13,18 +13,48 @@ python tools/portmaster/build.py          # -> build-portmaster/crusader
 
 ## Installer sur la console
 
-Le zip de release suit la structure PortMaster. Dézipper dans le dossier `ports/` de la carte (SD2 sous muOS) :
+Le zip de release suit la structure PortMaster (installé automatiquement par PortMaster). En manuel (USB ou lecteur de carte), le contenu du zip se répartit ainsi :
+
+| Dans le zip | À copier vers (carte SD des ports) | Rôle |
+|---|---|---|
+| `Crusader.sh` | `ROMS/Ports/Crusader.sh` | lanceur, affiché dans le menu Ports |
+| `crusader/` (dossier entier) | `ports/crusader/` | binaire, licences, données du jeu |
+| `port.json`, `gameinfo.xml`, `README.md`, `screenshot.png` | nulle part | métadonnées PortMaster, inutiles sur la console |
+
+Exemple sur la RG40XX-H sous muOS (les ports sont sur la carte **SD2** ; visible en USB/MTP sous « Ce PC\RG40XX-H\SD2 ») :
 
 ```
-Crusader.sh                    lanceur
-crusader/crusader              le binaire
-crusader/licenses/             licences
-crusader/data/                 données du jeu (fichiers installés ou .iso)
+SD2/
+├── ROMS/Ports/
+│   └── Crusader.sh                 lanceur
+└── ports/crusader/
+    ├── crusader                    binaire
+    ├── licenses/                   licences
+    ├── data/                       ICI : données du jeu d'origine
+    ├── conf/                       créé au premier lancement
+    └── log.txt                     créé au premier lancement
 ```
+
+Si les ports sont sur la carte SD1, même arborescence sur SD1. Redémarrer l'interface si l'entrée Crusader n'apparaît pas dans la liste des Ports.
+
+### Données du jeu d'origine
+
+Elles sont à fournir soi-même (aucun fichier du jeu n'est livré) et se déposent dans **`ports/crusader/data/`**, à côté du binaire `crusader`, soit :
+
+- les fichiers du jeu installé, directement dans `data/` (sans sous-dossier) :
+
+  ```
+  ports/crusader/data/
+  ├── STATIC/   USECODE/   SOUND/   FLICS/   IDATA/
+  ├── CRUSADER.EXE
+  └── ASYLUM.DLL
+  ```
+
+- ou l'image du CD : le fichier `.iso` dans `data/` (extrait au premier lancement, puis plus nécessaire).
+
+Versions gérées : française 1.08 et US 1.23. Le jeu écrit ses sauvegardes (`SAVEGAME/`) et `CRUSADER.CFG` dans `data/` : lors d'une mise à jour, conserver ce dossier (ne remplacer que `crusader/crusader` et `ROMS/Ports/Crusader.sh`, ce que fait `scripts/update-rg40xx.ps1`). Si `data/` est vide, le lanceur affiche « Game data missing » et quitte (voir `log.txt`).
 
 Les sources du port sont dans `tools/portmaster/port/` (`port.json`, `README.md`, `gameinfo.xml`, lanceur). Un `screenshot.png` (4:3, ≥ 640×480, pris en jeu) est à ajouter dans ce dossier avant la PR PortMaster.
-
-Les données sont celles du jeu d'origine (version française), à fournir soi-même. Le jeu écrit ses sauvegardes et `CRUSADER.CFG` dans `data/`.
 
 ## Manette
 
