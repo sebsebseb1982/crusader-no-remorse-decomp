@@ -1104,7 +1104,18 @@ void test_firing(const std::filesystem::path& data) {
     const Item* player = w.get(1);
     w.move_item(6, player->x - 120, player->y + 120, player->z);
     CHECK(w.is_partly_on_screen(*w.get(6)) && !in_combat(w, 6) && w.npc_word(6, npc::kActivity) == 0);
+    std::uint16_t rumble_low = 0;
+    std::uint16_t rumble_high = 0;
+    std::uint32_t rumble_duration = 0;
+    int rumble_calls = 0;
+    game.set_vibration_handler([&](std::uint16_t low, std::uint16_t high, std::uint32_t duration) {
+        rumble_low = low;
+        rumble_high = high;
+        rumble_duration = duration;
+        ++rumble_calls;
+    });
     tap();  // shot (8 -> 0x36): one round
+    CHECK(rumble_calls == 1 && rumble_low == 60000 && rumble_high == 48000 && rumble_duration == 130);
     std::printf("firing: NPC 6 after the shot: activity %u, in combat %d, target %u\n", w.npc_word(6, npc::kActivity),
                 in_combat(w, 6), w.npc_word(6, npc::kTarget));
     CHECK(w.npc_word(6, npc::kActivity) == 5 && in_combat(w, 6) && w.npc_word(6, npc::kTarget) == 1);
@@ -1115,6 +1126,48 @@ void test_firing(const std::filesystem::path& data) {
     tap();  // empty: reload from a clip (12 rounds), action 0xF
     CHECK(weapon->quality == 12 && clips->quality == 15 && last_action(game) == 0xF);
     CHECK(game.machine().faults().empty());
+}
+
+void test_rocket_vibration(const std::filesystem::path& data) {
+    struct Expected {
+        std::uint16_t shape;
+        std::uint16_t low_frequency;
+        std::uint16_t high_frequency;
+        std::uint32_t duration_ms;
+    };
+    constexpr Expected profiles[] = {{0x333, 60000, 56000, 220}, {0x334, 60000, 56000, 220}};
+
+    Game game(data, test_saves(data));
+    game.load_save(13);
+    settle(game);
+    World& world = game.world();
+    Item* weapon = world.get(world.active_weapon(1));
+    CHECK(weapon != nullptr);
+    if (!weapon) return;
+    int calls = 0;
+    std::uint16_t low_frequency = 0;
+    std::uint16_t high_frequency = 0;
+    std::uint32_t duration_ms = 0;
+    game.set_vibration_handler([&](std::uint16_t low, std::uint16_t high, std::uint32_t duration) {
+        ++calls;
+        low_frequency = low;
+        high_frequency = high;
+        duration_ms = duration;
+    });
+
+    for (const Expected& profile : profiles) {
+        weapon->shape = profile.shape;
+        weapon->quality = 10;
+        const int previous_calls = calls;
+        const int previous_shots = game.shots_fired();
+        press(game, 0x39, false, ' ');
+        for (int frame = 0; frame < 180 && game.shots_fired() == previous_shots; ++frame) game.update(kFrameUs);
+        CHECK(game.shots_fired() > previous_shots);
+        CHECK(calls == previous_calls + 1);
+        CHECK(low_frequency == profile.low_frequency && high_frequency == profile.high_frequency &&
+              duration_ms == profile.duration_ms);
+        settle(game);
+    }
 }
 
 // Milestone 6.2: the inventory keys of World_on_key (player_commands.hpp).
@@ -5050,6 +5103,7 @@ int main(int argc, char** argv) {
     test_credits(data);
     test_options(data);
     test_firing(data);
+    test_rocket_vibration(data);
     test_auto_firer(data);
     test_anim_end(data);
     test_special_frames(data);

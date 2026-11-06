@@ -48,6 +48,39 @@ namespace crusader {
 
 namespace {
 
+struct WeaponVibration {
+    std::uint16_t low_frequency;
+    std::uint16_t high_frequency;
+    std::uint32_t duration_ms;
+};
+
+WeaponVibration weapon_vibration(std::uint16_t shape) {
+    switch (shape) {
+    case 0x32E:  // BA-40 pistol
+        return {28000, 18000, 70};
+    case 0x32F:  // BA-41 machine gun
+    case 0x38B:  // AC-88
+        return {34000, 26000, 120};
+    case 0x38E:  // AR-7
+        return {32000, 22000, 85};
+    case 0x332:  // SG-A1 shotgun
+        return {60000, 48000, 130};
+    case 0x333:  // RP-22 rocket launcher
+    case 0x334:  // RP-32 rocket launcher
+        return {60000, 56000, 220};
+    case 0x388:  // GL-303 grenade launcher
+        return {48000, 38000, 160};
+    case 0x38C:  // EM-4
+    case 0x330:  // PA-21
+    case 0x38D:  // PL-1
+    case 0x38A:  // PA-31
+    case 0x386:  // UV-9
+        return {15000, 9000, 55};
+    default:
+        return {};
+    }
+}
+
 // KDAEMON.C: 45 Hz timed process, at every level, repeating held keys.
 class KeyDaemon : public TimedProcess {
 public:
@@ -216,11 +249,8 @@ void Game::fire_frame(ObjId actor, int a, int b, int z) {
     if (!source) return;
     const int type = dtable::weapon(source->shape).fire_type();
     const Item* equipped_weapon = world_->get(world_->active_weapon(actor));
-    const auto is_rocket_launcher = [](std::uint16_t shape) { return shape == 0x333 || shape == 0x334; };
-    const bool rocket_launcher =
-        is_rocket_launcher(source->shape) || (equipped_weapon && is_rocket_launcher(equipped_weapon->shape));
-    if (actor == world_->state.controlled_npc && (rocket_launcher || type == 9 || type == 10))
-        vibrate(60000, 56000, 180);
+    const bool source_is_weapon = dtable::weapon(source->shape).shape() == source->shape;
+    const std::uint16_t firing_shape = source_is_weapon ? source->shape : (equipped_weapon ? equipped_weapon->shape : 0);
     if (actor == 1 && type == 6) {
         if (world_->state.auto_firer != 0) {
             if (!world_->state.fire_held) stop_auto_firer(*kernel_, *world_);
@@ -232,6 +262,11 @@ void Game::fire_frame(ObjId actor, int a, int b, int z) {
     }
     const int dir = r.empty() ? 0 : r[npc::kDirection];
     fire_weapon(*kernel_, *world_, anims_, actor, a * 16, b * 16, z * 8, dir, type, true);
+    if (actor == world_->state.controlled_npc) {
+        const WeaponVibration vibration = weapon_vibration(firing_shape);
+        if (vibration.duration_ms != 0)
+            vibrate(vibration.low_frequency, vibration.high_frequency, vibration.duration_ms);
+    }
     const std::uint16_t sound = dtable::weapon(source->shape).sound();
     if (sound != 0 && audio_) audio_->sources.retrigger(*world_, sound, actor);
 }
