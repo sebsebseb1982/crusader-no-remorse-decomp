@@ -4,6 +4,8 @@
 
 A C++20/SDL2 reimplementation of the *Crusader: No Remorse* (Origin, 1995) engine for Windows and Linux. The project is still a **work in progress**.
 
+![Gameplay screenshot](docs/images/screenshot.png)
+
 This repository contains **no game files**: you need your own copy of the original game. The following versions are currently supported:
 
 - The **French version 1.08** (dated 12 October 1995) — ISO SHA-256: `B370436F2BA380500E918262A83293FBB89600253CC3F4579895D45FDB63B802`
@@ -12,7 +14,7 @@ This repository contains **no game files**: you need your own copy of the origin
 
 ## Recent improvements
 
-- Added gamepad support.
+- Added gamepad support with vibration.
 - Added an **Enhancements** menu to the Options menu, with:
   - Gamepad remapping
   - A camera that follows the player
@@ -107,4 +109,4 @@ Tests that require the original game data will run only when the data is availab
 
 The port's code and documentation are released under the [GNU GPL v3](LICENSE) or, at your option, any later version. You may use, study, modify, and redistribute them, provided that every redistributed version, modified or not, remains under the same license and includes its source code.
 
-This license applies only to this repository. *Crusader: No Remorse* remains the property of its rights holders. This project does not distribute the game's code, data, or screenshots. You must own a copy of the game to play it.
+This license applies only to this repository. *Crusader: No Remorse* remains the property of its rights holders. This project does not distribute the game's code or data. You must own a copy of the game to play it.
