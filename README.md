@@ -30,6 +30,7 @@ This repository contains **no game files**: you need your own copy of the origin
 - Release the game on PortMaster.
 - Support additional versions of *Crusader: No Remorse*, if there is interest.
 - Explore the possibility of supporting *Crusader: No Regret*.
+- Level editor.
 - Have an idea? Let me know what you'd like to see!
 
 Further improvements will come when my Claude subscription renews. If you'd like to help speed things up, feel free to leave a small tip (see [SPONSORING.md](SPONSORING.md)).
