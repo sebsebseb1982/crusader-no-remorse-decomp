@@ -62,7 +62,7 @@ The original has nothing like it. This screen gathers every option the port adds
 | 3 | DIRECTIONAL AIM / VISEE DIRECTIONNELLE | Toggles directional aiming | `directionalaim` |
 | 4 | DRAW ON AIM / DEGAINE EN VISANT | Draws the weapon when the aim stick is pushed | `drawonaim` |
 | 5 | NATIVE RESOLUTION / RESOLUTION NATIVE | Toggles native resolution | `nativeresolution` |
-| 6 | ZOOM | Cycles AUTO → x1 → … → xN → AUTO | `viewzoom` |
+| 6 | ZOOM | Cycles AUTO → x1 → x1.5 → x2 → … → xN → AUTO | `viewzoom` |
 | 7 | AUTOSAVE / SAUVEGARDE AUTO | Toggles the autosave | `autosave` |
 | 8 | TOGGLE RUN / COURSE PERMANENTE | Toggles toggle-run mode | `togglerun` |
 | 9 | BACK / RETOUR | Closes the screen | — |
@@ -272,10 +272,11 @@ The right stick puts the crosshair directly in the direction it points.
 Zoom sets the **maximum size of a game pixel** in native resolution.
 
 **Rules**
-- `AUTO` (0): the largest whole factor the window allows (see section 6).
-- `x1` to `x4`: factor = `min(largest factor for the window, chosen value)`. `x1` gives the finest picture and the widest field of view.
-- In the Enhancements screen, the value cycles AUTO → x1 → … → **x(limit)** → AUTO. The limit is the largest factor for the current window, capped at 4, and recomputed when the window changes.
-- The value read from the CFG is clamped to 0..4.
+- `AUTO` (0): the largest **whole** factor the window allows (see section 6).
+- `x1`, `x1.5`, `x2`, `x3`, `x4`: the chosen factor if the window allows it (window size ÷ 640×480, fractions included), otherwise the largest whole factor. `x1` gives the finest picture and the widest field of view.
+- `x1.5` is for windows that are not a whole multiple of 640×480, e.g. 1360×768 (limit 1.6, so only x1 and x1.5 are offered). The view is drawn at window ÷ 1.5 and stretched, so some game pixels are one screen pixel wider than others.
+- In the Enhancements screen, the value cycles AUTO → x1 → x1.5 → x2 → x3 → x4 → AUTO, stopping at the largest the current window allows (recomputed when the window changes).
+- The value is stored as `1`, `1.5` (`1,5` is read too), `2`… and clamped to 1..4 (0 = AUTO).
 
 ---
 
@@ -450,7 +451,7 @@ The original reads much of its data from the CD and needs it in the drive. The p
 | `togglerun` | false | `true` |
 | `nativeresolution` | true | `false` |
 | `autosave` | true | `false` |
-| `viewzoom` | 0 (auto), clamped to 0..4 | ≠ 0 |
+| `viewzoom` | 0 (auto), 1..4 with decimals (`1.5`) | ≠ 0 |
 | `padmap` | see section 2.4 | controller config ≠ default. 24 comma-separated action numbers; `-1` = default role; values clamped |
 | `padaim` | 3, clamped to 1..5 | same |
 | `paddeadzone` | 2, clamped to 0..4 | same |

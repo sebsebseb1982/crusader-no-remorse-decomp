@@ -56,8 +56,31 @@ void check_config() {
     check(!GameConfig::parse(saving.text()).autosave && saving.text().find("autosave=false") != std::string::npos,
           "config autosave off round trip");
 
+    // "viewzoom" (port addition): hundredths, whole values keep their old file form, x1.5 is new.
+    check(GameConfig::parse("irq=7\r\n").view_zoom_pct == 0, "config viewzoom default auto");
+    check(GameConfig::parse("viewzoom=2\r\n").view_zoom_pct == 200, "config viewzoom whole");
+    check(GameConfig::parse("viewzoom=1.5\r\n").view_zoom_pct == 150 && GameConfig::parse("viewzoom=1,5\r\n").view_zoom_pct == 150,
+          "config viewzoom 1.5");
+    check(GameConfig::parse("viewzoom=9\r\n").view_zoom_pct == 400 && GameConfig::parse("viewzoom=0.2\r\n").view_zoom_pct == 100 &&
+              GameConfig::parse("viewzoom=x\r\n").view_zoom_pct == 0,
+          "config viewzoom clamped");
+    GameConfig zoom = GameConfig::parse("irq=7\r\n");
+    zoom.view_zoom_pct = 150;
+    check(zoom.text().find("viewzoom=1.5") != std::string::npos && GameConfig::parse(zoom.text()).view_zoom_pct == 150,
+          "config viewzoom 1.5 round trip");
+    zoom.view_zoom_pct = 300;
+    check(zoom.text().find("viewzoom=3\r\n") != std::string::npos, "config viewzoom whole written as before");
+    zoom.view_zoom_pct = 0;
+    check(zoom.text().find("viewzoom") == std::string::npos, "config viewzoom auto not written");
+    // The cycle: auto, x1, x1.5, x2, x3, x4 up to what the window allows (160 % on 1360 x 768).
+    check(GameConfig::next_view_zoom(0, 160) == 100 && GameConfig::next_view_zoom(100, 160) == 150 &&
+              GameConfig::next_view_zoom(150, 160) == 0 && GameConfig::next_view_zoom(150, 225) == 200 &&
+              GameConfig::next_view_zoom(200, 225) == 0 && GameConfig::next_view_zoom(0, 100) == 100 &&
+              GameConfig::next_view_zoom(100, 100) == 0 && GameConfig::next_view_zoom(400, 900) == 0,
+          "config viewzoom cycle");
+
     GameConfig rumble = GameConfig::parse("irq=7\r\n");
-    check(rumble.vibration && rumble.vibration_intensity == 100, "config vibration defaults");
+    check(rumble.vibration &&rumble.vibration_intensity == 100, "config vibration defaults");
     rumble.vibration = false;
     rumble.vibration_intensity = 60;
     const GameConfig rumble_round_trip = GameConfig::parse(rumble.text());

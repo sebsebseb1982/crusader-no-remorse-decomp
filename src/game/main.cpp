@@ -247,10 +247,13 @@ int main(int argc, char** argv) {
             int w = 0, h = 0;
             presenter.output_size(&w, &h);
             if (classic || !game.config().native_resolution) w = Game::kScreenWidth, h = Game::kScreenHeight;
-            int scale = std::max(1, std::min(w / Game::kScreenWidth, h / Game::kScreenHeight));
-            game.set_view_zoom_limit(scale);
-            if (const int zoom = game.config().view_zoom) scale = std::min(scale, zoom);
-            const int vw = std::max(Game::kScreenWidth, w / scale), vh = std::max(Game::kScreenHeight, h / scale);
+            // Pixel size in hundredths: the biggest the window allows (x1 at least), then
+            // the one chosen (x1.5 fits a 1360 x 768 screen, where the whole multiple is 1).
+            const int limit = std::max(100, std::min(w * 100 / Game::kScreenWidth, h * 100 / Game::kScreenHeight));
+            game.set_view_zoom_limit(limit);
+            int scale = limit / 100 * 100;  // AUTO: whole multiples only
+            if (const int zoom = game.config().view_zoom_pct) scale = zoom <= limit ? zoom : scale;
+            const int vw = std::max(Game::kScreenWidth, w * 100 / scale), vh = std::max(Game::kScreenHeight, h * 100 / scale);
             if (vw != screen.width || vh != screen.height) {
                 screen = Surface8(vw, vh);
                 presenter.resize(vw, vh);

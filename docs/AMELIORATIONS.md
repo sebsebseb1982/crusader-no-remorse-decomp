@@ -55,7 +55,7 @@ L'original n'a pas d'équivalent. Cet écran regroupe toutes les options ajouté
 | 3 | VISEE DIRECTIONNELLE / DIRECTIONAL AIM | Bascule la visée directionnelle | `directionalaim` |
 | 4 | DEGAINE EN VISANT / DRAW ON AIM | Dégaîne l'arme quand le stick de visée est poussé | `drawonaim` |
 | 5 | RESOLUTION NATIVE / NATIVE RESOLUTION | Bascule la résolution native | `nativeresolution` |
-| 6 | ZOOM | Fait défiler AUTO → x1 → … → xN → AUTO | `viewzoom` |
+| 6 | ZOOM | Fait défiler AUTO → x1 → x1,5 → x2 → … → xN → AUTO | `viewzoom` |
 | 7 | SAUVEGARDE AUTO / AUTOSAVE | Bascule la sauvegarde automatique | `autosave` |
 | 8 | COURSE PERMANENTE / TOGGLE RUN | Bascule le mode course permanente | `togglerun` |
 | 9 | RETOUR / BACK | Ferme l'écran | — |
@@ -268,10 +268,11 @@ Le stick droit place directement le réticule dans la direction pointée.
 Le zoom fixe la **taille maximale d'un pixel du jeu** en résolution native.
 
 **Règles**
-- `AUTO` (0) : le plus grand facteur entier que la fenêtre permet (voir §6).
-- `x1` à `x4` : facteur = `min(facteur maximal de la fenêtre, valeur choisie)`. `x1` donne l'image la plus fine et le champ de vision le plus large.
-- Dans l'écran Améliorations, la valeur défile AUTO → x1 → … → **x(limite)** → AUTO. La limite est le facteur maximal de la fenêtre courante, plafonné à 4 et recalculé quand la fenêtre change.
-- Valeur lue dans le CFG : bornée entre 0 et 4.
+- `AUTO` (0) : le plus grand facteur **entier** que la fenêtre permet (voir §6).
+- `x1`, `x1,5`, `x2`, `x3`, `x4` : le facteur choisi si la fenêtre le permet (taille de la fenêtre ÷ 640×480, fractions comprises), sinon le plus grand facteur entier. `x1` donne l'image la plus fine et le champ de vision le plus large.
+- `x1,5` sert aux fenêtres qui ne sont pas un multiple entier de 640×480, par exemple 1360×768 (limite 1,6 : seuls x1 et x1,5 sont proposés). La vue est dessinée à fenêtre ÷ 1,5 puis étirée : certains pixels du jeu font un pixel d'écran de plus que d'autres.
+- Dans l'écran Améliorations, la valeur défile AUTO → x1 → x1,5 → x2 → x3 → x4 → AUTO, en s'arrêtant au plus grand que la fenêtre courante permet (recalculé quand la fenêtre change).
+- Valeur écrite : `1`, `1.5` (`1,5` est lu aussi), `2`… ; bornée entre 1 et 4 (0 = AUTO).
 
 ---
 
@@ -441,7 +442,7 @@ Un exécutable d'origine ne gère qu'une seule langue. Le portage accepte les do
 | `togglerun` | false | `true` |
 | `nativeresolution` | true | `false` |
 | `autosave` | true | `false` |
-| `viewzoom` | 0 (auto), borné à 0..4 | ≠ 0 |
+| `viewzoom` | 0 (auto), 1..4 avec décimales (`1.5`) | ≠ 0 |
 | `padmap` | voir §2.4 | config. manette ≠ défaut. Liste de 24 numéros d'action séparés par des virgules ; `-1` = rôle par défaut, valeurs bornées |
 | `padaim` | 3, borné à 1..5 | idem |
 | `paddeadzone` | 2, borné à 0..4 | idem |

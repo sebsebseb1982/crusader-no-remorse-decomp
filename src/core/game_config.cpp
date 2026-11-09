@@ -1,6 +1,7 @@
 #include "core/game_config.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
@@ -18,7 +19,30 @@ std::string_view key_of(std::string_view line) {
 // atoi, as the original reads numbers.
 int number(std::string_view value) { return std::atoi(std::string(value).c_str()); }
 
+// "viewzoom" in hundredths: 0, or 100..400 ("2", "1.5", "1,5"); anything else is clamped.
+int view_zoom_pct_of(std::string_view value) {
+    std::string text(value);
+    std::replace(text.begin(), text.end(), ',', '.');
+    const double zoom = std::atof(text.c_str());
+    if (!(zoom >= 0.005)) return 0;
+    return std::clamp(static_cast<int>(std::lround(zoom * 100)), 100, 400);
+}
+
+std::string view_zoom_text(int pct) {
+    if (pct % 100 == 0) return std::to_string(pct / 100);
+    std::string text = std::to_string(pct / 100) + '.' + (pct % 100 < 10 ? "0" : "") + std::to_string(pct % 100);
+    if (text.back() == '0') text.pop_back();
+    return text;
+}
+
 }  // namespace
+
+int GameConfig::next_view_zoom(int current_pct, int limit_pct) {
+    for (const int step : {100, 150, 200, 300, 400}) {
+        if (step > current_pct && (step <= limit_pct || step == 100)) return step;
+    }
+    return 0;
+}
 
 // @orig 1020:0000
 GameConfig GameConfig::load(const std::filesystem::path& path) {
@@ -52,7 +76,7 @@ GameConfig GameConfig::parse(std::string_view text) {
         else if (key == "noweasel") c.no_weasel = value == "true";
         else if (key == "followplayer") c.follow_player = value == "true";
         else if (key == "directionalmove") c.directional_move = value == "true";
-        else if (key == "viewzoom") c.view_zoom = std::clamp(number(value), 0, 4);
+        else if (key == "viewzoom") c.view_zoom_pct = view_zoom_pct_of(value);
         else if (key == "nativeresolution") c.native_resolution = value != "false";
         else if (key == "autosave") c.autosave = value != "false";
         else if (key == "directionalaim") c.directional_aim = value == "true";
@@ -98,7 +122,7 @@ std::string GameConfig::text() const {
     else out.erase("followplayer");
     if (directional_move) out.set("directionalmove", "true");
     else out.erase("directionalmove");
-    if (view_zoom) out.set("viewzoom", std::to_string(view_zoom));
+    if (view_zoom_pct) out.set("viewzoom", view_zoom_text(view_zoom_pct));
     else out.erase("viewzoom");
     if (!native_resolution) out.set("nativeresolution", "false");
     else out.erase("nativeresolution");

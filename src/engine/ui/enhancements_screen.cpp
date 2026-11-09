@@ -108,7 +108,9 @@ void EnhancementsScreen::draw(Surface8& screen) const {
                 on = config_->directional_move;
             } else if (row == kZoomRow) {
                 name = tr("ZOOM", "ZOOM");
-                value = config_->view_zoom ? "x" + std::to_string(config_->view_zoom) : tr("AUTO", "AUTO");
+                const int pct = config_->view_zoom_pct;
+                if (!pct) value = tr("AUTO", "AUTO");
+                else value = "x" + std::to_string(pct / 100) + (pct % 100 == 50 ? ".5" : "");
             } else if (row == kAutosaveRow) {
                 name = tr("SAUVEGARDE AUTO", "AUTOSAVE");
                 on = config_->autosave;
@@ -154,7 +156,7 @@ void EnhancementsScreen::activate(int row) {
     } else if (row == kDirectionalRow) {
         config_->directional_move = !config_->directional_move;
     } else if (row == kZoomRow) {
-        config_->view_zoom = (config_->view_zoom + 1) % (std::clamp(config_->view_zoom_limit, 1, 4) + 1);
+        config_->view_zoom_pct = GameConfig::next_view_zoom(config_->view_zoom_pct, config_->view_zoom_limit_pct);
     } else if (row == kAutosaveRow) {
         config_->autosave = !config_->autosave;
     } else if (row == kRunRow) {

@@ -264,8 +264,9 @@ public:
     GameConfig& config() { return config_; }
     // Replaces it, the sound settings applied (tests).
     void set_config(GameConfig config);
-    // Port addition: the biggest pixel size the window allows (the enhancements window stops there).
-    void set_view_zoom_limit(int limit) { config_.view_zoom_limit = limit; }
+    // Port addition: the biggest pixel size the window allows, in hundredths
+    // (the enhancements window stops there).
+    void set_view_zoom_limit(int limit_pct) { config_.view_zoom_limit_pct = limit_pct; }
     void set_config_file(std::filesystem::path path) { config_file_ = std::move(path); }
     // The two lines at the bottom of the main menu: the port's version (from
     // the build; empty hides the line) and the version of the game data

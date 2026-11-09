@@ -56,17 +56,23 @@ public:
     // Port addition, written only when set: "togglerun", the Shift key switches
     // running on and off at each press instead of running while it is held.
     bool toggle_run = false;
-    // Port addition, written when not 0: "viewzoom", the largest pixel size
-    // (whole multiple) of the native view; 0 takes the biggest that fits the
-    // window, 1 gives the finest picture.
-    int view_zoom = 0;
+    // Port addition, written when not 0: "viewzoom", the largest pixel size of
+    // the native view, in hundredths of a screen pixel per game pixel (100 = x1,
+    // 150 = x1.5, 200 = x2...); written as "1", "1.5", "2". 0 takes the biggest
+    // whole multiple that fits the window, 100 gives the finest picture. A
+    // fractional size stretches unevenly (some game pixels are wider), but fits
+    // windows that are not a whole multiple of 640 x 480 (1360 x 768...).
+    int view_zoom_pct = 0;
     // Port addition, written when changed: controller rumble and its strength
     // (0..100 percent).
     bool vibration = true;
     int vibration_intensity = 100;
-    // Not saved: the biggest pixel size the window allows (set by the platform
-    // layer), where the zoom choices stop.
-    int view_zoom_limit = 4;
+    // Not saved: the biggest pixel size the window allows, in hundredths (set
+    // by the platform layer), where the zoom choices stop.
+    int view_zoom_limit_pct = 400;
+    // The zoom choices after `current` (0 = auto, then x1, x1.5, x2, x3, x4),
+    // the ones above `limit_pct` left out; back to 0 (auto) after the last.
+    static int next_view_zoom(int current_pct, int limit_pct);
     // Port addition, written only when changed: "padmap" (comma-separated
     // action numbers, see PadButton), "padaim" and "paddeadzone".
     PadSettings pad;
