@@ -5119,6 +5119,35 @@ void test_processes_end_with_their_item(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
+// A jump down to a lower floor (SAVEGAME.13: the player stands at z 16, the
+// floor ahead is at z 0). The landing frame's support check makes the player
+// fall; as in the original (ANIMPRIM.C 1908, US 1158:1906), the jump waits
+// for the landing and plays its last frames (2109 to 2111, then 0): the
+// player ends standing, not frozen on the landing frame 2108
+// (docs/KNOWN_BUGS.md, "jump stance when landing").
+void test_jump_down_ends_standing(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save(13);
+    World& w = game.world();
+    for (int i = 0; i < 120 && actor_busy(game.kernel(), 1); ++i) game.update(kFrameUs);
+    const Item* p = w.get(1);
+    const int z0 = p->z;
+    press(game, 0x0F, false, '\t');
+    bool fell = false;
+    for (int i = 0; i < 300; ++i) {
+        game.update(kFrameUs);
+        fell = fell || (w.npc_record(1)[npc::kAnimFlags] & 0x02);
+        if (fell && !actor_busy(game.kernel(), 1) && !(w.npc_record(1)[npc::kAnimFlags] & 0x02)) break;
+    }
+    const AnimAction* stand = game.animations().action(p->shape, 0);
+    const int standing = stand ? stand->frame(w.npc_direction(1), 0)->frame : -1;
+    std::printf("jump down: z %d -> %d, fell %d, action 0x%X, frame %d (standing %d)\n", z0, p->z, fell,
+                last_action(game), p->frame, standing);
+    CHECK(fell && p->z < z0);
+    CHECK(last_action(game) == 0x3A && p->frame == standing);
+    CHECK(!actor_busy(game.kernel(), 1));
+}
+
 int main(int argc, char** argv) {
     const std::filesystem::path data = argc > 1 ? argv[1] : "data";
     if (!std::filesystem::exists(data / "STATIC/FIXED.DAT")) {
@@ -5128,6 +5157,10 @@ int main(int argc, char** argv) {
     if (!have_test_saves(data)) return 1;
     if (argc > 2 && std::string(argv[2]) == "--blinking-scenery") {
         test_processes_end_with_their_item(data);
+        return failures ? 1 : 0;
+    }
+    if (argc > 2 && std::string(argv[2]) == "--jump-down") {
+        test_jump_down_ends_standing(data);
         return failures ? 1 : 0;
     }
     if (argc > 2 && std::string(argv[2]) == "--conveyor") {
@@ -5230,6 +5263,7 @@ int main(int argc, char** argv) {
     test_function_keys(data);
     test_mouse_in_play(data);
     test_hard_landing(data);
+    test_jump_down_ends_standing(data);
     test_blocked_step(data);
     test_shot_kills(data);
     test_death_called_from_anim(data);

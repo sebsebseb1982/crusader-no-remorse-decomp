@@ -424,7 +424,11 @@ bool ActorAnimProcess::step(bool skip_frames, bool& skipped_frames) {
     };
     if (intermediate && !play_frame_effects(*intermediate)) return false;
     if (!play_frame_effects(*f)) return false;
-    if (f->ground_check && fall_if_unsupported(start, reached)) return false;
+    // ANIMPRIM.C 1908 (US 1158:1906): a fall does not end the animation. It
+    // waits for the landing (record +0x59 bit 1, see run) and plays on: a
+    // jump down to a lower floor ends standing (frame 0), not on its landing
+    // frame (2108). Only the stumble 0x3B, replacing it, ends it.
+    if (f->ground_check && fall_if_unsupported(start, reached)) return !terminated();
     return true;
 }
 
