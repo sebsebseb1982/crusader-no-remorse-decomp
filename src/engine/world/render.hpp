@@ -9,9 +9,10 @@
 //   sx = x/4 - y/4        sy = x/8 + y/8 - z
 // A frame is drawn with its anchor (xoff, yoff) on the projected location.
 //
-// Draw order: items whose screen rectangles overlap are ordered by their 3D
-// boxes (entirely below, or entirely behind on x or y => drawn first), then
-// topologically sorted. Intersecting boxes fall back to depth (x + y, z).
+// Draw order: items whose screen rectangles overlap are ordered by the
+// original's comparator (DLIST 11A0:0000): boxes apart on x, y, then z are
+// drawn back to front; intersecting boxes by the depth of their far bottom
+// corner (x + y + 2z). The constraints are then topologically sorted.
 
 #include "core/flex.hpp"
 #include "core/shape.hpp"

@@ -34,138 +34,61 @@ bool screen_overlap(const DrawItem& a, const DrawItem& b) {
     return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 }
 
-// Whether the screen hexagons of the two world boxes overlap (ScummVM,
-// SortItem::overlap). Sprites whose rectangles meet but whose boxes do not
-// cover each other get no ordering constraint: such constraints chained
-// floors, steps and crates into cycles.
-// @orig ?: display list sort (DLIST.C), not located
-bool box_overlap(const DrawItem& a, const DrawItem& b) {
-    struct Hex {
-        int left, right;      // x of the near-left and far-right corners
-        int top_x, top_y;     // far-left corner, top face
-        int bot_x, bot_y;     // near-right corner, bottom face
-    };
-    auto hex = [](const DrawItem& d) {
-        return Hex{project_x(d.x_left, d.y), project_x(d.x, d.y_far),
-                   project_x(d.x_left, d.y_far), project_y(d.x_left, d.y_far, d.z_top),
-                   project_x(d.x, d.y), project_y(d.x, d.y, d.z)};
-    };
-    const Hex p = hex(a), q = hex(b);
-    if (p.right <= q.left || p.left >= q.right) return false;
-    // Each top edge of a against the bottom corner of b, and the reverse
-    // (screen slopes 1/2).
-    const int tx = p.top_x - q.bot_x, ty = p.top_y - q.bot_y;
-    const int bx = p.bot_x - q.top_x, by = p.bot_y - q.top_y;
-    return tx + 2 * ty < 0 && -tx + 2 * ty < 0 && bx - 2 * by < 0 && -bx - 2 * by < 0;
-}
-
-// Draw-order comparison between two items whose screen rectangles overlap.
-// Decision order (after ScummVM's reverse engineering of the original sorter,
-// SortItem::below): clear separation in z, then y, then x; z with an 8-unit
-// tolerance; axes where one box has zero thickness, compared on the 32-unit
-// footpad grid; then tie-breaks on shape properties, screen position, depth
-// and identity so that the relation is total and deterministic.
-struct SortKey {
-    const DrawItem& d;
-    bool flat() const { return d.z == d.z_top; }
-    bool x_flat() const { return d.x_left == d.x; }
-    bool y_flat() const { return d.y_far == d.y; }
-    bool has(ShapeInfo::Flag f) const { return d.shape_flags & f; }
-    // ScummVM's _fbigsq: flat, as wide as deep, 128 world units or more.
-    bool big_square_flat() const { return flat() && d.x - d.x_left == d.y - d.y_far && d.x - d.x_left >= 128; }
+// A box in the original's display units (DLIST 11A0:095D): x and y are the
+// item's usecode x / 2 (world / 4), footpads * 8; a shape of height 0 is 1
+// high unless it is fixed (TYPEFLAG byte 0 bit 0).
+struct SortBox {
+    int x, y, z, dx, dy, dz;
 };
 
-// Compares a < b on a predicate; returns nullopt when they tie.
-template <class T>
-std::optional<bool> prefer(T a, T b, bool smaller_first) {
-    if (a == b) return std::nullopt;
-    return smaller_first ? a < b : b < a;
+// @orig 11A0:095D (the box part of the display entry)
+SortBox sort_box(const DrawItem& d) {
+    int dz = d.z_top - d.z;
+    if (dz == 0 && !(d.shape_flags & ShapeInfo::kFixed)) dz = 1;
+    return {d.x >> 2, d.y >> 2, d.z, (d.x - d.x_left) >> 2, (d.y - d.y_far) >> 2, dz};
 }
 
-// @orig ?: display list sort (DLIST.C), not located
-bool behind(const DrawItem& da, const DrawItem& db) {
-    const SortKey a{da}, b{db};
+enum class Order { kNone, kOtherFirst, kThisFirst };
 
-    // Clearly separated vertically.
-    if (a.flat() && b.flat()) {
-        if (da.z != db.z) return da.z < db.z;
-    } else {
-        if (da.z_top <= db.z) return true;
-        if (da.z >= db.z_top) return false;
-    }
-    // Clearly separated in y, then x (zero-thickness boxes on the 32 grid).
-    if (a.y_flat() && b.y_flat()) {
-        if (da.y / 32 != db.y / 32) return da.y < db.y;
-    } else {
-        if (da.y <= db.y_far) return true;
-        if (da.y_far >= db.y) return false;
-    }
-    if (a.x_flat() && b.x_flat()) {
-        if (da.x / 32 != db.x / 32) return da.x < db.x;
-    } else {
-        if (da.x <= db.x_left) return true;
-        if (da.x_left >= db.x) return false;
-    }
-    // Vertical overlap of at most 8 units counts as "on top of".
-    if (da.z_top - 8 <= db.z && da.z < db.z_top - 8) return true;
-    if (da.z >= db.z_top - 8 && da.z_top - 8 > db.z) return false;
-
-    // One box flat on an axis, the other not: coarse grid, then centres.
-    auto axis = [](std::int32_t lo1, std::int32_t hi1, std::int32_t lo2, std::int32_t hi2) -> std::optional<bool> {
-        if (hi1 / 32 <= lo2 / 32) return true;
-        if (lo1 / 32 >= hi2 / 32) return false;
-        return prefer((lo1 / 32 + hi1 / 32) / 2, (lo2 / 32 + hi2 / 32) / 2, true);
-    };
-    if (a.y_flat() != b.y_flat()) {
-        if (auto r = axis(da.y_far, da.y, db.y_far, db.y)) return *r;
-    }
-    if (a.x_flat() != b.x_flat()) {
-        if (auto r = axis(da.x_left, da.x, db.x_left, db.x)) return *r;
-    }
-
-    if (a.flat() || b.flat()) {
-        if (auto r = prefer(da.z, db.z, true)) return *r;                     // lower first
-        if (auto r = prefer(a.flat(), b.flat(), false)) return *r;            // flat first
-        if (auto r = prefer(a.has(ShapeInfo::kTranslucent), b.has(ShapeInfo::kTranslucent), true)) return *r;
-        if (auto r = prefer(a.has(ShapeInfo::kDraw), b.has(ShapeInfo::kDraw), false)) return *r;
-        if (auto r = prefer(a.has(ShapeInfo::kSolid), b.has(ShapeInfo::kSolid), false)) return *r;
-        if (auto r = prefer(a.has(ShapeInfo::kOccludes), b.has(ShapeInfo::kOccludes), false)) return *r;
-        // Large square flats (floor tiles) first, so that the markings laid
-        // on them (hazard stripes 0x10C) are not cut by the next tile.
-        if (auto r = prefer(a.big_square_flat(), b.big_square_flat(), false)) return *r;
-        // Both large squares, one laid on the other (the force field floor
-        // FFFLOOR 0x135, 64 x 64, on 256 x 256 tiles): the larger first, or
-        // the tile hides the outline of the smaller one.
-        if (a.big_square_flat() && b.big_square_flat()) {
-            if (auto r = prefer(da.x - da.x_left, db.x - db.x_left, false)) return *r;
-        }
-    }
-    if (da.x == db.x && da.y == db.y) {
-        if (auto r = prefer(a.has(ShapeInfo::kTranslucent), b.has(ShapeInfo::kTranslucent), true)) return *r;
-    }
-    if (a.has(ShapeInfo::kLand) && b.has(ShapeInfo::kLand)) {
-        if (auto r = prefer(a.has(ShapeInfo::kRoof), b.has(ShapeInfo::kRoof), true)) return *r;
-    }
-    if (auto r = prefer(a.has(ShapeInfo::kRoof), b.has(ShapeInfo::kRoof), false)) return *r;  // roof first
-    if (auto r = prefer(da.z, db.z, true)) return *r;
-    if (a.x_flat() || b.x_flat() || a.y_flat() || b.y_flat()) {
-        if (auto r = prefer(da.sx_left, db.sx_left, false)) return *r;  // further right on screen first
-        if (auto r = prefer(da.sy, db.sy, true)) return *r;
-    }
-    if (auto r = prefer(da.x + da.y, db.x + db.y, true)) return *r;
-    if (auto r = prefer(da.x_left + da.y_far, db.x_left + db.y_far, true)) return *r;
-    if (auto r = prefer(da.y, db.y, true)) return *r;
-    if (auto r = prefer(da.x, db.x, true)) return *r;
-    if (auto r = prefer(da.item->shape, db.item->shape, true)) return *r;
-    if (auto r = prefer(da.item->frame, db.item->frame, true)) return *r;
-    return da.item->id < db.item->id;
+// Draw order of two items (DLIST 11A0:0000, US 0035:0000). First whether
+// their screen hexagons overlap, tested on the three screen axes x - z,
+// y - z and x - y (strictly: touching boxes get no constraint). Then the
+// first axis on which the boxes are apart (x, y, then z) decides; boxes
+// that intersect are ordered by the sum x + y + 2z of their far bottom
+// corners, the smaller first. Equal sums leave them unordered. No shape
+// property (roof, land, flat, translucent) takes part.
+// @orig 11A0:0000
+Order compare(const DrawItem& self, const DrawItem& other) {
+    const SortBox a = sort_box(self), b = sort_box(other);
+    const bool overlap = a.x - a.z - a.dx - a.dz < b.x - b.z && b.x - b.z - b.dx - b.dz < a.x - a.z &&
+                         a.y - a.z - a.dy - a.dz < b.y - b.z && b.y - b.z - b.dy - b.dz < a.y - a.z &&
+                         a.x - a.y - a.dx < b.x - b.y + b.dy && b.x - b.y - b.dx < a.x - a.y + a.dy;
+    if (!overlap) return Order::kNone;
+    if (b.x <= a.x - a.dx) return Order::kOtherFirst;
+    if (a.x <= b.x - b.dx) return Order::kThisFirst;
+    if (b.y <= a.y - a.dy) return Order::kOtherFirst;
+    if (a.y <= b.y - b.dy) return Order::kThisFirst;
+    if (b.z + b.dz <= a.z && b.z < a.z + a.dz) return Order::kOtherFirst;
+    if (a.z + a.dz <= b.z && a.z < b.z + b.dz) return Order::kThisFirst;
+    const int far_a = a.x - a.dx + a.y - a.dy + 2 * a.z;
+    const int far_b = b.x - b.dx + b.y - b.dy + 2 * b.z;
+    if (far_b < far_a) return Order::kOtherFirst;
+    if (far_a < far_b) return Order::kThisFirst;
+    return Order::kNone;
 }
 
 }  // namespace
 
+// The edge that 1198:08A0 adds between two display entries.
+// @orig 1198:08A0
 std::optional<bool> draw_before(const DrawItem& a, const DrawItem& b) {
-    if (!screen_overlap(a, b) || !box_overlap(a, b)) return std::nullopt;
-    return behind(a, b);
+    if (!screen_overlap(a, b)) return std::nullopt;
+    switch (compare(a, b)) {
+    case Order::kThisFirst: return true;
+    case Order::kOtherFirst: return false;
+    case Order::kNone: break;
+    }
+    return std::nullopt;
 }
 
 std::vector<DrawItem> build_display_list(const World& world, ShapeCache& shapes, const Camera& camera, int w,
@@ -233,9 +156,10 @@ std::vector<DrawItem> build_display_list(const World& world, ShapeCache& shapes,
     std::vector<std::vector<std::uint32_t>> before(n);  // before[i]: items to draw before i
     for (std::size_t i = 0; i < n; ++i) {
         for (std::size_t j = i + 1; j < n && items[j].left < items[i].right; ++j) {
-            if (!screen_overlap(items[i], items[j]) || !box_overlap(items[i], items[j])) continue;
-            if (behind(items[i], items[j])) before[j].push_back(static_cast<std::uint32_t>(i));
-            else before[i].push_back(static_cast<std::uint32_t>(j));
+            if (!screen_overlap(items[i], items[j])) continue;
+            const Order order = compare(items[i], items[j]);
+            if (order == Order::kThisFirst) before[j].push_back(static_cast<std::uint32_t>(i));
+            else if (order == Order::kOtherFirst) before[i].push_back(static_cast<std::uint32_t>(j));
         }
     }
     std::vector<std::uint8_t> state(n, 0);  // 0 new, 1 visiting, 2 done

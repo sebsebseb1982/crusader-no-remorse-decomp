@@ -4645,6 +4645,31 @@ void test_force_field_floor(const std::filesystem::path& data) {
     CHECK(fields > 0 && checked >= fields && wrong == 0);
 }
 
+// "PB SPRITE" (triangle-noir-machine.sav, map 13): a black panel (0x175,
+// 32 x 512 x 96, it masks the void beyond the map) crosses the end of the
+// machine wall (0x127 frame 3, 512 x 32 x 96, TYPEFLAG roof bit). The
+// original's comparator (DLIST 11A0:0000) orders such intersecting boxes by
+// their far bottom corners: the panel, further back, is drawn first. The
+// port's former rules drew roofs first, and the panel's top left corner
+// covered the machine as a black triangle.
+void test_void_panel_behind_wall(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "triangle-noir-machine.sav");
+    game.update(kFrameUs);
+    const World& w = game.world();
+    const FlexArchive flex = FlexArchive::open(data / "STATIC/SHAPES.FLX");
+    ShapeCache shapes(flex, ShapeLayout::World);
+    const auto list = build_display_list(w, shapes, View{w.state.view_left, w.state.view_top}, 640, 480);
+    int panel = -1, wall = -1;
+    for (std::size_t i = 0; i < list.size(); ++i) {
+        const DrawItem& d = list[i];
+        if (d.item->shape == 0x175 && d.x == 54334 && d.y == 54302) panel = static_cast<int>(i);
+        if (d.item->shape == 0x127 && d.item->frame == 3 && d.x == 54782 && d.y == 54302) wall = static_cast<int>(i);
+    }
+    std::printf("void panel: drawn %d, machine wall drawn %d\n", panel, wall);
+    CHECK(panel >= 0 && wall >= 0 && panel < wall);
+}
+
 // Lot 6.4: the end of the game, EVENT (class 0x361) equip(88): movie O01,
 // then Game::I_playCredits: the credits, the start-up movies T01 and T02,
 // and the menu with no game to go back to.
@@ -5252,6 +5277,12 @@ int main(int argc, char** argv) {
         test_processes_end_with_their_item(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--draw-order") {
+        test_floor_stripes(data);
+        test_force_field_floor(data);
+        test_void_panel_behind_wall(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--jump-down") {
         test_jump_down_ends_standing(data);
         return failures ? 1 : 0;
@@ -5376,6 +5407,7 @@ int main(int argc, char** argv) {
     test_kneeling_aim(data);
     test_floor_stripes(data);
     test_force_field_floor(data);
+    test_void_panel_behind_wall(data);
     test_saved_death_plays_on(data);
     test_death_out_of_fast_area(data);
     test_other_map_npc_hidden(data);
