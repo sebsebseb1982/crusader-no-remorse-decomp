@@ -5289,6 +5289,49 @@ void test_jump_down_ends_standing(const std::filesystem::path& data) {
     CHECK(!actor_busy(game.kernel(), 1));
 }
 
+
+// A clip destroyed (spent, or by the usecode) leaves the player's ammunition
+// slot it held: Item_forget pushes it out of the world (10B0:1C21), which
+// empties the NPC's equipment slots naming it. SAVEGAME.13 carries ammo 2351.
+void test_destroyed_clip_leaves_its_slot(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save(13);
+    World& w = game.world();
+    constexpr ObjId kClip = 2351;
+    int slot = 0;
+    for (int s = 6; s < 11; ++s) {
+        if (w.npc_equip(ObjId{1}, s) == kClip) slot = s;
+    }
+    CHECK(slot != 0);
+    w.destroy(kClip);
+    int left = 0;
+    for (int s = 0; s < 30; ++s) left += w.npc_equip(ObjId{1}, s) == kClip;
+    std::printf("destroyed clip: slot %d, slots still naming it %d\n", slot, left);
+    CHECK(left == 0);
+}
+
+// SEB22, saved by the port before that fix: four of the five ammunition
+// slots named spent clips, so Weasel refused the GL-303 clips (a refusal
+// sound). They are emptied on loading; the clip still carried stays.
+void test_weasel_buys_ammo_after_spent_clips(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "weasel-munitions-gl303-refusees.sav");
+    const World& w = game.world();
+    int lost = 0;
+    for (int s = 1; s < 30; ++s) {
+        const ObjId id = w.npc_equip(ObjId{1}, s);
+        if (id != 0 && (!w.get(id) || w.get(id)->parent != ObjId{1})) ++lost;
+    }
+    const ObjId clip = w.npc_equip(ObjId{1}, 7);
+    int refused = 0;
+    for (std::uint16_t shape = 0x33D; shape <= 0x341; ++shape) refused += !may_add_item(w, shape);
+    std::printf("weasel ammo: lost slots %d, slot 7 shape 0x%X, ammo kinds refused %d\n", lost,
+                clip && w.get(clip) ? unsigned{w.get(clip)->shape} : 0u, refused);
+    CHECK(lost == 0);
+    CHECK(clip != 0 && w.get(clip) && w.get(clip)->shape == 0x33E);
+    CHECK(refused == 0);
+}
+
 int main(int argc, char** argv) {
     const std::filesystem::path data = argc > 1 ? argv[1] : "data";
     if (!std::filesystem::exists(data / "STATIC/FIXED.DAT")) {
@@ -5296,6 +5339,11 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (!have_test_saves(data)) return 1;
+    if (argc > 2 && std::string(argv[2]) == "--weasel-ammo") {
+        test_destroyed_clip_leaves_its_slot(data);
+        test_weasel_buys_ammo_after_spent_clips(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--editor-mod") {
         test_editor_mod(data);
         std::printf(failures ? "%d failure(s)\n" : "all checks passed\n", failures);
@@ -5428,6 +5476,8 @@ int main(int argc, char** argv) {
     test_end_credits(data);
     test_start_up(data);
     test_weasel(data);
+    test_destroyed_clip_leaves_its_slot(data);
+    test_weasel_buys_ammo_after_spent_clips(data);
     test_barrels(data);
     test_mines(data);
     test_station_pads(data);

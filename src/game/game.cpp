@@ -485,6 +485,11 @@ void Game::load_save_file(const std::filesystem::path& path) {
     world_->load_saved_items(save);
     const Item* player = world_->get(1);
     if (!player) throw std::runtime_error("saved game without the player (item 1)");
+    // Saves made by the port before World::destroy emptied equipment slots
+    // keep the ids of spent clips in them (SEB22: four of the five ammunition
+    // slots, so Weasel refused the GL-303 clips). The original never leaves
+    // one; these are emptied.
+    world_->forget_lost_equipment();
     // Entry 60 (FLAG_1410_02e7): the usecode globals, as in UNKDS.DAT.
     set_globals(save.entry(60));
     // Entry 91: Weasel's introduction played (DS:5ECF). Entry 90, the alert

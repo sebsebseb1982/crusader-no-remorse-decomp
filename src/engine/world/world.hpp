@@ -652,6 +652,10 @@ public:
             if (npc_equip(npc, slot) == item) set_npc_word(npc, 0x1B + 2 * slot, 0);
         }
     }
+    // Port repair of saves made before World::destroy emptied the slots of
+    // the items it destroys: every slot naming an item that is gone, or that
+    // its NPC no longer holds, is emptied. Returns how many were.
+    int forget_lost_equipment();
     // The NPC's active weapon: equipment slot at record +0x15, 0 = none
     // (NPC_10f0_33b8).
     ObjId active_weapon(ObjId npc) const {

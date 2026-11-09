@@ -1237,6 +1237,23 @@ ObjId World::pop() {
     return pop_to_coords(item.x, item.y, item.z);
 }
 
+// @orig none: port repair of saves made before World::destroy unequipped
+int World::forget_lost_equipment() {
+    int forgotten = 0;
+    for (ObjId npc = 1; npc < 256; ++npc) {
+        if (!get(npc)) continue;
+        for (int slot = 1; slot < 30; ++slot) {
+            const ObjId id = npc_equip(npc, slot);
+            if (id == 0) continue;
+            const Item* item = get(id);
+            if (item && item->parent == npc) continue;
+            set_npc_word(npc, 0x1B + 2 * slot, 0);
+            ++forgotten;
+        }
+    }
+    return forgotten;
+}
+
 // @orig 10A8:1365 10B0:1AB3
 void World::destroy(ObjId id) {
     Item* item = get(id);
@@ -1248,6 +1265,15 @@ void World::destroy(ObjId id) {
     item = get(id);
     if (!item) return;
     for (ObjId child : std::vector<ObjId>(item->contents)) destroy(child);
+    // Item_forget (US 10B0:1B7F) pushes an item still in the world out of
+    // it (10B0:1C21), which first empties the equipment slots of its NPC
+    // holding it (flag 0x200). Without that, a spent clip left its id in its
+    // ammunition slot: the five slots filled up with dead ids and Weasel
+    // refused any new kind of ammunition (may_add_item, 13E8:00C8).
+    if (id != 1 && (item->z & 0xFF) < 251 && !(item->flags & kItemEthereal) && (item->flags & kItemEquipped)) {
+        unequip(item->parent, id);
+        item->flags &= static_cast<std::uint16_t>(~kItemEquipped);
+    }
     if (Item* parent = get(item->parent)) std::erase(parent->contents, id);
     unlink_from_cell(*item);
     std::erase(pending_, id);
