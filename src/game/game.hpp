@@ -50,6 +50,13 @@
 
 namespace crusader {
 
+// A data file of the game: the mod folder's copy when there is one (the
+// level editor writes STATIC/FIXED.DAT, STATIC/GLOB.FLX... there), else the
+// data folder's.
+// @orig none: mod folders are a port addition
+std::filesystem::path game_file(const std::filesystem::path& data, const std::filesystem::path& mod,
+                                const std::string& relative);
+
 class Game {
 public:
     static constexpr int kScreenWidth = 640;
@@ -58,8 +65,11 @@ public:
     static constexpr int kAutoSave = 12;   // SAVEGAME.12, port addition (F6): the autosave
 
     // `saves`: where the saved games are read and written, data/SAVEGAME
-    // when empty (the tests use a copy of the original saves).
-    explicit Game(const std::filesystem::path& data, const std::filesystem::path& saves = {});
+    // when empty (the tests use a copy of the original saves). `mod`: a
+    // folder made by the level editor; its files replace those of the data
+    // (game_file), and its games are saved in mod/SAVEGAME.
+    explicit Game(const std::filesystem::path& data, const std::filesystem::path& saves = {},
+                  const std::filesystem::path& mod = {});
     Game(const Game&) = delete;
     Game& operator=(const Game&) = delete;
 
@@ -114,6 +124,13 @@ public:
     // Then a teleport to egg 0x1E of map 1 (SHAPHAND_1098_011f) loads the
     // first mission when the kernel runs.
     void new_game(int difficulty);
+    // Where new_game puts the player: the egg (teleport egg of frame 1 whose
+    // quality low byte is `egg`) of a map. The first mission's by default;
+    // the level editor starts the map it edits (--map, --egg).
+    void set_start(int map, std::uint16_t egg) {
+        start_map_ = map;
+        start_egg_ = egg;
+    }
 
     // Advances the clock by `elapsed_us` and runs one kernel slice. While the
     // menu is open, only the processes that run at any level do.
@@ -342,6 +359,9 @@ private:
     Palette difficulty_palette_;
     MouseCursor cursor_;
     std::filesystem::path data_;
+    std::filesystem::path mod_;  // level editor files that replace the data's
+    int start_map_ = 1;
+    std::uint16_t start_egg_ = 0x1E;  // kTeleportStartEgg
     std::string port_version_;
     std::string data_version_;  // "1.08", "1.23", "1.01"
     std::string data_language_;

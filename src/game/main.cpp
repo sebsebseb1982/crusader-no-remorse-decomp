@@ -1,7 +1,7 @@
 // crusader: runs the game from a saved game (milestone 1: the world runs, the
 // camera moves with the arrow keys).
 //
-//   crusader [data | game.iso | GAME.GOG] [--save N | --new-game] [-laurie]  (neither: the start-up movies, then the menu) [--movie NAME | --movie-overlay NAME] [--frames N [--scroll DX DY] [--walk] [--fire] [--use ID] [--menu | --menu-load | --menu-credits | --menu-options | --menu-gamepad | --menu-new] --png out.png [--wav out.wav]]
+//   crusader [data | game.iso | GAME.GOG] [--mod DIR] [--save N | --new-game | --map N [--egg E]] [-laurie]  (neither: the start-up movies, then the menu) [--movie NAME | --movie-overlay NAME] [--frames N [--scroll DX DY] [--walk] [--fire] [--use ID] [--menu | --menu-load | --menu-credits | --menu-options | --menu-gamepad | --menu-new] --png out.png [--wav out.wav]]
 //
 // With --png, runs N frames of 1/60 s without a window, moving the camera by
 // (DX, DY) usecode units per frame or making the player walk, and writes the
@@ -10,6 +10,10 @@
 // (as Enter on the selected item) before the first frame. --movie plays a
 // cutscene (FLICS/NAME.AVI, as MovieGump::I_playMovieCutscene) right away,
 // --movie-overlay as I_playMovieOverlay.
+// --mod loads a folder made by the level editor (crusader-editor): its
+// files replace those of the data. --map starts a new game on that map, on
+// its teleport egg E (frame 1, quality low byte E; 0x1E by default, where
+// every mission starts).
 //
 // Controls of the original (CRUSADER.C 12CF): arrows (shift runs), keypad,
 // Ctrl / Alt moves; see engine/world/avatar_mover.hpp. Escape opens the menu
@@ -94,7 +98,8 @@ void print_faults(Game& game) {
 // @orig none: command line and SDL start-up of the port
 int main(int argc, char** argv) {
     SDL_SetMainReady();
-    std::filesystem::path data = "data", iso;
+    std::filesystem::path data = "data", iso, mod;
+    int start_map = 0, start_egg = 0x1E;
     int save = 1, frames = 0;
     bool new_game = false, save_given = false, fullscreen = false, debug_title = false;
     int png_width = Game::kScreenWidth, png_height = Game::kScreenHeight;
@@ -117,6 +122,9 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--png") == 0 && i + 1 < argc) png = argv[++i];
         else if (std::strcmp(argv[i], "--wav") == 0 && i + 1 < argc) wav = argv[++i];
         else if (std::strcmp(argv[i], "--new-game") == 0) new_game = true;
+        else if (std::strcmp(argv[i], "--mod") == 0 && i + 1 < argc) mod = argv[++i];
+        else if (std::strcmp(argv[i], "--map") == 0 && i + 1 < argc) start_map = std::stoi(argv[++i], nullptr, 0), new_game = true;
+        else if (std::strcmp(argv[i], "--egg") == 0 && i + 1 < argc) start_egg = std::stoi(argv[++i], nullptr, 0);
         else if (std::strcmp(argv[i], "--fullscreen") == 0) fullscreen = true;
         else if (std::strcmp(argv[i], "--debug-title") == 0) debug_title = true;  // diagnostics in the window title
         else if (std::strcmp(argv[i], "--classic") == 0) classic = true;
@@ -155,8 +163,9 @@ int main(int argc, char** argv) {
             throw std::runtime_error("no game data in '" + data.string() +
                                      "': copy the files of an install of the game (French 1.08, US 1.23 or English 1.01) there, or its .iso image (GAME.GOG in the GOG release)");
         }
-        Game game(data);
+        Game game(data, {}, mod);
         game.set_port_version(CRUSADER_VERSION);
+        if (start_map > 0) game.set_start(start_map, static_cast<std::uint16_t>(start_egg));
         if (laurie) game.enable_cheats();
         // No game asked for: the start-up, as when the original is launched
         // (the movies, then the menu). The tools (--png, --movie) keep

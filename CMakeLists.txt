@@ -166,6 +166,47 @@ target_link_libraries(useprobe PRIVATE crusader_game)
 add_executable(shapedump src/tools/shapedump.cpp)
 target_link_libraries(shapedump PRIVATE crusader_core)
 
+# Level editor: the model (FIXED.DAT, GLOB.FLX, egg parameters), testable
+# without a window, and the editor itself (Dear ImGui over SDL2).
+add_library(crusader_editor_core
+  src/editor/level.cpp
+  src/editor/item_semantics.cpp
+  src/editor/project.cpp)
+target_link_libraries(crusader_editor_core PUBLIC crusader_core)
+
+option(CRUSADER_BUILD_EDITOR "Build the level editor (fetches Dear ImGui)" ON)
+if(CRUSADER_BUILD_EDITOR)
+  include(FetchContent)
+  FetchContent_Declare(imgui
+    URL https://github.com/ocornut/imgui/archive/refs/tags/v1.91.8.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+  FetchContent_MakeAvailable(imgui)
+  add_library(imgui STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/misc/cpp/imgui_stdlib.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer2.cpp)
+  target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
+  target_link_libraries(imgui PUBLIC ${SDL2_TARGET})
+  # Third-party code: no warnings from it.
+  if(MSVC)
+    target_compile_options(imgui PRIVATE /W0)
+  else()
+    target_compile_options(imgui PRIVATE -w)
+  endif()
+
+  if(WIN32)
+    add_executable(crusader-editor src/editor/editor_main.cpp src/editor/editor_app.cpp src/game/res/crusader.rc)
+  else()
+    add_executable(crusader-editor src/editor/editor_main.cpp src/editor/editor_app.cpp)
+  endif()
+  target_link_libraries(crusader-editor PRIVATE crusader_editor_core crusader_engine imgui)
+endif()
+
 enable_testing()
 # tests/: no game data needed, run by the GitHub CI.
 # e2e/: end-to-end tests on the original game data and on saved games, none of
@@ -204,6 +245,10 @@ add_executable(ui_tests tests/ui_tests.cpp)
 target_link_libraries(ui_tests PRIVATE crusader_engine)
 add_test(NAME ui_tests COMMAND ui_tests)
 
+add_executable(editor_tests tests/editor_tests.cpp)
+target_link_libraries(editor_tests PRIVATE crusader_editor_core)
+add_test(NAME editor_tests COMMAND editor_tests)
+
 add_executable(audio_tests tests/audio_tests.cpp)
 target_link_libraries(audio_tests PRIVATE crusader_engine)
 add_test(NAME audio_tests COMMAND audio_tests)
@@ -219,13 +264,16 @@ target_compile_definitions(world_data_tests PRIVATE CRUSADER_TEST_SAVES="${CRUSA
 add_executable(audio_data_tests e2e/audio_data_tests.cpp)
 target_link_libraries(audio_data_tests PRIVATE crusader_engine)
 
+add_executable(editor_data_tests e2e/editor_data_tests.cpp)
+target_link_libraries(editor_data_tests PRIVATE crusader_editor_core)
+
 add_executable(game_tests e2e/game_tests.cpp)
-target_link_libraries(game_tests PRIVATE crusader_game)
+target_link_libraries(game_tests PRIVATE crusader_game crusader_editor_core)
 target_include_directories(game_tests PRIVATE e2e)
 target_compile_definitions(game_tests PRIVATE CRUSADER_TEST_SAVES="${CRUSADER_TEST_SAVES_DIR}")
 
 if(CRUSADER_GAME_DATA_TESTS)
-    foreach(t core_data_tests world_data_tests audio_data_tests game_tests)
+    foreach(t core_data_tests world_data_tests audio_data_tests editor_data_tests game_tests)
         add_test(NAME ${t} COMMAND ${t} ${CRUSADER_DATA_DIR})
     endforeach()
 endif()

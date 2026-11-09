@@ -26,6 +26,7 @@ Le reste du moteur reproduit l'original : chaque fonction porte une étiquette `
 16. [Fichier de configuration `CRUSADER.CFG`](#16-fichier-de-configuration-crusadercfg)
 17. [Différences de comportement assumées](#17-différences-de-comportement-assumées)
 18. [Portabilité et distribution](#18-portabilité-et-distribution)
+19. [Éditeur de niveaux](#19-éditeur-de-niveaux)
 
 ---
 
@@ -405,6 +406,8 @@ Un exécutable d'origine ne gère qu'une seule langue. Le portage accepte les do
 - **Lancement normal**, sans `--save` ni `--new-game` : cinématiques T01 et T02, puis menu de démarrage sans partie en cours, comme l'original (`Game_start`). Dans ce menu, « Retour » et « Sauvegarder » ne font rien. Les cycles de couleurs de la palette restent en pause sous ce menu, pour éviter un scintillement.
 - `--new-game` : lance directement la première mission.
 - `--save N` : reprend directement `SAVEGAME.N`.
+- `--mod DIR` : charge un dossier de mod fait par l'éditeur de niveaux ; ses fichiers remplacent ceux des données, ses sauvegardes vont dans `DIR/SAVEGAME` (voir §19).
+- `--map N [--egg E]` : nouvelle partie sur la carte N, sur son œuf d'arrivée E (0x1E par défaut).
 - `--version` : affiche la version.
 - `--classic` : vue d'origine 640×480 (voir §6).
 - Options de test et d'outillage, sans fenêtre :
@@ -412,7 +415,7 @@ Un exécutable d'origine ne gère qu'une seule langue. Le portage accepte les do
   - `--size WxH`, `--scroll DX DY`, `--walk`, `--fire`, `--use ID` ;
   - `--menu*`, `--movie NAME`, `--movie-overlay NAME` ;
   - `--debug-title` : diagnostics dans le titre de la fenêtre (FPS, processus, intrinsèques manquantes…).
-- Outils fournis : `shapeview`, `mapview`, `shapedump`, `sortcheck`, `ucsmoke`, `useprobe`, `diffcheck` (comparaison avec l'exécutable d'origine).
+- Outils fournis : `crusader-editor` (éditeur de niveaux, §19), `shapeview`, `mapview`, `shapedump`, `sortcheck`, `ucsmoke`, `useprobe`, `diffcheck` (comparaison avec l'exécutable d'origine).
 
 ---
 
@@ -483,3 +486,16 @@ Ces écarts sont volontaires et documentés dans le code.
   - script de mise à jour par MTP pour la RG40XX-H.
 - **Versions** : SemVer calculé à partir des Conventional Commits. Chaque release est construite et testée sous Linux et Windows (voir `docs/RELEASING.md`).
 - **Tests** : tests unitaires sans données, et tests de bout en bout (`e2e/`) sur les données réelles et des sauvegardes de reproduction (`e2e/saves`). Plusieurs améliorations ont leurs propres tests : sauvegarde automatique, digicode, caméra scriptée, configuration.
+
+---
+
+## 19. Éditeur de niveaux
+
+**Fichiers :** `src/editor/`, `src/game/game.*` (`game_file`, `set_start`), `docs/EDITEUR.md`
+
+L'original n'a pas d'éditeur livré. `crusader-editor` (Dear ImGui sur SDL2, rendu par le moteur du portage) ouvre les cartes de `FIXED.DAT` et les globs de `GLOB.FLX`, décode les paramètres des œufs (déclencheurs, téléportations, monstres, globs, marqueurs) et les liens par qualité basse, et enregistre dans un dossier de mod sans toucher aux données. Le jeu lit ce dossier avec `--mod` et démarre une carte avec `--map`. Mode d'emploi complet : `docs/EDITEUR.md`.
+
+**Règles**
+- Les cartes et globs non modifiés sont réécrits à l'octet près (`editor_data_tests`) ; les contenus de conteneurs gardent leur profondeur brute (la carte 244 contient des enregistrements qui ne sont pas des objets).
+- Un fichier du mod remplace celui des données : `FIXED.DAT`, `GLOB.FLX`, `SHAPES.FLX`, `TYPEFLAG.DAT`, `DAMAGE.FLX`, `ANIM.DAT`, `DTABLE.FLX`, `EUSECODE.FLX`, `UNKDS.DAT`.
+- `--map N` : la nouvelle partie se déroule comme celle de l'original, mais `MainActor_I_teleportToEgg` reçoit la carte N et l'œuf `--egg` au lieu de 1 et 0x1E (`game_tests --editor-mod`).

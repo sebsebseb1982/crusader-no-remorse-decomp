@@ -169,42 +169,52 @@ constexpr std::uint32_t kAutosaveIconUs = 2'500'000;
 constexpr std::uint32_t kAutosaveDelayTicks = 60;
 constexpr int kFloppyScale = 2, kFloppyMargin = 8;
 
-std::vector<std::uint8_t> load_damage_table(
-const std::filesystem::path& data) {
-    const auto flex = FlexArchive::open(data / "STATIC/DAMAGE.FLX");
+std::vector<std::uint8_t> load_damage_table(const std::filesystem::path& file) {
+    const auto flex = FlexArchive::open(file);
     const auto entry = flex.entry(0);
     return {entry.begin(), entry.end()};
 }
 
 }  // namespace
 
+// @orig none: mod folders are a port addition
+std::filesystem::path game_file(const std::filesystem::path& data, const std::filesystem::path& mod,
+                                const std::string& relative) {
+    if (!mod.empty()) {
+        std::filesystem::path p = mod / relative;
+        if (std::filesystem::exists(p)) return p;
+    }
+    return data / relative;
+}
+
 // @orig none: loads the data and builds the port's subsystems
-Game::Game(const std::filesystem::path& data, const std::filesystem::path& saves)
-    : shapes_flex_(FlexArchive::open(data / "STATIC/SHAPES.FLX")),
-      globs_(FlexArchive::open(data / "STATIC/GLOB.FLX")),
-      fixed_(FlexArchive::open(data / "STATIC/FIXED.DAT")),
-      typeflags_(load_typeflags(data / "STATIC/TYPEFLAG.DAT")),
+Game::Game(const std::filesystem::path& data, const std::filesystem::path& saves, const std::filesystem::path& mod)
+    : shapes_flex_(FlexArchive::open(game_file(data, mod, "STATIC/SHAPES.FLX"))),
+      globs_(FlexArchive::open(game_file(data, mod, "STATIC/GLOB.FLX"))),
+      fixed_(FlexArchive::open(game_file(data, mod, "STATIC/FIXED.DAT"))),
+      typeflags_(load_typeflags(game_file(data, mod, "STATIC/TYPEFLAG.DAT"))),
       trig_(TrigTables::load(data / "STATIC/TRIG.DAT")),
-      damage_(load_damage_table(data)),
-      anims_(AnimDat::load(data / "STATIC/ANIM.DAT")),
+      damage_(load_damage_table(game_file(data, mod, "STATIC/DAMAGE.FLX"))),
+      anims_(AnimDat::load(game_file(data, mod, "STATIC/ANIM.DAT"))),
       weapon_overlay_(WeaponOverlay::load(data / "STATIC/WPNOVLAY.DAT")),
       palette_(Palette::load(data / "STATIC/GAMEPAL.PAL")),
-      usecode_(UsecodeFile::from_flex(FlexArchive::open(data / "USECODE/EUSECODE.FLX"))),
+      usecode_(UsecodeFile::from_flex(FlexArchive::open(game_file(data, mod, "USECODE/EUSECODE.FLX")))),
       shapes_(shapes_flex_, ShapeLayout::World),
       gumps_flex_(FlexArchive::open(data / "STATIC/GUMPS.FLX")),
       gumps_(gumps_flex_, ShapeLayout::Flat2D),
       fonts_(FontSet::load(data / "STATIC/FONTS.FLX")),
       xform_(XformTable::load(data / "STATIC/XFORMPAL.DAT")),
-      npc_types_(dtable::NpcTypes::load(data / "STATIC/DTABLE.FLX")),
+      npc_types_(dtable::NpcTypes::load(game_file(data, mod, "STATIC/DTABLE.FLX"))),
       status_bar_(gumps_, fonts_, xform_, npc_types_),
       pickup_area_(gumps_, fonts_, xform_),
       menu_palette_(Palette::load(data / "STATIC/MISC.PAL")),
       difficulty_palette_(Palette::load(data / "STATIC/DIFF.PAL")),
       cursor_(MouseCursor::load(data / "STATIC/MOUSE.SHP")),
       data_(data),
-      save_dir_(saves.empty() ? data / "SAVEGAME" : saves),
+      mod_(mod),
+      save_dir_(!saves.empty() ? saves : mod.empty() ? data / "SAVEGAME" : mod / "SAVEGAME"),
       config_(GameConfig::load(data / "CRUSADER.CFG")),
-      save_names_(LoadScreen::read_names(saves.empty() ? data / "SAVEGAME" : saves)),
+      save_names_(LoadScreen::read_names(save_dir_)),
       credits_data_(CreditsData::load(data / "STATIC")),
       help_pictures_(HelpScreen::Pictures::load(data / "STATIC")) {
     // The US data has no CRUSADER.CFG (the installer writes it): without one,
@@ -712,7 +722,7 @@ void Game::new_game(int difficulty) {
     reset_world();
     // FLAG_1410_0051(0): the globals' initial values.
     {
-        std::ifstream in(data_ / "USECODE/UNKDS.DAT", std::ios::binary);
+        std::ifstream in(game_file(data_, mod_, "USECODE/UNKDS.DAT"), std::ios::binary);
         const std::vector<std::uint8_t> bytes{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
         set_globals(bytes);
     }
@@ -747,7 +757,7 @@ void Game::new_game(int difficulty) {
 
     // CameraProcess::I_setCenterOn(1), then the first mission.
     s.camera_target = 1;
-    start_teleport_to_egg(*kernel_, *world_, 1, kTeleportStartEgg, true, true);
+    start_teleport_to_egg(*kernel_, *world_, start_map_, start_egg_, true, true);
     s.status_bar_visible = true;
     apply_status_bar_mouse_range();
 }

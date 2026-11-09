@@ -27,6 +27,8 @@
 #include "engine/world/sprite_process.hpp"
 #include "engine/world/projectile.hpp"
 #include "engine/world/teleport.hpp"
+#include "editor/level.hpp"
+#include "editor/project.hpp"
 #include "game/game.hpp"
 #include "test_saves.hpp"
 
@@ -434,6 +436,47 @@ void test_load_from_menu(const std::filesystem::path& data) {
 
 // Milestone 6: a new game from the fixed data (GAMEPAL_1028_0000), the
 // teleport eggs and changing maps.
+// A level made with the level editor: a new map in a mod folder, played
+// as `crusader data --mod DIR --map N`. The map holds the start pad of the
+// first mission (its egg 0x1E and the globs of its cell), under a new number.
+void test_editor_mod(const std::filesystem::path& data) {
+    const auto mod = std::filesystem::temp_directory_path() / "crusader_game_tests_mod";
+    std::filesystem::remove_all(mod);
+    std::size_t slot = 0;
+    std::int32_t ex = 0, ey = 0, ez = 0;
+    {
+        editor::Project project(data, mod);
+        slot = project.free_map();
+        const editor::Level map1 = project.load_map(1);
+        editor::Level level;
+        for (const editor::LevelItem& i : map1.items) {
+            if (i.shape == 0x194 && i.frame == 1 && i.quality_low() == 0x1E) ex = i.x, ey = i.y, ez = i.z;
+        }
+        for (const editor::LevelItem& i : map1.items) {
+            const bool start_egg = i.shape == 0x194 && i.frame == 1 && i.quality_low() == 0x1E;
+            const bool glob_here = i.shape == 0x10 && (i.x & ~0x1FF) == (ex & ~0x1FF) && (i.y & ~0x1FF) == (ey & ~0x1FF);
+            if (start_egg || glob_here) level.items.push_back(i);
+        }
+        CHECK(slot != 0 && level.items.size() >= 2);
+        project.store_map(slot, level);
+        project.save();
+    }
+    CHECK(std::filesystem::exists(mod / "STATIC/FIXED.DAT"));
+    // Saves of a mod go to mod/SAVEGAME unless told otherwise.
+    Game game(data, test_saves(data), mod);
+    game.set_start(static_cast<int>(slot), 0x1E);
+    game.new_game(3);
+    for (int f = 0; f < 120; ++f) game.update(kFrameUs);
+    const World& w = game.world();
+    const Item* player = w.get(1);
+    CHECK(w.current_map() == static_cast<int>(slot));
+    CHECK(player && player->map_number == slot && player->x == ex && player->y == ey);
+    const std::int32_t z = player ? player->z : -1;
+    for (int f = 0; f < 120; ++f) game.update(kFrameUs);
+    CHECK(player && w.get(1)->z == z && z >= ez);  // standing on the pad, not falling
+    std::filesystem::remove_all(mod);
+}
+
 void test_new_game(const std::filesystem::path& data) {
     // Globals of a saved game: entry 60.
     {
@@ -5200,6 +5243,11 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (!have_test_saves(data)) return 1;
+    if (argc > 2 && std::string(argv[2]) == "--editor-mod") {
+        test_editor_mod(data);
+        std::printf(failures ? "%d failure(s)\n" : "all checks passed\n", failures);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--blinking-scenery") {
         test_processes_end_with_their_item(data);
         return failures ? 1 : 0;
@@ -5342,6 +5390,7 @@ int main(int argc, char** argv) {
     test_leave_surface(data);
     test_enemies(data);
     test_new_game(data);
+    test_editor_mod(data);
     test_movies(data);
     test_back_to_base(data);
     test_mission2_final_scene(data);

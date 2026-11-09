@@ -87,7 +87,8 @@ def main():
          f"-DCMAKE_TOOLCHAIN_FILE={HERE / 'zig-aarch64.cmake'}",
          f"-DSDL2_DIR={HERE / 'sdl2-stub'}",
          f"-DCRUSADER_SDL2_STUB_LIB={stub}", f"-DCRUSADER_SDL2_HEADERS={headers}",
-         "-DCRUSADER_GAME_DATA_TESTS=OFF", f"-DCRUSADER_VERSION={args.version}"], env=env)
+         "-DCRUSADER_GAME_DATA_TESTS=OFF", "-DCRUSADER_BUILD_EDITOR=OFF",
+         f"-DCRUSADER_VERSION={args.version}"], env=env)
     run(["cmake", "--build", out, "--target", "crusader"], env=env)
     print("built:", out / "crusader")
 

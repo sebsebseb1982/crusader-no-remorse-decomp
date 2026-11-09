@@ -100,9 +100,9 @@ jobs:
           pkg="crusader-${VERSION}-${{ matrix.name }}"
           mkdir -p "dist/$pkg"
           if [ "$RUNNER_OS" = "Windows" ]; then
-            cp build/Release/crusader.exe "dist/$pkg/"
+            cp build/Release/crusader.exe build/Release/crusader-editor.exe "dist/$pkg/"
           else
-            cp build/crusader "dist/$pkg/"
+            cp build/crusader build/crusader-editor "dist/$pkg/"
           fi
           mkdir "dist/$pkg/data"
           cp tools/release/PUT_GAME_DATA_HERE.txt "dist/$pkg/data/"
