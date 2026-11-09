@@ -385,6 +385,9 @@ void test_fast_area() {
     CHECK(w.get(disposable) == nullptr);
     CHECK(w.get(far_item)->flags & kItemFastArea);
     CHECK(std::ranges::count(failed, near_item) == 1 && std::ranges::count(failed, plain) == 1);
+    // Item_forget: the destroyed glob item's processes end with it; the next
+    // item created takes its slot and must not inherit them.
+    CHECK(std::ranges::count(failed, disposable) == 1);
     CHECK(std::ranges::count(events, std::pair<ObjId, std::uint16_t>{near_item, std::uint16_t{0x10}}) == 1);
     CHECK(std::ranges::count(events, std::pair<ObjId, std::uint16_t>{far_item, std::uint16_t{0x0F}}) == 1);
 

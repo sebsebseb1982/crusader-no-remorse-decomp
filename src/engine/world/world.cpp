@@ -1239,6 +1239,8 @@ void World::destroy(ObjId id) {
     if (Item* parent = get(item->parent)) std::erase(parent->contents, id);
     unlink_from_cell(*item);
     std::erase(pending_, id);
+    // A slot already freed (z >= 251) leaves its processes alone.
+    const bool listed = (item->z & 0xFF) < 251;
     // ITEMCACH_10b0_1a23: the slot goes to the head of its free list and
     // keeps what it held, at z = 0xFE. The player's slot is never freed.
     if (id != 1 && id < kItemSlots) {
@@ -1247,6 +1249,12 @@ void World::destroy(ObjId id) {
         push_free(id);
     }
     items_.erase(id);
+    // Item_forget ends with Kernel_fail_processes(id, any type): the item's
+    // processes (its usecode events among them) end with it. Otherwise they
+    // went on with the next item given the slot, the head of the free list:
+    // scenery and bodies that took the id of a glob item gone with its cell
+    // were given its frames ("décors qui clignotent", docs/bugs.md).
+    if (id != 1 && listed && hooks_.fail_processes) hooks_.fail_processes(id);
 }
 
 // @orig 10B0:161B

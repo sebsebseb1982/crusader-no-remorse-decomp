@@ -5057,6 +5057,68 @@ void test_conveyor_passenger(const std::filesystem::path& data) {
     }
 }
 
+// Décors qui clignotent (docs/bugs.md, save DECORSCLIGNOTE): after a while,
+// walls, floors and bodies flickered between the frames of their shape.
+// World::destroy freed the slot of a glob item gone with its cell but left
+// its processes running; the next item created took the slot (head of the
+// free list) and those processes went on with it, setting its frame.
+// Item_forget (10B0:1AB3) ends with Kernel_fail_processes(id, any type).
+// The camera sweeps the map around the player for ten minutes (one second
+// per place, 7 x 7 places 1024 units apart) to load and unload cells.
+void test_processes_end_with_their_item(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "decors-clignotent.sav");
+    World& w = game.world();
+    Kernel& k = game.kernel();
+    const Item* player = w.get(1);
+    CHECK(player != nullptr);
+    if (!player) return;
+    const std::int32_t px = player->x, py = player->y, pz = player->z;
+    // (pid, owner, type) of a live process -> its owner's shape when first seen.
+    std::map<std::tuple<Pid, ObjId, std::uint16_t>, std::uint16_t> owner_shape;
+    int moved = 0;
+    for (int f = 0; f < 36000; ++f) {
+        if (f % 60 == 0) {
+            const int step = f / 60;
+            const int dx = (step % 7 - 3) * 1024, dy = (step / 7 % 7 - 3) * 1024;
+            w.set_camera(std::max(0, px + dx), std::max(0, py + dy), pz);
+        }
+        game.update(kFrameUs);
+        std::map<std::tuple<Pid, ObjId, std::uint16_t>, std::uint16_t> live;
+        k.for_each_process([&](const Process& p) {
+            if (p.owner() < 256) return;
+            const Item* i = w.get(p.owner());
+            const std::uint16_t shape = i ? i->shape : 0xFFFF;
+            const auto key = std::make_tuple(p.pid(), p.owner(), p.type());
+            const auto it = owner_shape.find(key);
+            if (it != owner_shape.end() && it->second != shape) ++moved;
+            live[key] = shape;
+        });
+        owner_shape = std::move(live);
+    }
+    // Then a still camera: an item with no animation type changes its frame
+    // only when one of its own processes does it.
+    int flips = 0;
+    std::map<ObjId, std::pair<std::uint16_t, std::uint16_t>> last;
+    for (int f = 0; f < 600; ++f) {
+        game.update(kFrameUs);
+        std::set<ObjId> owners;
+        k.for_each_process([&](const Process& p) { owners.insert(p.owner()); });
+        w.for_each([&](const Item& i) {
+            if (i.id < 256) return;
+            const ShapeInfo* s = w.shape_info(i.shape);
+            if (s && s->anim_type) return;
+            auto [it, fresh] = last.try_emplace(i.id, i.shape, i.frame);
+            if (!fresh && it->second.first == i.shape && it->second.second != i.frame && !owners.count(i.id)) ++flips;
+            it->second = {i.shape, i.frame};
+        });
+    }
+    std::printf("blinking scenery: %d processes moved to another item, %d frame changes, %zu processes\n", moved,
+                flips, k.process_count());
+    CHECK(moved == 0 && flips == 0);
+    CHECK(game.machine().faults().empty());
+}
+
 int main(int argc, char** argv) {
     const std::filesystem::path data = argc > 1 ? argv[1] : "data";
     if (!std::filesystem::exists(data / "STATIC/FIXED.DAT")) {
@@ -5064,6 +5126,10 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (!have_test_saves(data)) return 1;
+    if (argc > 2 && std::string(argv[2]) == "--blinking-scenery") {
+        test_processes_end_with_their_item(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--conveyor") {
         test_conveyor_passenger(data);
         return failures ? 1 : 0;
@@ -5185,6 +5251,7 @@ int main(int argc, char** argv) {
     test_saved_death_plays_on(data);
     test_death_out_of_fast_area(data);
     test_other_map_npc_hidden(data);
+    test_processes_end_with_their_item(data);
     test_aiming(data);
     test_aim_mode(data);
     test_aim_stick_draws(data);
