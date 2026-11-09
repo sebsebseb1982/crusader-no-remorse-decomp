@@ -1269,12 +1269,23 @@ void test_floor_pad(const std::filesystem::path& data) {
         CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
     }
     {
+        // Off the lift at the top: a fall of 96 units kills, and the death
+        // shows the double (0x580). Walking off the rising lift used to get
+        // there, but each walk cycle is tested before it starts (ANIMPRIM.C
+        // 016F) and refused when it would end over the edge: whether a cycle
+        // starts while the lift is still within 9 units of the floor next to
+        // it depends on the frame, so the player is put past the edge, where
+        // such a walk left it.
         Game game(data, test_saves(data));
         game.load_save(13);
         World& w = game.world();
         w.move_item(1, 5233, 5675, 9);
         for (int f = 0; f < 60; ++f) game.update(kFrameUs);
-        walk(game, 8, 60);  // keeps walking: off the platform on its way up
+        walk(game, 8, 10);  // onto the pad
+        for (int f = 0; f < 600 && w.get(kLift)->z != 88; ++f) game.update(kFrameUs);
+        CHECK(w.get(kLift)->z == 88 && w.get(1)->z == 96);
+        w.move_item(1, 5233, 5843, 96);
+        fall(game.kernel(), w, 1);
         bool double_seen = false;
         for (int f = 0; f < 300; ++f) {
             game.update(kFrameUs);

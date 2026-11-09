@@ -54,6 +54,7 @@ struct WeaponVibration {
     std::uint32_t duration_ms;
 };
 
+// @orig none: port-only gamepad vibration
 WeaponVibration weapon_vibration(std::uint16_t shape) {
     switch (shape) {
     case 0x32E:  // BA-40 pistol
