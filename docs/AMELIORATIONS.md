@@ -250,6 +250,7 @@ Le stick droit place directement le réticule dans la direction pointée.
 - Facteur d'échelle = le plus grand entier tel que `fenêtre / facteur` fait encore au moins 640×480. Les pixels restent carrés et nets.
 - Taille logique de la vue = `max(640, largeur / facteur)` × `max(480, hauteur / facteur)`.
 - La caméra garde sa place par rapport au centre : origine à `w/2` depuis la gauche et `300 + (h − 480)/2` depuis le haut. Les pixels supplémentaires se répartissent donc autour de la scène.
+- La zone active (les cellules de la carte où le décor « glob » est déplié, où les œufs de monstres créent leurs PNJ et où les objets s'animent) grandit avec la vue. L'original la fixe à ±5 cellules en `s = cx + cy` et ±3 en `d = cx − cy` autour de la cellule de la caméra, ce qui déborde de l'écran 640×480. Le portage ajoute une cellule en `d` par tranche de 256 pixels de plus de chaque côté, et une en `s` par tranche de 128 pixels de plus en haut et en bas. Le monde est donc toujours complet dans la vue, et tout continue d'apparaître hors champ. En 640×480, la zone est celle de l'original.
 - **Restent en 640×480, centrés** : menus, écrans (options, chargement, digicode, ordinateurs…), cinématiques, barre d'état, boîtes de message, curseur et icône de sauvegarde. Le reste de l'écran est noir pour les menus et les cinématiques.
 - Les coordonnées de la souris sont rapportées à ce bloc 640×480 centré.
 - Option désactivée, ou `--classic` en ligne de commande : vue 640×480 d'origine, étirée à la fenêtre.

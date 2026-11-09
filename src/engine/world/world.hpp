@@ -281,11 +281,14 @@ struct FrameBox {
 // cells are 512 usecode units (the item grid, 64 x 64 cells). With s = cx + cy
 // and d = cx - cy, the area is s0 <= s <= s1 and d0 <= d <= d1: a diamond on
 // the map, i.e. a rectangle on screen. Around the camera cell it spans
-// s +/- 5 and d +/- 3, whatever the screen size (saved in SAVEGAME entry 1).
+// s +/- 5 and d +/- 3 in the original (saved in SAVEGAME entry 1). A larger
+// native-resolution view widens it (World::set_view_size).
 struct FastArea {
+    static constexpr std::int32_t kHalfS = 5, kHalfD = 3;  // 640 x 480
     std::int32_t s0 = 0, s1 = -1, d0 = 0, d1 = -1;  // empty by default
 
-    static FastArea around(std::int32_t x, std::int32_t y);
+    static FastArea around(std::int32_t x, std::int32_t y, std::int32_t half_s = kHalfS,
+                           std::int32_t half_d = kHalfD);
     bool contains_cell(std::int32_t cx, std::int32_t cy) const;
     bool contains(std::int32_t x, std::int32_t y) const { return contains_cell(x >> 9, y >> 9); }
     bool operator==(const FastArea&) const = default;
@@ -566,7 +569,11 @@ public:
     // Port addition (native resolution): the view is w x h instead of
     // 640 x 480. The camera keeps the same place relative to the centre
     // (w / 2 from the left, 300 + (h - 480) / 2 from the top), so the extra
-    // pixels show more of the surroundings. No change when the size is the same.
+    // pixels show more of the surroundings. The fast area grows with it and
+    // keeps the original margin around the view: one more cell of d per 256
+    // extra pixels on each side, one more of s per 128 above and below, so
+    // the whole view is filled and items still wake up out of sight. No
+    // change when the size is the same.
     void set_view_size(int w, int h);
     int view_origin_x() const;
     int view_origin_y() const;
@@ -700,6 +707,7 @@ private:
     const TrigTables* trig_ = nullptr;
     int current_map_ = -1;
     FastArea fast_area_;
+    std::int32_t fast_half_s_ = FastArea::kHalfS, fast_half_d_ = FastArea::kHalfD;  // grown by set_view_size
     void shift_camera(int dx, int dy);  // the view moves by (dx, dy) pixels
     void set_camera_view(std::int32_t x, std::int32_t y, std::int32_t z, int left, int top);
     bool follow_player_ = false;

@@ -395,6 +395,21 @@ void test_fast_area() {
     const ObjId created = w.create(5, 0);
     w.pop_to_coords(30 * 512, 4 * 512, 0);
     CHECK(w.get(created)->flags & kItemFastArea);
+
+    // Native resolution: a 1146 x 600 view (21:9 at x3, taller too) shows
+    // 253 more pixels on each side and 60 above and below: one more cell of d
+    // and one of s, so items there are active before they come into view.
+    const ObjId wide = place(5, 34, 4);  // camera cell (30, 4): d + 4
+    CHECK(!(w.get(wide)->flags & kItemFastArea));
+    w.state.camera_x = 30 * 512;
+    w.state.camera_y = 4 * 512;
+    w.set_view_size(1146, 600);
+    CHECK((w.fast_area() == FastArea::around(30 * 512, 4 * 512, 6, 4)));
+    CHECK(w.get(wide)->flags & kItemFastArea);
+    // Back to 640 x 480: the original area.
+    w.set_view_size(640, 480);
+    CHECK((w.fast_area() == FastArea::around(30 * 512, 4 * 512)));
+    CHECK(!(w.get(wide)->flags & kItemFastArea));
 }
 
 void test_item_search() {

@@ -726,9 +726,9 @@ ObjId World::pop_to_coords(std::int32_t x, std::int32_t y, std::int32_t z) {
     return id;
 }
 
-FastArea FastArea::around(std::int32_t x, std::int32_t y) {
+FastArea FastArea::around(std::int32_t x, std::int32_t y, std::int32_t half_s, std::int32_t half_d) {
     const std::int32_t cx = (x & 0xFFFF) >> 9, cy = (y & 0xFFFF) >> 9;
-    return {cx + cy - 5, cx + cy + 5, cx - cy - 3, cx - cy + 3};
+    return {cx + cy - half_s, cx + cy + half_s, cx - cy - half_d, cx - cy + half_d};
 }
 
 bool FastArea::contains_cell(std::int32_t cx, std::int32_t cy) const {
@@ -883,6 +883,10 @@ void World::set_view_size(int w, int h) {
     if (state.screen_right == w - 1 && state.screen_bottom == h - 1) return;
     state.screen_right = static_cast<std::int16_t>(w - 1);
     state.screen_bottom = static_cast<std::int16_t>(h - 1);
+    // A cell is 512 units: 256 pixels across in d, 128 down in s.
+    const int extra_x = std::max(0, w - 640) / 2, extra_y = std::max(0, h - 480) / 2;
+    fast_half_d_ = FastArea::kHalfD + (extra_x + 255) / 256;
+    fast_half_s_ = FastArea::kHalfS + (extra_y + 127) / 128;
     set_camera(state.camera_x, state.camera_y, state.camera_z);
 }
 
@@ -1121,7 +1125,7 @@ void World::clear_fast_area() {
 // @orig 10B0:13BE
 void World::update_fast_area(std::int32_t x, std::int32_t y) {
     const FastArea before = fast_area_;
-    const FastArea after = FastArea::around(x, y);
+    const FastArea after = FastArea::around(x, y, fast_half_s_, fast_half_d_);
     if (after == before) return;
     auto on_map = [](const Item& i) { return i.parent == 0 && !(i.flags & (kItemContained | kItemEthereal)); };
     auto in = [](const FastArea& area, const Item& i) { return area.contains(i.x, i.y); };
