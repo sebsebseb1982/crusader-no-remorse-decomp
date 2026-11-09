@@ -66,7 +66,25 @@ void UCMachine::set_intrinsic(std::uint16_t number, Intrinsic fn) {
     intrinsics_[number] = std::move(fn);
 }
 
+// Item::callUsecodeEvent (US 0086:0E3A): the process that UCProcess's
+// constructor (0086:0EEC) makes runs at once through vtable slot 0
+// (UCProcess::run, 0086:10DA), as a spawned one does; the call answers its
+// pid, or 0 when it is already over. An event started while a map loads
+// (cachein, event 4) thus runs before the teleport moves the fast area and
+// fails the processes of the items left behind: mission 7's egg (MISS7, in
+// a corner of map 13) gives its fusion pack there.
 // @orig 1420:0E3A
+Pid UCMachine::call_event(std::uint16_t cid, std::uint32_t event, ObjId item, std::span<const std::uint8_t> args) {
+    const Pid pid = start_event(cid, event, item, args);
+    auto* p = dynamic_cast<UCProcess*>(kernel_.get(pid));
+    if (!p) return 0;
+    execute(*p);
+    return p->terminated() ? 0 : pid;
+}
+
+// The process alone, queued for the next pass (UCProcess, 0086:0EEC, without
+// its first run).
+// @orig 1420:0EEC
 Pid UCMachine::start_event(std::uint16_t cid, std::uint32_t event, ObjId item, std::span<const std::uint8_t> args) {
     const std::uint32_t offset = usecode_.event_offset(cid, event);
     if (offset == 0) {
@@ -344,26 +362,22 @@ bool UCMachine::step(UCProcess& p, bool& yield) {
         case 0x1D: { const auto b = st.pop4(); st.push4(st.pop4() - b); break; }
         case 0x1E: { const auto b = st.pop2(); st.push2(static_cast<std::uint16_t>(st.pop2() * b)); break; }
         case 0x1F: { const auto b = st.pop4(); st.push4(st.pop4() * b); break; }
+        // Division and remainder by zero give 0 (UCMachine::execProcess,
+        // opcodes 0x20..0x23): HOVER's move (class 0xA0D, fn 0x20) divides
+        // by the largest of its deltas, all 0 when the platform is already
+        // on its waypoint.
         case 0x20:
         case 0x22: {
             const auto b = pop_s16();
             const auto a = pop_s16();
-            if (b == 0) {
-                fault(p, "division by zero");
-                return false;
-            }
-            st.push2(static_cast<std::uint16_t>(op == 0x20 ? a / b : a % b));
+            st.push2(b == 0 ? 0 : static_cast<std::uint16_t>(op == 0x20 ? a / b : a % b));
             break;
         }
         case 0x21:
         case 0x23: {
             const auto b = pop_s32();
             const auto a = pop_s32();
-            if (b == 0) {
-                fault(p, "division by zero");
-                return false;
-            }
-            st.push4(static_cast<std::uint32_t>(op == 0x21 ? a / b : a % b));
+            st.push4(b == 0 ? 0 : static_cast<std::uint32_t>(op == 0x21 ? a / b : a % b));
             break;
         }
 

@@ -4163,23 +4163,24 @@ void test_floor_stripes(const std::filesystem::path& data) {
 // TEST11 (docs/bugs.md): guard 8 was saved as its death began (dead, action
 // 0x12 on its first frame). The animation processes are not loaded from
 // saves; loading plays the death on, NPCDEATH then lays its body (D_GUARD
-// 0x339). Before, the guard stayed standing, dead, for good.
+// 0x339). Before, the guard stayed standing, dead, for good. The event
+// runs at once (Item::callUsecodeEvent): the body may be laid by the load.
 void test_saved_death_plays_on(const std::filesystem::path& data) {
     constexpr ObjId kGuard = 8;
     const auto file = test_saves(data) / "ordinateur-robot-face-garde-mort-debout.sav";
+    std::int32_t gx = 0, gy = 0;
     {
         World saved(load_typeflags(data / "STATIC/TYPEFLAG.DAT"));
         saved.load_saved_items(FlexArchive::open(file));
         const Item* g = saved.get(kGuard);
-        CHECK(g && g->frame == 231 && saved.npc_word(kGuard, npc::kLastAnim) == 0x12);
+        CHECK(g && g->frame == 231 && saved.npc_word(kGuard, npc::kLastAnim) == 0x12 && saved.is_dead(kGuard));
+        if (!g) return;
+        gx = g->x;
+        gy = g->y;
     }
     Game game(data, test_saves(data));
     game.load_save_file(file);
     World& w = game.world();
-    const Item* guard = w.get(kGuard);
-    CHECK(guard && w.is_dead(kGuard));
-    if (!guard) return;
-    const std::int32_t gx = guard->x, gy = guard->y;
     for (int f = 0; f < 600; ++f) game.update(kFrameUs);
     bool body = false;
     w.for_each([&](const Item& i) {
@@ -4668,6 +4669,33 @@ void test_void_panel_behind_wall(const std::filesystem::path& data) {
     }
     std::printf("void panel: drawn %d, machine wall drawn %d\n", panel, wall);
     CHECK(panel >= 0 && wall >= 0 && panel < wall);
+}
+
+// Mission 7 (map 13): its egg MISS7 (class 0x913) gives the player the
+// fusion pack (FUSPAC 0x39C) that blows up the reservoir, from its cachein
+// event (4) when the map loads. The egg lies in a corner of the map, near
+// (0, 0), where the teleport first takes the player to load the map: it
+// enters the fast area there, then leaves it when the player reaches the
+// start egg, and that fails its processes. The original's events run at
+// once (Item::callUsecodeEvent, US 0086:0E3A), so the pack is given before;
+// queued for the next pass, the event was failed first and the pack never
+// came (saves "PB SPRITE", "DECORSCLIGNOTE": no FUSPAC anywhere).
+void test_mission7_fusion_pack(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "carte11-vers-mission7-bombe-fusion.sav");
+    World& w = game.world();
+    CHECK(w.current_map() == 11);
+    start_switch_map(game.kernel(), w, 13);
+    for (int f = 0; f < 120; ++f) game.update(kFrameUs);
+    int packs = 0, carried = 0;
+    w.for_each([&](const Item& i) {
+        if (i.shape != 0x39C) return;
+        ++packs;
+        carried += i.parent == 1;
+    });
+    std::printf("mission 7: map %d, %d fusion pack(s), %d carried by the player\n", w.current_map(), packs, carried);
+    CHECK(w.current_map() == 13 && packs == 1 && carried == 1);
+    CHECK(game.machine().faults().empty());
 }
 
 // Lot 6.4: the end of the game, EVENT (class 0x361) equip(88): movie O01,
@@ -5277,6 +5305,10 @@ int main(int argc, char** argv) {
         test_processes_end_with_their_item(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--mission7-bomb") {
+        test_mission7_fusion_pack(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--draw-order") {
         test_floor_stripes(data);
         test_force_field_floor(data);
@@ -5408,6 +5440,7 @@ int main(int argc, char** argv) {
     test_floor_stripes(data);
     test_force_field_floor(data);
     test_void_panel_behind_wall(data);
+    test_mission7_fusion_pack(data);
     test_saved_death_plays_on(data);
     test_death_out_of_fast_area(data);
     test_other_map_npc_hidden(data);

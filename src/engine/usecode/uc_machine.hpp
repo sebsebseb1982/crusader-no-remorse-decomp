@@ -63,6 +63,9 @@ public:
     // Starts event/function `event` of class `cid` on an item (engine-side
     // trigger: use(), look(), hatch()...). Returns the new pid, 0 if absent.
     Pid start_event(std::uint16_t cid, std::uint32_t event, ObjId item, std::span<const std::uint8_t> args = {});
+    // Item::callUsecodeEvent: start_event, then the process runs at once until
+    // it first yields; its pid, or 0 when it is already over.
+    Pid call_event(std::uint16_t cid, std::uint32_t event, ObjId item, std::span<const std::uint8_t> args = {});
 
     void execute(UCProcess& p);
 

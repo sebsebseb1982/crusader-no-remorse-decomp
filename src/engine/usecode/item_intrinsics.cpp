@@ -105,11 +105,11 @@ std::vector<std::uint16_t> register_item_intrinsics(UCMachine& m, World& w) {
     w.set_hooks({
         [&m, &w](ObjId id, std::uint16_t event) -> std::uint16_t {
             const Item* item = w.get(id);
-            return item ? m.start_event(w.usecode_class(*item), event, id) : 0;
+            return item ? m.call_event(w.usecode_class(*item), event, id) : 0;
         },
         [&m](ObjId id) { m.kernel().fail_processes(id, Kernel::kAnyType, 1); },
         [&m, &w](ObjId id, std::uint16_t event, std::span<const std::uint8_t> args) {
-            if (const Item* item = w.get(id)) m.start_event(w.usecode_class(*item), event, id, args);
+            if (const Item* item = w.get(id)) m.call_event(w.usecode_class(*item), event, id, args);
         },
     });
     {
@@ -175,7 +175,7 @@ std::vector<std::uint16_t> register_item_intrinsics(UCMachine& m, World& w) {
             const std::array<std::uint8_t, 4> arg = {
                 static_cast<std::uint8_t>(value), static_cast<std::uint8_t>(value >> 8),
                 static_cast<std::uint8_t>(value >> 16), static_cast<std::uint8_t>(value >> 24)};
-            return m.start_event(w.usecode_class(i), event, i.id, arg);
+            return m.call_event(w.usecode_class(i), event, i.id, arg);
         };
     };
     bind({0x006, 0x0B6}, equip_event(10));
@@ -186,7 +186,7 @@ std::vector<std::uint16_t> register_item_intrinsics(UCMachine& m, World& w) {
         const std::uint32_t value = arg16(a, 4);
         const std::array<std::uint8_t, 4> arg = {
             static_cast<std::uint8_t>(value), static_cast<std::uint8_t>(value >> 8), 0, 0};
-        return m.start_event(w.usecode_class(i), 0x11, i.id, arg);
+        return m.call_event(w.usecode_class(i), 0x11, i.id, arg);
     });
     // Item::I_avatarStoleSomething (10A8:2FDA): the same with event 0x13
     // (mask 0x80000), nothing for a dead NPC.
@@ -199,7 +199,7 @@ std::vector<std::uint16_t> register_item_intrinsics(UCMachine& m, World& w) {
     bind({0x025}, [](Item&, Args) { return 0u; });
     // Item::I_use (10A8:2667): event 1 of the item's class; the pid or 0.
     bind({0x081, 0x0D0, 0x0D5}, [&m, &w](Item& i, Args) -> std::uint32_t {
-        return may_use(w, i.id) ? m.start_event(w.usecode_class(i), 1, i.id) : 0;
+        return may_use(w, i.id) ? m.call_event(w.usecode_class(i), 1, i.id) : 0;
     });
     bind({0x004}, [](Item& i, Args) { return i.flags; });
     bind({0x005}, [](Item& i, Args a) { i.flags |= arg16(a, 4); return 0u; });
