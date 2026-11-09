@@ -29,13 +29,13 @@ std::uint16_t word_at(std::span<const std::uint8_t> r, std::size_t at) {
     return static_cast<std::uint16_t>(r[at] | r[at + 1] << 8);
 }
 
-// TYPE_1108_026e: on screen, with a default activity 1 it is not doing yet,
+// TYPE_1108_026e: in the combat zone (the screen), with a default activity 1 it is not doing yet,
 // the NPC that sees the controlled NPC takes its default activity 1.
 // @orig 1108:026E
 bool spot_controlled(Kernel& kernel, World& world, const AnimDat& anims, ObjId npc) {
     const Item* self = world.get(npc);
     const auto r = world.npc_record(npc);
-    if (!self || r.empty() || !world.is_partly_on_screen(*self)) return false;
+    if (!self || r.empty() || !world.is_partly_in_combat_zone(*self)) return false;
     const std::uint16_t alert = word_at(r, npc::kDefaultActivity + 2);
     if (alert == 0 || word_at(r, npc::kActivity) == alert) return false;
     if (!sees_controlled(world, anims, npc)) return false;
@@ -184,7 +184,7 @@ protected:
         const ObjId controlled = world_.state.controlled_npc;
         const Item* self = world_.get(npc);
         const Item* other = world_.get(controlled);
-        if (self && other && !actor_busy(k, npc) && world_.is_mostly_on_screen(*self)) {
+        if (self && other && !actor_busy(k, npc) && world_.is_mostly_in_combat_zone(*self)) {
             const int dir = direction_8(self->x, self->y, other->x, other->y);
             if ((world_.npc_direction(npc) & 0xF) == dir) {
                 // Once it sees the controlled NPC, a plea drawn by shape.
@@ -260,7 +260,7 @@ bool sees_controlled(const World& world, const AnimDat& anims, ObjId npc, bool l
     const ObjId controlled = world.state.controlled_npc;
     const Item* self = world.get(npc);
     const Item* other = world.get(controlled);
-    if (controlled == 0 || !self || !other || !world.is_mostly_on_screen(*self)) return false;
+    if (controlled == 0 || !self || !other || !world.is_mostly_in_combat_zone(*self)) return false;
     int facing = world.npc_direction(npc) & 0xF;
     if (look_turn) {
         // Looking left or right (actions 0x1E, 0x1F) from its third frame,
@@ -307,7 +307,8 @@ void wake_npcs_on_screen(Kernel& kernel, World& world, const AnimDat& anims) {
     const ObjId controlled = world.state.controlled_npc;
     for (ObjId id = 2; id < 0x100; ++id) {
         const Item* self = world.get(id);
-        if (!self || (self->z & 0xFF) == 0xFE || id == controlled || !world.is_partly_on_screen(*self)) continue;
+        if (!self || (self->z & 0xFF) == 0xFE || id == controlled || !world.is_partly_in_combat_zone(*self))
+            continue;
         const auto r = world.npc_record(id);
         if (r.empty()) continue;
         const std::uint16_t activity = word_at(r, npc::kActivity);

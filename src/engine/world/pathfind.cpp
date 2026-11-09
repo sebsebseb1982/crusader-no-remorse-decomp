@@ -122,7 +122,7 @@ int PathfinderProcess::choose_direction(World::Point& pos) {
     if (in_combat(world_, npc) && npc != world_.state.controlled_npc) {
         const ObjId target = world_.npc_word(npc, npc::kTarget);
         const Item* self = world_.get(npc);
-        if (target != 0 && self && world_.is_partly_on_screen(*self) &&
+        if (target != 0 && self && world_.is_partly_in_combat_zone(*self) &&
             fire_distance(world_, anims_, npc, target, d) != 0) {
             do_anim(kernel(), world_, anims_, npc, 0, kDirCurrent, 10000, false);
             if (auto* attack = dynamic_cast<AttackProcess*>(kernel().find_process(npc, AttackProcess::kType)))

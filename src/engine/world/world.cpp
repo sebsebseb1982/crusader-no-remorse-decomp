@@ -1072,8 +1072,17 @@ void World::update_follow_camera(std::uint32_t elapsed_us) {
     if (dx != 0 || dy != 0) shift_camera(dx, dy);
 }
 
+// @orig none: port-only native resolution, the original screen in a larger view
+World::ScreenRect World::combat_rect() const {
+    const ScreenRect view = view_rect();
+    if (!original_combat_zone_) return view;
+    // The camera point is at (320, 300) of the original screen.
+    const int x0 = view_origin_x() - 320, y0 = view_origin_y() - 300;
+    return {std::max(x0, view.x0), std::max(y0, view.y0), std::min(x0 + 639, view.x1), std::min(y0 + 479, view.y1)};
+}
+
 // @orig 10A8:40CE
-bool World::is_partly_on_screen(const Item& item) const {
+bool World::is_partly_in(const Item& item, const ScreenRect& r) const {
     if (!frame_lookup_) return false;
     const auto box = frame_lookup_(item.shape, item.frame);
     if (!box) return false;
@@ -1085,12 +1094,11 @@ bool World::is_partly_on_screen(const Item& item) const {
     const int left = sx - box->xoff, top = sy - box->yoff;
     const int right = left + box->width - 1, bottom = top + box->height - 1;
     // rect_overlaps: inclusive bounds.
-    return left <= state.screen_right && right >= 0 && top <= state.screen_bottom && bottom >= 0 &&
-           right >= left && bottom >= top;
+    return left <= r.x1 && right >= r.x0 && top <= r.y1 && bottom >= r.y0 && right >= left && bottom >= top;
 }
 
 // @orig 10A8:41F6
-bool World::is_mostly_on_screen(const Item& item) const {
+bool World::is_mostly_in(const Item& item, const ScreenRect& r) const {
     if (!frame_lookup_) return false;
     const auto box = frame_lookup_(item.shape, item.frame);
     if (!box) return false;
@@ -1101,8 +1109,8 @@ bool World::is_mostly_on_screen(const Item& item) const {
     const int left = sx - box->xoff, top = sy - box->yoff;
     const int right = left + box->width - 1, bottom = top + box->height - 1;
     // rect_clip_to the screen.
-    const int cl = std::max(left, 0), ct = std::max(top, 0);
-    const int cr = std::min<int>(right, state.screen_right), cb = std::min<int>(bottom, state.screen_bottom);
+    const int cl = std::max(left, r.x0), ct = std::max(top, r.y0);
+    const int cr = std::min(right, r.x1), cb = std::min(bottom, r.y1);
     return (box->width >> 1) <= cr - cl + 1 && cb - ct + 1 == box->height;
 }
 

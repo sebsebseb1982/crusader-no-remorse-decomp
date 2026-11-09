@@ -242,7 +242,7 @@ Le stick droit place directement le réticule dans la direction pointée.
 ## 6. Résolution native
 
 **Option :** `RESOLUTION NATIVE` (`nativeresolution`, **activée par défaut**)
-**Fichiers :** `src/game/main.cpp` (`fit_screen`), `src/game/game.cpp` (`render`, `draw_window`), `src/engine/world/world.cpp` (`set_view_size`)
+**Fichiers :** `src/game/main.cpp` (`fit_screen`), `src/game/game.cpp` (`render`, `draw_window`), `src/engine/world/world.cpp` (`set_view_size`, `combat_rect`)
 
 **Original** : 640×480. **Avec l'option** : la vue de jeu occupe toute la fenêtre et montre davantage le décor autour du personnage.
 
@@ -251,6 +251,7 @@ Le stick droit place directement le réticule dans la direction pointée.
 - Taille logique de la vue = `max(640, largeur / facteur)` × `max(480, hauteur / facteur)`.
 - La caméra garde sa place par rapport au centre : origine à `w/2` depuis la gauche et `300 + (h − 480)/2` depuis le haut. Les pixels supplémentaires se répartissent donc autour de la scène.
 - La zone active (les cellules de la carte où le décor « glob » est déplié, où les œufs de monstres créent leurs PNJ et où les objets s'animent) grandit avec la vue. L'original la fixe à ±5 cellules en `s = cx + cy` et ±3 en `d = cx − cy` autour de la cellule de la caméra, ce qui déborde de l'écran 640×480. Le portage ajoute une cellule en `d` par tranche de 256 pixels de plus de chaque côté, et une en `s` par tranche de 128 pixels de plus en haut et en bas. Le monde est donc toujours complet dans la vue, et tout continue d'apparaître hors champ. En 640×480, la zone est celle de l'original.
+- **La zone de combat reste celle de l'original** : le rectangle 640×480 placé dans la vue comme l'écran d'origine autour de la caméra (`World::combat_rect`). Un PNJ ne repère le joueur, ne le garde pour cible, ne tire et n'est réveillé par un tir que s'il y est, et le tir du joueur n'y choisit sa cible que là. Les caméras de surveillance (CAMERACO, CAMERANS, CAMERAEW) et les tourelles (WALLGUN) testent aussi cette zone (`Item::I_isPartlyOnScreen`, 0x007). Les tests purement visuels gardent la vue entière : saut d'images des animations, volume des sons, scripts d'effets (bulles, flammes, vapeur) et scripts qui agissent hors de la vue. Un ennemi des bandes latérales est donc visible, patrouille et s'approche, mais se comporte comme un ennemi hors écran dans l'original.
 - **Restent en 640×480, centrés** : menus, écrans (options, chargement, digicode, ordinateurs…), cinématiques, barre d'état, boîtes de message, curseur et icône de sauvegarde. Le reste de l'écran est noir pour les menus et les cinématiques.
 - Les coordonnées de la souris sont rapportées à ce bloc 640×480 centré.
 - Option désactivée, ou `--classic` en ligne de commande : vue 640×480 d'origine, étirée à la fenêtre.

@@ -593,12 +593,32 @@ public:
     // stride, so the uneven steps of the walk cycle scroll at an even speed.
     void update_follow_camera(std::uint32_t elapsed_us = 16667);
 
+    // A rectangle of the view, in screen pixels, bounds included.
+    struct ScreenRect {
+        int x0, y0, x1, y1;
+    };
+    // The whole view drawn: the window in native resolution.
+    ScreenRect view_rect() const { return {0, 0, state.screen_right, state.screen_bottom}; }
+    // Where combat happens: the 640 x 480 screen of the original, placed in a
+    // larger view like the original screen around the camera. An NPC only
+    // spots, keeps and shoots the player in it, and the player's shots only
+    // pick their target in it. The whole view when the combat zone is not
+    // kept (set_original_combat_zone) or the view is not larger.
+    ScreenRect combat_rect() const;
+    void set_original_combat_zone(bool on) { original_combat_zone_ = on; }
+    bool original_combat_zone() const { return original_combat_zone_; }
+
     // Item::I_isPartlyOnScreen: the item's frame overlaps the screen. Uses
     // the item's own x/y/z, like the original.
-    bool is_partly_on_screen(const Item& item) const;
+    bool is_partly_on_screen(const Item& item) const { return is_partly_in(item, view_rect()); }
     // ITEM_10a8_41f6: at least half the frame's width and its whole height
     // are on screen.
-    bool is_mostly_on_screen(const Item& item) const;
+    bool is_mostly_on_screen(const Item& item) const { return is_mostly_in(item, view_rect()); }
+    // The same tests against the combat zone, for what decides a fight.
+    bool is_partly_in_combat_zone(const Item& item) const { return is_partly_in(item, combat_rect()); }
+    bool is_mostly_in_combat_zone(const Item& item) const { return is_mostly_in(item, combat_rect()); }
+    bool is_partly_in(const Item& item, const ScreenRect& r) const;
+    bool is_mostly_in(const Item& item, const ScreenRect& r) const;
 
     // Item::I_setFrame: 16 bits for NPCs (high byte also in the NPC record),
     // 8 bits for other items.
@@ -708,6 +728,7 @@ private:
     int current_map_ = -1;
     FastArea fast_area_;
     std::int32_t fast_half_s_ = FastArea::kHalfS, fast_half_d_ = FastArea::kHalfD;  // grown by set_view_size
+    bool original_combat_zone_ = true;
     void shift_camera(int dx, int dy);  // the view moves by (dx, dy) pixels
     void set_camera_view(std::int32_t x, std::int32_t y, std::int32_t z, int left, int top);
     bool follow_player_ = false;

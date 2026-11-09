@@ -144,7 +144,7 @@ ObjId find_target(const World& world, ObjId shooter, int dir, bool sixteen_direc
         const ShapeInfo* info = world.shape_info(item->shape);
         const bool preferred = info && info->is(ShapeInfo::kOccludes);  // ITEM_10a8_30a8
         if ((!npc && found_npc) || (!preferred && found_preferred)) continue;
-        if (id == shooter || !world.is_partly_on_screen(*item)) continue;
+        if (id == shooter || !world.is_partly_in_combat_zone(*item)) continue;
         const int to = sixteen_directions
                            ? closest_direction_in_range(from->x, from->y, item->x, item->y, 16, 0, 15)
                            : closest_direction_in_range(from->x, from->y, item->x, item->y, 8, 0, 7) * 2;
@@ -335,7 +335,7 @@ void apply_damage(Kernel& kernel, World& world, const AnimDat& anims, ObjId targ
     record[0x6C] = static_cast<std::uint8_t>(now >> 24);
     // The victim fights back: activity 5 (or its default activity 2) and the
     // controlled NPC as target. Walking (record +0x59 bit 5) and hit by the
-    // controlled NPC within 0x280, on screen, with a line of fire back to it,
+    // controlled NPC within 0x280, in the combat zone, with a line of fire back to it,
     // it stops walking (its path finder, type 0x204, ends).
     if (target != world.state.controlled_npc && target != 1) {
         const ObjId controlled = world.state.controlled_npc;
@@ -353,7 +353,7 @@ void apply_damage(Kernel& kernel, World& world, const AnimDat& anims, ObjId targ
             const int distance = std::max({std::abs(static_cast<std::int16_t>(item->x - shooter->x)),
                                            std::abs(static_cast<std::int16_t>(item->y - shooter->y)),
                                            std::abs((item->z & 0xFF) - (shooter->z & 0xFF))});
-            if (distance <= 0x280 && world.is_partly_on_screen(*item)) {
+            if (distance <= 0x280 && world.is_partly_in_combat_zone(*item)) {
                 const int back = closest_direction_in_range(item->x, item->y, shooter->x, shooter->y, 16, 0, 15);
                 if (fire_distance(world, anims, target, attacker, back) != 0)
                     kernel.fail_processes(target, PathfinderProcess::kType, 1);

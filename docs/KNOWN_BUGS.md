@@ -41,4 +41,8 @@ La résolution native élargissait la vue et la zone de combat, mais pas la zone
 
 **Étape 1, corrigée : le monde est complet.** La zone active grandit avec la vue en gardant la marge de l'original (voir AMELIORATIONS.md §6). Test : `test_fast_area`.
 
-**Étape 2, à faire : le comportement des ennemis.** Les ennemis des bandes latérales existent maintenant, et la zone de combat est toujours la vue entière : ils repèrent et visent le joueur de plus loin qu'à l'origine. Piste : garder pour la zone de combat le rectangle 640×480 de l'original, centré comme lui, et laisser la vue entière aux tests purement visuels (saut d'images d'animation, volume des sons). L'intrinsic `I_isOnScreen` (0x007) est à classer selon l'usage qu'en font les scripts.
+**Étape 2, en cours : le comportement des ennemis.**
+ - *Fait* : la zone de combat reste le rectangle 640×480 de l'original, centré comme lui (voir AMELIORATIONS.md §6). Repérage, garde de la cible, tir, réveil par un tir et choix de cible du tir du joueur s'y limitent ; caméras de surveillance et tourelles aussi. La vue entière reste aux tests visuels. Tests : `test_on_screen`, `test_combat_zone`.
+ - *À faire* : vérifier ce que devient un projectile du joueur tiré droit vers un ennemi des bandes (le choix de cible l'ignore, mais le projectile peut-il le toucher ?).
+ - *À faire* : signaler les menaces hors de la zone de combat en les dessinant en niveaux de gris assombris (environ 55 à 60 % de la luminosité, à régler en jeu), avec une courte transition quand elles y entrent : PNJ vivants autres que le joueur, tourelles, caméras. Pas les cadavres, mines, projectiles ni le décor.
+ - *À faire* : option « ZONE DE COMBAT : ORIGINALE / ÉCRAN ENTIER » dans Améliorations (`World::set_original_combat_zone`).

@@ -482,7 +482,7 @@ void AttackProcess::run() {
     if (word_at(r, npc::kTarget) != controlled) set_target(k, world_, anims_, id, controlled != 0 ? controlled : 1);
     const ObjId target = word_at(r, npc::kTarget);
     const Item* t = world_.get(target);
-    if (!t || (t->z & 0xFF) == 0xFE || world_.is_dead(target) || !world_.is_partly_on_screen(*t)) {
+    if (!t || (t->z & 0xFF) == 0xFE || world_.is_dead(target) || !world_.is_partly_in_combat_zone(*t)) {
         set_target(k, world_, anims_, id, 0);
         if (stationary_) return;
         // Wander to a random point within 0x200 (12 steps at most, stopping
@@ -543,7 +543,7 @@ void AttackProcess::run() {
     if (target_dir == -1) target_dir = target_direction(target, dirs);
     const int distance = chebyshev3(*self, *t);
     const bool steep = std::abs((self->z & 0xFF) - (t->z & 0xFF)) * 2 >= distance;
-    const bool visible = world_.is_mostly_on_screen(*self);
+    const bool visible = world_.is_mostly_in_combat_zone(*self);
     if ((!stationary_ && !visible) || steep) {
         approach();
         return;

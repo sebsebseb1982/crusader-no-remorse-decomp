@@ -1023,6 +1023,25 @@ void test_on_screen() {
     CHECK(w.is_partly_on_screen(*w.get(edge)));
     w.get(edge)->x += 2;
     CHECK(!w.is_partly_on_screen(*w.get(edge)));
+    CHECK(!w.is_partly_in_combat_zone(*w.get(edge)));
+
+    // A 1280 x 600 view: the camera point moves to (640, 360), the original
+    // screen around it is x 320..959, y 60..539.
+    w.set_view_size(1280, 600);
+    const World::ScreenRect zone = w.combat_rect();
+    CHECK(zone.x0 == 320 && zone.y0 == 60 && zone.x1 == 959 && zone.y1 == 539);
+    CHECK(w.is_partly_on_screen(*w.get(edge)) && !w.is_partly_in_combat_zone(*w.get(edge)));
+    w.get(edge)->x -= 2;  // back on the original right edge
+    CHECK(w.is_partly_in_combat_zone(*w.get(edge)));
+    CHECK(!w.is_mostly_in_combat_zone(*w.get(edge)) && w.is_mostly_on_screen(*w.get(edge)));
+    CHECK(w.is_mostly_in_combat_zone(*w.get(centre)));
+    // Without the original combat zone, combat takes the whole view.
+    w.set_original_combat_zone(false);
+    const World::ScreenRect view = w.combat_rect();
+    CHECK(view.x0 == 0 && view.y0 == 0 && view.x1 == 1279 && view.y1 == 599);
+    CHECK(w.is_partly_in_combat_zone(*w.get(far_item)) == w.is_partly_on_screen(*w.get(far_item)));
+    w.get(edge)->x += 2;
+    CHECK(w.is_partly_in_combat_zone(*w.get(edge)));
 }
 
 void test_directions() {

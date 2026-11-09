@@ -471,7 +471,18 @@ std::vector<std::uint16_t> register_item_intrinsics(UCMachine& m, World& w) {
     // Item::I_getEtherealTop() (10B0:2622): the top of the pending stack
     // (DS:7DD4), 0 when empty.
     bind_raw(0x023, [&w](UCMachine&, UCProcess&, Args) -> std::uint32_t { return w.pending_top(); });
-    bind({0x007}, [&w](Item& i, Args) -> std::uint32_t { return w.is_partly_on_screen(i); });
+    // Item::I_isPartlyOnScreen(item). Security cameras and wall guns wait to
+    // be on screen before they look for the player: they test the combat
+    // zone, so a larger view does not let them spot the player from farther.
+    // Other scripts animate what is seen (bubbles, flames, steam) or act
+    // where it is not seen, and test the whole view.
+    bind_raw(0x007, [&w](UCMachine& machine, UCProcess& process, Args a) -> std::uint32_t {
+        const Item* item = item_arg(machine, w, a);
+        if (!item) return 0;
+        const std::string cls = machine.usecode().class_name(process.class_id());
+        const bool watches = cls == "CAMERACO" || cls == "CAMERANS" || cls == "CAMERAEW" || cls == "WALLGUN";
+        return watches ? w.is_partly_in_combat_zone(*item) : w.is_partly_on_screen(*item);
+    });
     bind({0x089}, [](Item& i, Args a) { i.map_number = static_cast<std::uint8_t>(arg16(a, 4)); return 0u; });
     // Item::I_fall(item), Item::I_hurl(item, vx, vy, vz, gravity).
     bind_raw(0x040, [&w](UCMachine& machine, UCProcess&, Args a) -> std::uint32_t {

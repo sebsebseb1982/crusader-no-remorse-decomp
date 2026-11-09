@@ -1059,6 +1059,40 @@ void test_auto_firer(const std::filesystem::path& data) {
     CHECK(launched - held <= 2);
 }
 
+// A 21:9 view (1720 x 720) shows bands beside the original 640 x 480 screen.
+// A shot of the player wakes the NPCs on screen (1138:2DAF); an NPC in a band
+// is drawn but stays out of the fight until it comes into the combat zone.
+void test_combat_zone(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save(13);
+    World& w = game.world();
+    w.set_view_size(1720, 720);
+    settle(game);
+    const World::ScreenRect zone = w.combat_rect();
+    CHECK(zone.x0 == 540 && zone.x1 == 1179 && zone.y0 == 120 && zone.y1 == 599);
+    const Item* player = w.get(1);
+    const std::int32_t px = player->x, py = player->y, pz = player->z;
+    // 450 pixels to the right of the player: in the band.
+    w.move_item(6, px + 450, py - 450, pz);
+    const bool drawn = w.is_partly_on_screen(*w.get(6)), fights = w.is_partly_in_combat_zone(*w.get(6));
+    wake_npcs_on_screen(game.kernel(), w, game.animations());
+    const std::uint16_t band_activity = w.npc_word(6, npc::kActivity);
+    const bool band_combat = in_combat(w, 6);
+    // 120 pixels away: in the combat zone.
+    w.move_item(6, px - 120, py + 120, pz);
+    wake_npcs_on_screen(game.kernel(), w, game.animations());
+    std::printf("combat zone: band drawn %d, in zone %d, activity %u, combat %d; near activity %u, combat %d, "
+                "target %u\n",
+                drawn, fights, band_activity, band_combat, w.npc_word(6, npc::kActivity), in_combat(w, 6),
+                w.npc_word(6, npc::kTarget));
+    CHECK(drawn && !fights && band_activity == 0 && !band_combat);
+    CHECK(w.npc_word(6, npc::kActivity) == 5 && in_combat(w, 6) && w.npc_word(6, npc::kTarget) == 1);
+    // Without the original combat zone, the band fights too.
+    w.set_original_combat_zone(false);
+    w.move_item(6, px + 450, py - 450, pz);
+    CHECK(w.is_partly_in_combat_zone(*w.get(6)));
+}
+
 void test_firing(const std::filesystem::path& data) {
     // Action remapping for the shotgun (record +0xC = 0, overlay 0x33B).
     Game game(data, test_saves(data));
@@ -5242,6 +5276,7 @@ int main(int argc, char** argv) {
     test_credits(data);
     test_options(data);
     test_firing(data);
+    test_combat_zone(data);
     test_rocket_vibration(data);
     test_auto_firer(data);
     test_anim_end(data);
