@@ -20,6 +20,7 @@ std::string_view key_of(std::string_view line) {
 int number(std::string_view value) { return std::atoi(std::string(value).c_str()); }
 
 // "viewzoom" in hundredths: 0, or 100..400 ("2", "1.5", "1,5"); anything else is clamped.
+// @orig none: port-only fractional view zoom
 int view_zoom_pct_of(std::string_view value) {
     std::string text(value);
     std::replace(text.begin(), text.end(), ',', '.');
@@ -28,6 +29,7 @@ int view_zoom_pct_of(std::string_view value) {
     return std::clamp(static_cast<int>(std::lround(zoom * 100)), 100, 400);
 }
 
+// @orig none: port-only fractional view zoom
 std::string view_zoom_text(int pct) {
     if (pct % 100 == 0) return std::to_string(pct / 100);
     std::string text = std::to_string(pct / 100) + '.' + (pct % 100 < 10 ? "0" : "") + std::to_string(pct % 100);
@@ -37,6 +39,7 @@ std::string view_zoom_text(int pct) {
 
 }  // namespace
 
+// @orig none: port-only view zoom steps
 int GameConfig::next_view_zoom(int current_pct, int limit_pct) {
     for (const int step : {100, 150, 200, 300, 400}) {
         if (step > current_pct && (step <= limit_pct || step == 100)) return step;
