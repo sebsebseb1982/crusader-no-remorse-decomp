@@ -771,7 +771,12 @@ void Game::new_game(int difficulty) {
 void Game::update(std::uint32_t elapsed_us) {
     // The enhancements window edits config_ in place.
     if (world_) world_->set_follow_player(config_.follow_player);
-    if (world_ && aim_stick_ && !modal() && !movie_ && !world_->state.avatar_in_stasis && world_->state.controlled_npc == 1) {
+    // The right stick aims for whichever NPC is controlled (a robot taken over
+    // too), with the fire key's conditions (CombatControl::handle_key): not
+    // for a dead NPC, nor for the player held in stasis.
+    const ObjId aim_npc = world_ ? world_->state.controlled_npc : 0;
+    if (aim_stick_ && aim_npc != 0 && !modal() && !movie_ && !world_->is_dead(aim_npc) &&
+        !(aim_npc == 1 && world_->state.avatar_in_stasis)) {
         // Screen east is the world angle 315 degrees, north 225: 315 - screen.
         aim_at_angle(*kernel_, *world_, anims_, static_cast<int>(std::lround(315.0 - aim_stick_deg_)),
                      config_.draw_on_aim);
