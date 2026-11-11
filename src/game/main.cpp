@@ -344,6 +344,7 @@ int main(int argc, char** argv) {
                 if (!relative_mouse) presenter.warp_mouse(game.cursor().x() + game.ui_x(), game.cursor().y() + game.ui_y());
             }
             fit_screen();
+            presenter.set_smooth(game.config().smooth_scaling);
             game.render(screen, &stats);
             if (debug_title) {
                 int ow = 0, oh = 0;

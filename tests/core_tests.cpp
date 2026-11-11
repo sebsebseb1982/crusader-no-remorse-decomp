@@ -56,6 +56,15 @@ void check_config() {
     check(!GameConfig::parse(saving.text()).autosave && saving.text().find("autosave=false") != std::string::npos,
           "config autosave off round trip");
 
+    // "smoothscaling" (port addition): written only when set.
+    check(!GameConfig::parse("irq=7\r\n").smooth_scaling && GameConfig::parse("smoothscaling=true\r\n").smooth_scaling,
+          "config smoothscaling");
+    {
+        GameConfig smooth = GameConfig::parse("smoothscaling=true\r\n");
+        check(smooth.text().find("smoothscaling=true") != std::string::npos, "config smoothscaling written");
+        smooth.smooth_scaling = false;
+        check(smooth.text().find("smoothscaling") == std::string::npos, "config smoothscaling erased");
+    }
     // "viewzoom" (port addition): hundredths, whole values keep their old file form, x1.5 is new.
     check(GameConfig::parse("irq=7\r\n").view_zoom_pct == 0, "config viewzoom default auto");
     check(GameConfig::parse("viewzoom=2\r\n").view_zoom_pct == 200, "config viewzoom whole");

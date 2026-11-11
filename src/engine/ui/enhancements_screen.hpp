@@ -12,7 +12,8 @@
 // (GameConfig::draw_on_aim): pushing that stick draws the weapon, and the
 // "resolution native" toggle
 // (GameConfig::native_resolution): the view fills the screen, and its "zoom"
-// row (GameConfig::view_zoom): auto, then pixels of 1 to 4 screen pixels, and
+// row (GameConfig::view_zoom): auto, then pixels of 1 to 4 screen pixels, the
+// "lissage" toggle (GameConfig::smooth_scaling): bilinear filtering, and
 // the "sauvegarde auto" toggle (GameConfig::autosave): the game saves itself
 // at the key moments of a mission, "course toggle" (GameConfig::toggle_run),
 // and controller vibration (GameConfig::vibration / vibration_intensity).
@@ -46,8 +47,8 @@ void draw_plus_icon(Surface8& screen, int x, int y, int size, std::uint8_t colou
 class EnhancementsScreen {
 public:
     static constexpr int kPadRow = 0, kFollowRow = 1, kDirectionalRow = 2, kAimRow = 3, kDrawRow = 4,
-                         kNativeRow = 5, kZoomRow = 6, kAutosaveRow = 7, kRunRow = 8, kVibrationRow = 9,
-                         kVibrationIntensityRow = 10, kBackRow = 11, kRows = 12;
+                         kNativeRow = 5, kZoomRow = 6, kSmoothRow = 7, kAutosaveRow = 8, kRunRow = 9,
+                         kVibrationRow = 10, kVibrationIntensityRow = 11, kBackRow = 12, kRows = 13;
     static constexpr int kFont = 14;
 
     struct Rect {

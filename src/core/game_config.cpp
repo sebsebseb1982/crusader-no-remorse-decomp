@@ -80,6 +80,7 @@ GameConfig GameConfig::parse(std::string_view text) {
         else if (key == "followplayer") c.follow_player = value == "true";
         else if (key == "directionalmove") c.directional_move = value == "true";
         else if (key == "viewzoom") c.view_zoom_pct = view_zoom_pct_of(value);
+        else if (key == "smoothscaling") c.smooth_scaling = value == "true";
         else if (key == "nativeresolution") c.native_resolution = value != "false";
         else if (key == "autosave") c.autosave = value != "false";
         else if (key == "directionalaim") c.directional_aim = value == "true";
@@ -127,6 +128,8 @@ std::string GameConfig::text() const {
     else out.erase("directionalmove");
     if (view_zoom_pct) out.set("viewzoom", view_zoom_text(view_zoom_pct));
     else out.erase("viewzoom");
+    if (smooth_scaling) out.set("smoothscaling", "true");
+    else out.erase("smoothscaling");
     if (!native_resolution) out.set("nativeresolution", "false");
     else out.erase("nativeresolution");
     if (!autosave) out.set("autosave", "false");

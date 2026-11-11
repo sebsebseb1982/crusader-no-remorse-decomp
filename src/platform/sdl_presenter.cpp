@@ -63,6 +63,7 @@ void SdlPresenter::resize(int width, int height) {
     if (!texture) {
         throw std::runtime_error(std::string("SDL texture: ") + SDL_GetError());
     }
+    SDL_SetTextureScaleMode(texture, smooth_ ? SDL_ScaleModeLinear : SDL_ScaleModeNearest);
     SDL_DestroyTexture(texture_);
     texture_ = texture;
     width_ = width;
@@ -82,6 +83,12 @@ void SdlPresenter::set_gamma(double gamma) {
     for (std::size_t i = 0; i < gamma_table_.size(); ++i) {
         gamma_table_[i] = static_cast<std::uint8_t>(std::lround(255.0 * std::pow(i / 255.0, 1.0 / gamma)));
     }
+}
+
+void SdlPresenter::set_smooth(bool smooth) {
+    if (smooth == smooth_) return;
+    smooth_ = smooth;
+    SDL_SetTextureScaleMode(texture_, smooth ? SDL_ScaleModeLinear : SDL_ScaleModeNearest);
 }
 
 void SdlPresenter::set_title(const std::string& title) {

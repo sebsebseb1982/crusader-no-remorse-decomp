@@ -128,6 +128,11 @@ void test_vibration_settings() {
     for (int i = 0; i < EnhancementsScreen::kVibrationRow; ++i) toggle.key(gump_key::kDown);
     toggle.key(gump_key::kEnter);
     CHECK(!config.vibration);
+
+    EnhancementsScreen smooth(fonts, config, pad_focus);
+    for (int i = 0; i < EnhancementsScreen::kSmoothRow; ++i) smooth.key(gump_key::kDown);
+    smooth.key(gump_key::kEnter);
+    CHECK(config.smooth_scaling);
 }
 
 }  // namespace

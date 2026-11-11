@@ -12,7 +12,7 @@ namespace {
 
 constexpr int kPanelX0 = 100, kPanelY0 = 50, kPanelX1 = 539, kPanelY1 = 455;
 constexpr int kTitleY = 82, kIconSize = 14, kIconGap = 8;
-constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 108, kRowStep = 28, kRowHeight = 24;
+constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 106, kRowStep = 26, kRowHeight = 24;
 constexpr int kTextDrop = 17, kRowPad = 18;  // glyphs hang from their baseline
 constexpr std::uint8_t kFrameColour = 0x57, kGreen = 0x0C, kDimGreen = 0x75;
 
@@ -94,7 +94,7 @@ void EnhancementsScreen::draw(Surface8& screen) const {
         draw_rounded_box(screen, r.x0, r.y0, r.x1, r.y1, -1, static_cast<std::uint8_t>(tint));
         const TextWriter writer(*fonts_, kFont);
         if (row == kFollowRow || row == kDirectionalRow || row == kAimRow || row == kDrawRow || row == kNativeRow ||
-            row == kZoomRow || row == kAutosaveRow || row == kRunRow || row == kVibrationRow ||
+            row == kZoomRow || row == kSmoothRow || row == kAutosaveRow || row == kRunRow || row == kVibrationRow ||
             row == kVibrationIntensityRow) {
             // The name on the left, its state on the right.
             std::string name;
@@ -111,6 +111,9 @@ void EnhancementsScreen::draw(Surface8& screen) const {
                 const int pct = config_->view_zoom_pct;
                 if (!pct) value = tr("AUTO", "AUTO");
                 else value = "x" + std::to_string(pct / 100) + (pct % 100 == 50 ? ".5" : "");
+            } else if (row == kSmoothRow) {
+                name = tr("LISSAGE", "SMOOTHING");
+                on = config_->smooth_scaling;
             } else if (row == kAutosaveRow) {
                 name = tr("SAUVEGARDE AUTO", "AUTOSAVE");
                 on = config_->autosave;
@@ -157,6 +160,8 @@ void EnhancementsScreen::activate(int row) {
         config_->directional_move = !config_->directional_move;
     } else if (row == kZoomRow) {
         config_->view_zoom_pct = GameConfig::next_view_zoom(config_->view_zoom_pct, config_->view_zoom_limit_pct);
+    } else if (row == kSmoothRow) {
+        config_->smooth_scaling = !config_->smooth_scaling;
     } else if (row == kAutosaveRow) {
         config_->autosave = !config_->autosave;
     } else if (row == kRunRow) {

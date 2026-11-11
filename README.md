@@ -24,6 +24,7 @@ This repository contains **no game files**: you need your own copy of the origin
   - Directional aiming: the right stick puts the crosshair where it points
   - Native resolution: the view fills your screen (in whole-number pixel multiples, never stretched), showing more of the surroundings; the menus and cutscenes stay 640×480, centred
   - Zoom: choose the pixel size of the native view (Auto, or ×1, ×1.5, ×2 to ×4 — ×1.5 suits screens like 1360×768); ×1 gives the finest picture and the widest view
+  - Smoothing: the picture is stretched to the window with bilinear filtering (soft pixels, like DOSBox's `output=opengl`) instead of sharp ones; it shows when the zoom is above ×1 or the 640×480 view fills a bigger window (`smoothscaling=true` in `CRUSADER.CFG`)
   - Autosave: the game saves itself when you pick up a keycard, open a door with a keycard or a code, open a chest with a code, start a level, and after each cutscene of the mission (a floppy disk shows in the corner). It uses its own slot, separate from your saves; load it from the last row of the load screen or press **F6**
 - Fullscreen toggle: press **Alt+Enter** at any time to switch between windowed and fullscreen.
 

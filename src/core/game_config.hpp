@@ -63,6 +63,12 @@ public:
     // fractional size stretches unevenly (some game pixels are wider), but fits
     // windows that are not a whole multiple of 640 x 480 (1360 x 768...).
     int view_zoom_pct = 0;
+    // Port addition, written only when set: "smoothscaling", the picture is
+    // stretched to the window with bilinear filtering (soft, as DOSBox's
+    // "output=opengl") instead of keeping sharp pixels. Only visible when the
+    // game pixels are bigger than the screen's (zoom above x1, or the 640 x 480
+    // view in a bigger window).
+    bool smooth_scaling = false;
     // Port addition, written when changed: controller rumble and its strength
     // (0..100 percent).
     bool vibration = true;
