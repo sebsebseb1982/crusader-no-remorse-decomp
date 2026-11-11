@@ -43,6 +43,17 @@ void check_config() {
                       "mousespeed=2\r\nanimation=0\r\nframeskip=3\r\n",
           "config written over its lines, other keys kept");
 
+    // 1020:0000 lowers keys and values, cuts them at blanks, skips comments.
+    {
+        const GameConfig l = GameConfig::parse("# filter=false\r\n  MusicVolume = 12  \r\nBIGVIDEO=True\r\n/limitblasts=true\r\n");
+        check(l.music_volume == 12 && l.big_video && l.filter && !l.limit_blasts, "config case, blanks, comments");
+        GameConfig r = l;
+        r.music_volume = 20;
+        check(r.text().find("musicvolume=20\r\n") != std::string::npos &&
+                  r.text().find("MusicVolume") == std::string::npos && r.text().find("# filter=false\r\n") == 0,
+              "config line of a lowered key replaced");
+    }
+
     // "noweasel": read, and written only when set (1020:0C7F).
     GameConfig w = GameConfig::parse("irq=7\r\nnoweasel=true\r\n");
     check(w.no_weasel && !GameConfig::parse("noweasel=false\r\n").no_weasel, "config noweasel");

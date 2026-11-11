@@ -1,6 +1,7 @@
 #include "core/game_config.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
@@ -11,9 +12,35 @@ namespace crusader {
 
 namespace {
 
-std::string_view key_of(std::string_view line) {
-    const auto eq = line.find('=');
-    return eq == std::string_view::npos ? std::string_view{} : line.substr(0, eq);
+bool is_blank(char ch) { return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n'; }
+
+std::string lower(std::string_view text) {
+    std::string out(text);
+    for (char& ch : out) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    return out;
+}
+
+// A line as 1020:0000 reads it (FILEPARS.C): lines starting with '#' or '/'
+// are comments; then blanks skipped, the key up to '=' and cut at its first
+// blank, the value the first word after '=', both lowered (strlwr, 1000:7088).
+struct Entry {
+    std::string key, value;
+};
+
+// @orig 1020:0000
+Entry entry_of(std::string_view line) {
+    if (line.empty() || line[0] == '#' || line[0] == '/') return {};
+    std::size_t i = 0;
+    while (i < line.size() && is_blank(line[i])) ++i;
+    const auto eq = line.find('=', i);
+    if (eq == std::string_view::npos) return {};
+    std::size_t k = i;
+    while (k < eq && !is_blank(line[k])) ++k;
+    std::size_t v = eq + 1;
+    while (v < line.size() && is_blank(line[v])) ++v;
+    std::size_t w = v;
+    while (w < line.size() && !is_blank(line[w])) ++w;
+    return {lower(line.substr(i, k - i)), lower(line.substr(v, w - v))};
 }
 
 // atoi, as the original reads numbers.
@@ -65,8 +92,9 @@ GameConfig GameConfig::parse(std::string_view text) {
         text = end == std::string_view::npos ? std::string_view{} : text.substr(end + 1);
         if (line.empty()) continue;
         c.lines_.emplace_back(line);
-        const std::string_view key = key_of(line);
-        const std::string_view value = line.substr(key.size() + (key.empty() ? 0 : 1));
+        const Entry e = entry_of(line);
+        const std::string_view key = e.key;
+        const std::string_view value = e.value;
         if (key == "soundvolume") c.sound_volume = number(value);
         else if (key == "musicvolume") c.music_volume = number(value);
         else if (key == "filter") c.filter = value == "true";
@@ -175,7 +203,7 @@ void GameConfig::save(const std::filesystem::path& path) const {
 void GameConfig::set(std::string_view key, const std::string& value) {
     const std::string line = std::string(key) + "=" + value;
     for (std::string& l : lines_) {
-        if (key_of(l) == key) {
+        if (entry_of(l).key == key) {
             l = line;
             return;
         }
@@ -184,7 +212,7 @@ void GameConfig::set(std::string_view key, const std::string& value) {
 }
 
 void GameConfig::erase(std::string_view key) {
-    std::erase_if(lines_, [key](const std::string& l) { return key_of(l) == key; });
+    std::erase_if(lines_, [key](const std::string& l) { return entry_of(l).key == key; });
 }
 
 }  // namespace crusader
