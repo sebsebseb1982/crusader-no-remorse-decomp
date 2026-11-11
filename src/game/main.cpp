@@ -275,7 +275,9 @@ int main(int argc, char** argv) {
             gamepad.rumble(low, high, duration);
         });
         const bool pad_debug = std::getenv("CRUSADER_PAD_DEBUG") != nullptr;  // see sdl_gamepad.cpp
-        if (pad_debug) std::setvbuf(stdout, nullptr, _IOLBF, 0);
+        // Unbuffered: MSVC has no line buffering (_IOLBF is full buffering) and
+        // rejects a size of 0 with it, which ended the game at once.
+        if (pad_debug) std::setvbuf(stdout, nullptr, _IONBF, 0);
         gamepad.set_settings(&game.config().pad);
         std::uint64_t last = SDL_GetPerformanceCounter();
         const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
