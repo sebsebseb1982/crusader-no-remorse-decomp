@@ -37,6 +37,17 @@ constexpr double kMoveHold = 30.0;  // degrees from the held sector's axis befor
 constexpr int kStrafeArrows[4] = {0, 2, 1, 3};
 constexpr double kStrafeHold = 60.0;
 
+// How long a stick's rebound lasts after a release (milliseconds): a push the
+// other way within it is not a move.
+constexpr std::uint32_t kSnapbackMs = 80;
+// The turn (degrees) past which the stick is taken to have crossed the centre.
+constexpr double kReversal = 120.0;
+
+double angle_between(double a, double b) {
+    const double d = std::fmod(std::fabs(a - b), 360.0);
+    return d > 180.0 ? 360.0 - d : d;
+}
+
 // The sector of `angle` among `count` equal ones (0 centred on angle 0), kept
 // on `held` while the angle stays within `hold` degrees of its axis.
 int sector_of(double angle, int count, int held, double hold) {
@@ -281,21 +292,38 @@ void Gamepad::sync_left_stick() {
 // threshold. A new sector goes down before the old one goes up, so the
 // avatar turns on the spot instead of stopping in between. While aiming with
 // the weapon out, the stick strafes instead: an Alt move relative to the aim.
+//
+// A released stick springs back past the centre: within a frame it may go
+// from one side to the other, and it rings there for a few milliseconds. So
+// a turn of more than kReversal degrees between two frames lets go of the key
+// instead of pressing the opposite one, a push that way within kSnapbackMs
+// of a release is ignored, and only a firm push (past kStickOn) changes the
+// sector of a held key.
 void Gamepad::update_move() {
     const double len = std::hypot(static_cast<double>(left_x_), static_cast<double>(left_y_));
-    if (!directional_active() || len <= (move_scancode_ != 0 ? kStickOff : kStickOn)) {
+    const double angle = std::atan2(-static_cast<double>(left_y_), static_cast<double>(left_x_)) * 180.0 / 3.14159265358979;
+    const bool held = move_scancode_ != 0;
+    bool off = !directional_active() || len <= (held ? kStickOff : kStickOn);
+    if (released_ && now_ms_ - released_ms_ >= kSnapbackMs) released_ = false;
+    if (!off && (held || released_) && angle_between(angle, stick_deg_) > kReversal) off = true;
+    if (off) {
+        if (held) {
+            released_ = true;
+            released_ms_ = now_ms_;
+        }
         move_dir_ = strafe_dir_ = -1;
         set_move_key(0, false, false);
         return;
     }
-    const double angle = std::atan2(-static_cast<double>(left_y_), static_cast<double>(left_x_)) * 180.0 / 3.14159265358979;
+    stick_deg_ = angle;
+    const bool weak = held && len <= kStickOn;  // keeps the held sector
     if (weapon_out_ && aim_on_) {
         move_dir_ = -1;
-        strafe_dir_ = sector_of(angle - aim_deg_, 4, strafe_dir_, kStrafeHold);
+        if (!weak || strafe_dir_ < 0) strafe_dir_ = sector_of(angle - aim_deg_, 4, strafe_dir_, kStrafeHold);
         set_move_key(kArrows[kStrafeArrows[strafe_dir_]], true, true);
     } else {
         strafe_dir_ = -1;
-        move_dir_ = sector_of(angle, 8, move_dir_, kMoveHold);
+        if (!weak || move_dir_ < 0) move_dir_ = sector_of(angle, 8, move_dir_, kMoveHold);
         set_move_key(kMoveKeys[move_dir_], false, false);
     }
 }
@@ -429,15 +457,18 @@ std::vector<int> Gamepad::take_captured() {
     return out;
 }
 
-void Gamepad::update() {
-    // update_aim() updates the move too (the strafe follows the aim).
+void Gamepad::update(std::uint32_t now_ms) {
+    now_ms_ = now_ms;
+    // update_aim() updates the move too (the strafe follows the aim). After a
+    // release the move is read every frame: a push held back as a rebound is
+    // pressed once the rebound is over.
     if (right_moved_) update_aim();
-    else if (left_moved_ && directional_active()) update_move();
+    else if ((left_moved_ || released_) && directional_active()) update_move();
     left_moved_ = right_moved_ = false;
 }
 
 std::vector<KeyEvent> Gamepad::take_keys() {
-    update();
+    update(now_ms_);
     std::vector<KeyEvent> out;
     out.swap(keys_);
     return out;

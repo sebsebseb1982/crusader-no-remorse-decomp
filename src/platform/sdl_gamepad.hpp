@@ -62,8 +62,10 @@ public:
     // Applies the stick moves fed since the last call, once the events of a
     // frame are all in. A stick's two axes come as separate events: read one
     // at a time, a released stick pairs its new X with its old Y, and that
-    // ghost direction turned the avatar around. take_keys() calls it too.
-    void update();
+    // ghost direction turned the avatar around. `now_ms` (SDL_GetTicks) times
+    // the stick's rebound after a release. take_keys() calls it too, at the
+    // last time given.
+    void update(std::uint32_t now_ms);
 
     // While on, a press of an input (button, trigger or direction) sends no
     // key: it is kept for take_captured(), so the controller screen can bind
@@ -152,6 +154,10 @@ private:
     int move_dir_ = -1;    // keypad sector held (index in kMoveKeys), or -1
     int strafe_dir_ = -1;  // strafe held (index in kStrafeArrows), or -1
     int move_scancode_ = 0;    // the move key actually down (0: none)
+    double stick_deg_ = 0;     // the left stick's direction at the last move read
+    bool released_ = false;    // the move key went up less than kSnapbackMs ago
+    std::uint32_t released_ms_ = 0;
+    std::uint32_t now_ms_ = 0;  // the time given to update()
     bool move_extended_ = false;
     bool move_alt_ = false;    // and Alt, held with it for a strafe
     double rem_x_ = 0, rem_y_ = 0;
