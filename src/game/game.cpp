@@ -1105,6 +1105,7 @@ void Game::on_key(const GameKeyEvent& e) {
     } else {
         run_toggled_ = false;
     }
+    mover_->set_keypad_diagonals_held(config_.directional_move);
     combat_->handle_key(ev);  // the Controller: movement, then fire keys
     // WORLD_13e8_14b4 (World_on_key): Alt+X first, whatever the view is
     // doing (the item selection too). Escape opens the menu, except in

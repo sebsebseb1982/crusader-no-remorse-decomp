@@ -99,7 +99,10 @@ bool AvatarMover::handle_key(const GameKeyEvent& e) {
                               keyboard_.down(kKeyLeft, false) || keyboard_.down(kKeyRight, false) ||
                               keyboard_.down(kKeyHome, true) || keyboard_.down(kKeyPgUp, true) ||
                               keyboard_.down(kKeyEnd, true) || keyboard_.down(kKeyPgDn, true) ||
-                              keyboard_.down(kKeySlash, true);
+                              keyboard_.down(kKeySlash, true) ||
+                              (keypad_diagonals_held_ &&
+                               (keyboard_.down(kKeyHome, false) || keyboard_.down(kKeyPgUp, false) ||
+                                keyboard_.down(kKeyEnd, false) || keyboard_.down(kKeyPgDn, false)));
         if (any_down || !in(sc, {kKeyUp, kKeyDown, kKeyLeft, kKeyRight, kKeyHome, kKeyPgUp, kKeyEnd, kKeyPgDn,
                                  kKeySlash})) {
             return false;

@@ -1540,6 +1540,39 @@ void test_run_after_last_weapon_dropped(const std::filesystem::path& data) {
     CHECK(plain_run && !armed_run);
 }
 
+// Running on the keypad 8, a turn to the 7 as the controller sends it (the 7
+// down, then the 8 up). The original stops the run there (its release check
+// skips the keypad diagonals), then the 7's repeat starts it again; with
+// directional movement (AvatarMover::set_keypad_diagonals_held) the run goes on.
+void test_run_turn_to_keypad_diagonal(const std::filesystem::path& data) {
+    for (const bool directional : {false, true}) {
+        Game game(data, test_saves(data));
+        game.load_save(13);
+        game.config().toggle_run = false;
+        game.config().directional_move = directional;
+        settle(game);
+        bool running = false;
+        game.key(0x48, false, true, kLeftShift);
+        for (int i = 0; i < 60; ++i) {
+            game.update(kFrameUs);
+            const std::uint16_t a = last_action(game);
+            running = running || a == 3 || a == 0x30 || a == 0x31;
+        }
+        game.key(0x47, false, true, kLeftShift);
+        game.key(0x48, false, false, kLeftShift);
+        bool stopped = false;
+        for (int i = 0; i < 60; ++i) {
+            game.update(kFrameUs);
+            stopped = stopped || last_action(game) == 0x27 || last_action(game) == 0x19;  // the stop, armed
+        }
+        game.key(0x47, false, false, 0);
+        std::printf("run turned to the keypad 7 (directional %d): running %d, stopped %d\n", directional, running,
+                    stopped);
+        CHECK(running);
+        CHECK(stopped == !directional);
+    }
+}
+
 // Milestone 6.2: the item selection mode (item_selection.hpp).
 void test_item_selection(const std::filesystem::path& data) {
     {
@@ -5387,6 +5420,7 @@ int main(int argc, char** argv) {
     if (argc > 2 && std::string(argv[2]) == "--inventory-keys") {
         test_inventory_keys(data);
         test_run_after_last_weapon_dropped(data);
+    test_run_turn_to_keypad_diagonal(data);
         return failures ? 1 : 0;
     }
     if (argc > 2 && std::string(argv[2]) == "--enemies") {
@@ -5462,6 +5496,7 @@ int main(int argc, char** argv) {
     test_conveyor_passenger(data);
     test_inventory_keys(data);
     test_run_after_last_weapon_dropped(data);
+    test_run_turn_to_keypad_diagonal(data);
     test_item_selection(data);
     test_message_box(data);
     test_cheats(data);

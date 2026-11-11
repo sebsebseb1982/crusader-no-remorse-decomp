@@ -39,6 +39,14 @@ public:
 
     ObjId actor() const { return world_.state.controlled_npc; }
 
+    // Port addition (directional movement, GameConfig::directional_move): at
+    // a release, the keypad's diagonals (7, 9, 1, 3) count as movement keys
+    // still held. The original counts the gray Home, PgUp, End and PgDn
+    // only, so turning from a keypad 8 to a keypad 7 (the new key down, then
+    // the old one up) stopped the actor, and the KeyDaemon's repeat of the
+    // 7 started him again: a run broke off at each turn to a diagonal.
+    void set_keypad_diagonals_held(bool on) { keypad_diagonals_held_ = on; }
+
 private:
     std::uint16_t last_anim() const;
     bool kneeling() const;
@@ -48,6 +56,7 @@ private:
     const AnimDat& anims_;
     const Keyboard& keyboard_;
     bool drawn_before_run_ = false;  // the weapon was out when the run began
+    bool keypad_diagonals_held_ = false;
 };
 
 // CRUSADER.C 0F8D: actions whose direction may change while they run; a

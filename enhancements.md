@@ -193,6 +193,9 @@ The original uses tank controls: up walks forward, left/right turn. With this op
 - These are the absolute "screen direction" moves the original already offers on the numeric keypad.
 - **Angular hysteresis**: the current sector is kept while the stick stays within **30°** of its axis.
 - **Sector change**: the new key is pressed **before** the old one is released, so the avatar turns without stopping.
+- **Keypad diagonals held**: at a release, the keypad diagonals (7, 9, 1, 3) count as movement keys still down. The original counts only the gray Home / PgUp / End / PgDn, so a turn from a straight sector to a diagonal one stopped the run (action `0x27`, `0x19` armed) before the key's repeat started it again.
+- **Both axes together**: the stick is read once per frame, after all its events: SDL sends X and Y separately, and a released stick read in between paired its new X with its old Y (a ghost direction).
+- **Release and rebound**: a released stick springs back past the centre. A turn of more than **120°** between two frames releases the key instead of pressing the opposite one; a push that way within **80 ms** of a release is ignored (pressed after that if still held); a weak push (below the press threshold) never changes the sector of a held key.
 - The **RUN** action becomes **Shift alone**, held with the movement key, instead of Shift + ↑.
 - When the mode changes, everything the previous mode held down is released.
 - **Strafing while aiming**: while the right stick aims (directional aiming) and the controlled NPC has its weapon out (draw actions 7 / 0xC, holstered by 0xB / 0x10), the stick strafes instead of giving the absolute keypad directions. The stick's direction is taken relative to the aim, in 4 sectors of 90° (kept up to 60° from their axis), and gives the original's Alt moves, which keep the aiming mode:
