@@ -506,6 +506,24 @@ void test_gamepad_directional_weapon_out() {
     CHECK(keys[1].scancode == 0x38 && !keys[1].pressed && !keys[1].alt());
 }
 
+// Directional movement reads the left stick once both axes are in: letting go
+// of it up-left, X snaps back (past the centre) one event before Y, and the
+// pair (new X, old Y) once pressed the keypad's 9, which turned the avatar.
+// (A trace of an Xbox One controller.)
+void test_gamepad_directional_release() {
+    Gamepad pad;
+    pad.set_directional(true);
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, -27815));
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, -16402));
+    auto keys = pad.take_keys();
+    CHECK(keys.size() == 1 && keys[0].scancode == 0x47 && !keys[0].extended && keys[0].pressed);
+
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, 7506));
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, -1200));
+    keys = pad.take_keys();
+    CHECK(keys.size() == 1 && keys[0].scancode == 0x47 && !keys[0].pressed);
+}
+
 }  // namespace
 
 int main() {
@@ -516,6 +534,7 @@ int main() {
     test_mouse_queue();
     test_gamepad();
     test_gamepad_directional_weapon_out();
+    test_gamepad_directional_release();
     std::printf(failures ? "%d failure(s)\n" : "all input checks passed\n", failures);
     return failures ? 1 : 0;
 }

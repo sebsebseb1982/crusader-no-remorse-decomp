@@ -59,6 +59,11 @@ public:
     // Feeds one SDL event (device hot-plug, buttons, axes). Returns true when
     // the event belonged to the controller.
     bool feed(const SDL_Event& ev);
+    // Applies the stick moves fed since the last call, once the events of a
+    // frame are all in. A stick's two axes come as separate events: read one
+    // at a time, a released stick pairs its new X with its old Y, and that
+    // ghost direction turned the avatar around. take_keys() calls it too.
+    void update();
 
     // While on, a press of an input (button, trigger or direction) sends no
     // key: it is kept for take_captured(), so the controller screen can bind
@@ -138,6 +143,7 @@ private:
     bool triggers_[2] = {};
     int right_x_ = 0, right_y_ = 0;
     int left_x_ = 0, left_y_ = 0;
+    bool left_moved_ = false, right_moved_ = false;  // a vector stick awaiting update()
     bool directional_ = false;
     bool directional_aim_ = false;
     bool weapon_out_ = false;  // with aim_on_: directional movement strafes

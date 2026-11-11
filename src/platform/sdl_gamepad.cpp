@@ -391,24 +391,26 @@ void Gamepad::stick(int first_slot, Dir negative, Dir positive, int value) {
 
 void Gamepad::axis(int a, int value) {
     switch (a) {
+        // A stick read as one direction waits for update(), when both its
+        // axes are in; read as four directions, each axis stands alone.
         case SDL_CONTROLLER_AXIS_LEFTX:
             left_x_ = value;
-            if (directional_active()) update_move();
+            if (directional_active()) left_moved_ = true;
             else stick(kPadLeftStickUp, kLeft, kRight, value);
             break;
         case SDL_CONTROLLER_AXIS_LEFTY:
             left_y_ = value;
-            if (directional_active()) update_move();
+            if (directional_active()) left_moved_ = true;
             else stick(kPadLeftStickUp, kUp, kDown, value);
             break;
         case SDL_CONTROLLER_AXIS_RIGHTX:
             right_x_ = value;
-            if (aim_directional_active()) update_aim();
+            if (aim_directional_active()) right_moved_ = true;
             else stick(kPadRightStickUp, kLeft, kRight, value);
             break;
         case SDL_CONTROLLER_AXIS_RIGHTY:
             right_y_ = value;
-            if (aim_directional_active()) update_aim();
+            if (aim_directional_active()) right_moved_ = true;
             else stick(kPadRightStickUp, kUp, kDown, value);
             break;
         case SDL_CONTROLLER_AXIS_TRIGGERLEFT:
@@ -427,7 +429,15 @@ std::vector<int> Gamepad::take_captured() {
     return out;
 }
 
+void Gamepad::update() {
+    // update_aim() updates the move too (the strafe follows the aim).
+    if (right_moved_) update_aim();
+    else if (left_moved_ && directional_active()) update_move();
+    left_moved_ = right_moved_ = false;
+}
+
 std::vector<KeyEvent> Gamepad::take_keys() {
+    update();
     std::vector<KeyEvent> out;
     out.swap(keys_);
     return out;
