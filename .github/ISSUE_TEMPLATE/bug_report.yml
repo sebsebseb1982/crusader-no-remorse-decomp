@@ -1,0 +1,118 @@
+name: Bug report
+description: Something does not work, or differs from the original game
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. The more precise the report, the easier it is to reproduce and fix.
+        This repository contains **no game files**: never attach the game's executables, data or ISO.
+
+  - type: input
+    id: version
+    attributes:
+      label: Port version
+      description: Output of `crusader --version` (for example `1.4.2`), or the release tag you downloaded. For a build from source, give the commit hash.
+      placeholder: "1.4.2"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug description
+      description: What happens, and what you expected instead (or what the original game does).
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Where in the game (mission, room, menu, level editor) and what to do to trigger the bug.
+      placeholder: |
+        1. Start a new game
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: data-source
+    attributes:
+      label: Game data source
+      description: Which copy of the game the data comes from.
+      options:
+        - French 1.08 — CD image (.iso)
+        - French 1.08 — files copied from the original CD
+        - US 1.23 — CD image (.iso)
+        - US 1.23 — files copied from the original CD
+        - English 1.01 — GOG release (GAME.GOG image)
+        - English 1.01 — GOG release (files already extracted)
+        - Other (please explain below)
+    validations:
+      required: true
+
+  - type: input
+    id: data-details
+    attributes:
+      label: Game data details
+      description: Anything else that helps identify your copy, such as the ISO SHA-256. Leave empty if unsure.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - Linux
+        - PortMaster (handheld)
+        - Other (please explain below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment details
+      description: OS version, graphics card, controller used, any command-line options or Enhancements settings that matter.
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: Optional. Drag and drop an image into this field.
+    validations:
+      required: false
+
+  - type: textarea
+    id: video
+    attributes:
+      label: Video
+      description: Optional. Drag and drop a short video (GitHub accepts `.mp4` and `.mov` up to 10 MB), or paste a link.
+    validations:
+      required: false
+
+  - type: textarea
+    id: savegame
+    attributes:
+      label: Saved game
+      description: |
+        Optional, but very useful when the bug happens in game. Zip the `SAVEGAME.n` file (from the `SAVEGAME` folder of your data folder) and drag the `.zip` into this field, because GitHub refuses files without a known extension.
+        Say which save slot it is and what to do after loading it.
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error messages or logs
+      description: Optional. Console output or error messages.
+      render: text
+    validations:
+      required: false
