@@ -27,8 +27,10 @@ bool action_fits(const World& world, const AnimDat& anims, std::uint16_t action,
 
 bool is_roll(std::uint16_t action) { return action == 0x17 || action == 0x18 || action == 0x3D || action == 0x3E; }
 
+// 1158:1A3B / 1C4B: frame skip 3 for the controlled NPC, else the rule of
+// any NPC (frame skip 2 or more, or not on screen), which also covers it.
 bool skips_frames(const World& world, ObjId actor, const Item& item) {
-    if (actor == world.state.controlled_npc) return world.state.frameskip == 3;
+    (void)actor;
     return world.state.frameskip >= 2 || !world.is_partly_on_screen(item);
 }
 
@@ -83,7 +85,8 @@ std::uint16_t fit_start(Kernel& kernel, World& world, const AnimDat& anims, ObjI
                 move(r);
                 return action;
             }
-            reach[i] = std::max(std::abs(start.x - at.x), std::abs(start.y - at.y));
+            // 10D8:0098 measures from the place tried, not from where the actor stands.
+            reach[i] = std::max(std::abs(there.x - at.x), std::abs(there.y - at.y));
         }
         for (int i = 1; i < 7; ++i) {
             if (reach[i] <= 48) continue;
