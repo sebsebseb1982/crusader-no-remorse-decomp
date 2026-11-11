@@ -104,6 +104,8 @@ void set_controlled_npc(Kernel& kernel, World& world, const AnimDat& anims, ObjI
     }
     world.state.controlled_npc = npc;
     world.state.camera_target = npc;
+    // Port: the smooth follow would pull the view back to the old NPC.
+    world.stop_following();
     const Item* item = world.get(npc);
     if (npc == 0 || !item) return;
     if (npc != 1) {

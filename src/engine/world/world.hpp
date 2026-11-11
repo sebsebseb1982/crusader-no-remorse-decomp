@@ -592,6 +592,9 @@ public:
     // Once a frame: the view follows the NPC's position averaged over about a
     // stride, so the uneven steps of the walk cycle scroll at an even speed.
     void update_follow_camera(std::uint32_t elapsed_us = 16667);
+    // The view is put on another target: the follow's goal, the old target's
+    // place, is dropped. Following resumes when the new target moves.
+    void stop_following() { follow_active_ = false; }
 
     // A rectangle of the view, in screen pixels, bounds included.
     struct ScreenRect {

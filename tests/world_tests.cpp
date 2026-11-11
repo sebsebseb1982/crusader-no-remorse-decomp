@@ -860,6 +860,32 @@ void test_scripted_camera() {
     fresh.move_item(1, 1000, 1000, 0);
     for (int frame = 0; frame < 60; ++frame) fresh.update_follow_camera(16667);
     CHECK(fresh.state.camera_x == 1008 && fresh.state.camera_y == 1008);
+
+    // Taking control of an NPC puts the view on it, and leaving it puts the
+    // view back on the player, without waiting for a step.
+    World robot;
+    const AnimDat anims{};
+    Kernel k;
+    for (const ObjId id : {ObjId{1}, ObjId{2}}) {
+        Item npc;
+        npc.id = id;
+        npc.x = id == 1 ? 1000 : 3000;
+        npc.y = 1000;
+        robot.add_with_id(npc);
+    }
+    robot.state.controlled_npc = robot.state.camera_target = 1;
+    robot.set_follow_player(true);
+    robot.set_camera(1000, 1000, 0);
+    robot.track_camera_target(1100, 1100, 0);
+    for (int frame = 0; frame < 60; ++frame) robot.update_follow_camera(16667);
+    set_controlled_npc(k, robot, anims, 2);
+    for (int frame = 0; frame < 60; ++frame) robot.update_follow_camera(16667);
+    CHECK(robot.state.camera_x == 3000 && robot.state.camera_y == 1000);
+    robot.track_camera_target(3100, 1000, 0);
+    for (int frame = 0; frame < 60; ++frame) robot.update_follow_camera(16667);
+    set_controlled_npc(k, robot, anims, 1);
+    for (int frame = 0; frame < 60; ++frame) robot.update_follow_camera(16667);
+    CHECK(robot.state.camera_x == 1000 && robot.state.camera_y == 1000);
 }
 
 void test_support_and_fall() {
