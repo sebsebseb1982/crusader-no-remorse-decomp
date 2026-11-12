@@ -1573,6 +1573,36 @@ void test_run_turn_to_keypad_diagonal(const std::filesystem::path& data) {
     }
 }
 
+// Issue #8: a run turned back on the keypad as the controller now sends it
+// (the 2 down, then the 8 up: Gamepad::update_move) goes on the other way
+// without its stop (0x27, armed 0x19). The release finds the 2 still down
+// (1138:12CF), and the run's direction follows the 2.
+void test_run_turn_back(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save(13);
+    game.config().toggle_run = false;
+    game.config().directional_move = true;
+    settle(game);
+    game.key(0x48, false, true, kLeftShift);
+    for (int i = 0; i < 60; ++i) game.update(kFrameUs);
+    const std::int32_t y0 = game.world().get(1)->y;
+    game.key(0x50, false, true, kLeftShift);
+    game.key(0x48, false, false, kLeftShift);
+    bool stopped = false, running = false;
+    for (int i = 0; i < 60; ++i) {
+        game.update(kFrameUs);
+        const std::uint16_t a = last_action(game);
+        stopped = stopped || a == 0x27 || a == 0x19;
+        running = a == 3 || a == 0x30 || a == 0x31;
+    }
+    const int dir = game.world().npc_direction(1) & 0xF;
+    const std::int32_t y1 = game.world().get(1)->y;
+    game.key(0x50, false, false, 0);
+    std::printf("run turned back: stopped %d, running %d, direction %d, y %d -> %d\n", stopped, running, dir, y0, y1);
+    CHECK(!stopped && running && dir == 6);
+    CHECK(game.machine().faults().empty());
+}
+
 // Milestone 6.2: the item selection mode (item_selection.hpp).
 void test_item_selection(const std::filesystem::path& data) {
     {
@@ -5425,6 +5455,7 @@ int main(int argc, char** argv) {
         test_inventory_keys(data);
         test_run_after_last_weapon_dropped(data);
     test_run_turn_to_keypad_diagonal(data);
+    test_run_turn_back(data);
         return failures ? 1 : 0;
     }
     if (argc > 2 && std::string(argv[2]) == "--enemies") {
@@ -5501,6 +5532,7 @@ int main(int argc, char** argv) {
     test_inventory_keys(data);
     test_run_after_last_weapon_dropped(data);
     test_run_turn_to_keypad_diagonal(data);
+    test_run_turn_back(data);
     test_item_selection(data);
     test_message_box(data);
     test_cheats(data);

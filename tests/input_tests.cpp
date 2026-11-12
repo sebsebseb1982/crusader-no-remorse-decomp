@@ -462,21 +462,19 @@ void test_gamepad_directional_weapon_out() {
     CHECK(keys[1].scancode == 0x4B && keys[1].extended && !keys[1].pressed && keys[1].alt());
 
     // Down while aiming north: backward (Alt + down). Straight from up, the
-    // stick went through the centre: the forward step ends first, and the
-    // backward one waits for the end of the stick's rebound.
+    // stick turned back past the centre: the forward key stays down for the
+    // stick's rebound time, then, the stick still pushed down, the backward
+    // key goes down before the forward one goes up.
     pad.update(1000);
     pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, 30000));
-    keys = pad.take_keys();
-    CHECK(keys.size() == 2);
-    CHECK(keys[0].scancode == 0x48 && keys[0].extended && !keys[0].pressed);
-    CHECK(keys[1].scancode == 0x38 && !keys[1].pressed);
+    CHECK(pad.take_keys().empty());
     pad.update(1050);
     CHECK(pad.take_keys().empty());
     pad.update(1100);
     keys = pad.take_keys();
     CHECK(keys.size() == 2);
-    CHECK(keys[0].scancode == 0x38 && keys[0].pressed && keys[0].alt());
-    CHECK(keys[1].scancode == 0x50 && keys[1].extended && keys[1].pressed && keys[1].alt());
+    CHECK(keys[0].scancode == 0x50 && keys[0].extended && keys[0].pressed && keys[0].alt());
+    CHECK(keys[1].scancode == 0x48 && keys[1].extended && !keys[1].pressed);
 
     // Right while aiming north: a side step to the right.
     pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, 0));
@@ -536,8 +534,8 @@ void test_gamepad_directional_release() {
 
 // Let go of from the left, the stick springs to the right: past the centre
 // within a frame (the left key held, its lower threshold), then ringing
-// there. The move ends without a step to the right; a real push right after
-// the rebound is a move again.
+// there. The left key stays down for the rebound time, then goes up without
+// a step to the right; a real push right after the rebound is a move again.
 void test_gamepad_directional_snapback() {
     Gamepad pad;
     pad.set_directional(true);
@@ -556,19 +554,85 @@ void test_gamepad_directional_snapback() {
 
     pad.update(1016);
     pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, 12000));
-    keys = pad.take_keys();
-    CHECK(keys.size() == 1 && keys[0].scancode == 0x4B && !keys[0].pressed);
+    CHECK(pad.take_keys().empty());
     pad.update(1032);
     pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, 18000));
     CHECK(pad.take_keys().empty());
     pad.update(1048);
     pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, 0));
     CHECK(pad.take_keys().empty());
+    pad.update(1100);
+    keys = pad.take_keys();
+    CHECK(keys.size() == 1 && keys[0].scancode == 0x4B && !keys[0].pressed);
 
     pad.update(1300);
     pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, 30000));
     keys = pad.take_keys();
     CHECK(keys.size() == 1 && keys[0].scancode == 0x4D && !keys[0].extended && keys[0].pressed);
+}
+
+// Issue #8: running left, the stick is flicked right. The left key stays
+// down for the rebound time; the stick still pushed firmly right, the right
+// key then goes down before the left one goes up, so the run turns back
+// without the stop (0x27, armed 0x19) a release would play. Flicked back
+// within that time, the left key just stays down.
+void test_gamepad_directional_turn_back() {
+    Gamepad pad;
+    pad.set_directional(true);
+    pad.update(1000);
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, -32768));
+    auto keys = pad.take_keys();
+    CHECK(keys.size() == 1 && keys[0].scancode == 0x4B && keys[0].pressed);
+
+    pad.update(1016);
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, 32767));
+    CHECK(pad.take_keys().empty());
+    pad.update(1064);
+    CHECK(pad.take_keys().empty());
+    pad.update(1096);
+    keys = pad.take_keys();
+    CHECK(keys.size() == 2);
+    CHECK(keys[0].scancode == 0x4D && !keys[0].extended && keys[0].pressed);
+    CHECK(keys[1].scancode == 0x4B && !keys[1].extended && !keys[1].pressed);
+
+    // Flicked left, then back right within the rebound time: no key changes.
+    pad.update(2000);
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, -32768));
+    CHECK(pad.take_keys().empty());
+    pad.update(2032);
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, 32767));
+    CHECK(pad.take_keys().empty());
+    pad.update(2200);
+    CHECK(pad.take_keys().empty());
+
+    // Turned back, then pushed across within the wait: the key of that
+    // sector at once, without a stop.
+    pad.update(2500);
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, -32768));
+    CHECK(pad.take_keys().empty());
+    pad.update(2532);
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, 0));
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, -32768));
+    keys = pad.take_keys();
+    CHECK(keys.size() == 2);
+    CHECK(keys[0].scancode == 0x48 && !keys[0].extended && keys[0].pressed);
+    CHECK(keys[1].scancode == 0x4D && !keys[1].pressed);
+    pad.update(2700);
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTY, 0));
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, 32767));
+    keys = pad.take_keys();
+    CHECK(keys.size() == 2 && keys[0].scancode == 0x4D && keys[0].pressed && keys[1].scancode == 0x48);
+
+    // Let go of during the wait: the key goes up once it is over.
+    pad.update(3000);
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, -32768));
+    CHECK(pad.take_keys().empty());
+    pad.update(3040);
+    pad.feed(axis(SDL_CONTROLLER_AXIS_LEFTX, 0));
+    CHECK(pad.take_keys().empty());
+    pad.update(3080);
+    keys = pad.take_keys();
+    CHECK(keys.size() == 1 && keys[0].scancode == 0x4D && !keys[0].pressed);
 }
 
 }  // namespace
@@ -583,6 +647,7 @@ int main() {
     test_gamepad_directional_weapon_out();
     test_gamepad_directional_release();
     test_gamepad_directional_snapback();
+    test_gamepad_directional_turn_back();
     std::printf(failures ? "%d failure(s)\n" : "all input checks passed\n", failures);
     return failures ? 1 : 0;
 }
