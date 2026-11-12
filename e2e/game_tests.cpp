@@ -2969,8 +2969,10 @@ void test_precise_aim(const std::filesystem::path& data) {
     w.pop_to_coords(px + 256, py - 40, pz + 80);
     CHECK(fire_distance(w, anims, 1, level, dir) != 0);
 
-    // Off: the original choice, the nearer one.
+    // Off (whatever CRUSADER.CFG says): the original choice, the nearer one.
+    game.config().precise_aim = false;
     game.update(kFrameUs);
+    CHECK(!w.precise_aim());
     CHECK(find_target(w, 1, dir, true, &anims) == upstairs);
     // On: the one in sight; the shot hits it, not the other.
     game.config().precise_aim = true;
