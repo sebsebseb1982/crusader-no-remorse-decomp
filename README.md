@@ -68,6 +68,15 @@ data/
 └── SAVEGAME/           saved games (optional for a new game)
 ```
 
+#### Digital versions (GOG, Steam, EA App / Origin)
+
+The digital releases are not a separate version: they ship one of the supported versions, but not always as loose files.
+
+- **GOG:** the installer unpacks the whole CD into the game folder, so the installed files work as they are, as does `GAME.GOG` (see above).
+- **Steam and EA App / Origin:** the install is the same as the retail one and does **not** contain all the CD files (`DATA\STATIC\CRED.DAT`, the `FLICS` cutscenes, and others). Copying that folder into `data/` therefore fails with `Cannot open DATA\STATIC\CRED.DAT`. Use the CD image shipped inside the install instead, `Crusader No Remorse\data\Game\GAME.BIN`, which is reported to be identical to the GOG `GAME.GOG` (issues [#3](https://github.com/sebsebseb1982/crusader-no-remorse-decomp/issues/3) and [#11](https://github.com/sebsebseb1982/crusader-no-remorse-decomp/issues/11)). The game recognises CD images by their extension (`.iso` or `.gog`), so copy it into `data/` under another name, such as `GAME.ISO`, and launch the game as described in the CD image option above.
+
+The maintainer does not own the Steam or EA releases, so this has not been tested here. If it works (or fails) for you, please comment on those issues.
+
 ### 3. Launch
 
 ```sh
