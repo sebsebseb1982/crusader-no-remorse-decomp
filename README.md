@@ -14,7 +14,7 @@ This repository contains **no game files**: you need your own copy of the origin
 
 ## Recent improvements
 
-- **Level editor** (`crusader-editor`): edit the original maps or create new ones, with the game's own renderer: scenery, globs (prefab rooms), NPCs, and the eggs and item links that drive the scripts. It saves to a mod folder that the game plays with `--mod` (the original data is never modified). Press **F5** in the editor to test the level. See [docs/EDITEUR.md](docs/EDITEUR.md) (in French).
+- **Level editor** (`crusader-editor`): edit the original maps or create new ones, with the game's own renderer: scenery, globs (prefab rooms), NPCs, and the eggs and item links that drive the scripts. It saves to a mod folder that the game plays with `--mod` (the original data is never modified). Press **F5** in the editor to test the level. See [docs/EDITEUR.md](docs/EDITEUR.md).
 
 - Added gamepad support with vibration.
 - Added an **Enhancements** menu to the Options menu, with:

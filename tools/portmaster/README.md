@@ -1,47 +1,47 @@
-# Portage PortMaster (consoles aarch64 : RG40XX-H, etc.)
+# PortMaster port (aarch64 consoles: RG40XX-H, etc.)
 
-Compile `crusader` pour Linux aarch64 (glibc ≥ 2.28) depuis Windows ou Linux, avec Zig comme compilateur croisé. Le binaire utilise le SDL2 du système de la console (muOS, Knulli, ROCKNIX, ArkOS…) ; libc++ est liée statiquement.
+Builds `crusader` for Linux aarch64 (glibc ≥ 2.28) from Windows or Linux, with Zig as a cross compiler. The binary uses the console's system SDL2 (muOS, Knulli, ROCKNIX, ArkOS…); libc++ is linked statically.
 
-## Compiler
+## Building
 
 ```
 pip install ziglang ninja
 python tools/portmaster/build.py          # -> build-portmaster/crusader
 ```
 
-`build.py` récupère les en-têtes SDL2, fabrique une `libSDL2-2.0.so.0` vide (symboles seulement) pour l'édition de liens, puis lance CMake avec `zig-aarch64.cmake`.
+`build.py` fetches the SDL2 headers, makes an empty `libSDL2-2.0.so.0` (symbols only) for linking, then runs CMake with `zig-aarch64.cmake`.
 
-## Installer sur la console
+## Installing on the console
 
-Le zip de release suit la structure PortMaster (installé automatiquement par PortMaster). En manuel (USB ou lecteur de carte), le contenu du zip se répartit ainsi :
+The release zip follows the PortMaster structure (installed automatically by PortMaster). Manually (USB or card reader), the contents of the zip are laid out as follows:
 
-| Dans le zip | À copier vers (carte SD des ports) | Rôle |
+| In the zip | Copy it to (on the SD card holding your ports) | Role |
 |---|---|---|
-| `Crusader.sh` | `ROMS/Ports/Crusader.sh` | lanceur, affiché dans le menu Ports |
-| `crusader/` (dossier entier) | `ports/crusader/` | binaire, licences, données du jeu |
-| `port.json`, `gameinfo.xml`, `README.md`, `screenshot.png` | nulle part | métadonnées PortMaster, inutiles sur la console |
+| `Crusader.sh` | `ROMS/Ports/Crusader.sh` | launcher, shown in the Ports menu |
+| `crusader/` (whole folder) | `ports/crusader/` | binary, licenses, game data |
+| `port.json`, `gameinfo.xml`, `README.md`, `screenshot.png` | nowhere | PortMaster metadata, not needed on the console |
 
-Exemple sur la RG40XX-H sous muOS (les ports sont sur la carte **SD2** ; visible en USB/MTP sous « Ce PC\RG40XX-H\SD2 ») :
+Example on the RG40XX-H running muOS (ports are on the **SD2** card; visible over USB/MTP under "This PC\RG40XX-H\SD2"):
 
 ```
 SD2/
 ├── ROMS/Ports/
-│   └── Crusader.sh                 lanceur
+│   └── Crusader.sh                 launcher
 └── ports/crusader/
-    ├── crusader                    binaire
-    ├── licenses/                   licences
-    ├── data/                       ICI : données du jeu d'origine
-    ├── conf/                       créé au premier lancement
-    └── log.txt                     créé au premier lancement
+    ├── crusader                    binary
+    ├── licenses/                   licenses
+    ├── data/                       HERE: the original game data
+    ├── conf/                       created on first launch
+    └── log.txt                     created on first launch
 ```
 
-Si les ports sont sur la carte SD1, même arborescence sur SD1. Redémarrer l'interface si l'entrée Crusader n'apparaît pas dans la liste des Ports.
+If your ports are on the SD1 card, use the same layout on SD1. Restart the front-end if the Crusader entry does not show up in the Ports list.
 
-### Données du jeu d'origine
+### Original game data
 
-Elles sont à fournir soi-même (aucun fichier du jeu n'est livré) et se déposent dans **`ports/crusader/data/`**, à côté du binaire `crusader`, soit :
+You must supply it yourself (no game file is shipped) and put it in **`ports/crusader/data/`**, next to the `crusader` binary, as either:
 
-- les fichiers du jeu installé, directement dans `data/` (sans sous-dossier) :
+- the files of the installed game, directly in `data/` (no subfolder):
 
   ```
   ports/crusader/data/
@@ -50,26 +50,26 @@ Elles sont à fournir soi-même (aucun fichier du jeu n'est livré) et se dépos
   └── ASYLUM.DLL
   ```
 
-- ou l'image du CD : le fichier `.iso` dans `data/` (extrait au premier lancement, puis plus nécessaire).
+- or the CD image: the `.iso` file in `data/` (extracted on first launch, then no longer needed).
 
-Versions gérées : française 1.08 et US 1.23. Le jeu écrit ses sauvegardes (`SAVEGAME/`) et `CRUSADER.CFG` dans `data/` : lors d'une mise à jour, conserver ce dossier (ne remplacer que `crusader/crusader` et `ROMS/Ports/Crusader.sh`, ce que fait `scripts/update-rg40xx.ps1`). Si `data/` est vide, le lanceur affiche « Game data missing » et quitte (voir `log.txt`).
+Supported versions: French 1.08 and US 1.23. The game writes its saves (`SAVEGAME/`) and `CRUSADER.CFG` in `data/`: when updating, keep that folder (only replace `crusader/crusader` and `ROMS/Ports/Crusader.sh`, which `scripts/update-rg40xx.ps1` does). If `data/` is empty, the launcher shows "Game data missing" and exits (see `log.txt`).
 
-Les sources du port sont dans `tools/portmaster/port/` (`port.json`, `README.md`, `gameinfo.xml`, lanceur). Un `screenshot.png` (4:3, ≥ 640×480, pris en jeu) est à ajouter dans ce dossier avant la PR PortMaster.
+The port's sources are in `tools/portmaster/port/` (`port.json`, `README.md`, `gameinfo.xml`, launcher). A `screenshot.png` (4:3, ≥ 640×480, taken in game) must be added to that folder before the PortMaster PR.
 
-## Manette
+## Gamepad
 
-Le jeu lit la manette lui-même (SDL_GameController) : `gptokeyb` n'est pas utilisé (ses touches par défaut doublaient chaque entrée : RT envoyait aussi Fin, qui fait reculer). Select + Start quitte le jeu. `CRUSADER_PAD_DEBUG=1` journalise la manette dans `log.txt`. Les réglages par défaut sont ceux de l'écran « MANETTE » des options, où chaque action se réassigne (écrits dans `data/CRUSADER.CFG`, clés `padmap`, `padaim`, `paddeadzone`) :
+The game reads the gamepad itself (SDL_GameController): `gptokeyb` is not used (its default keys doubled every input: RT also sent End, which moves backward). Select + Start quits the game. `CRUSADER_PAD_DEBUG=1` logs the gamepad to `log.txt`. The defaults are those of the "CONTROLLER" options screen, where each action can be reassigned (written to `data/CRUSADER.CFG`, keys `padmap`, `padaim`, `paddeadzone`):
 
-| Entrée | Action |
+| Input | Action |
 |---|---|
-| Stick gauche | flèches (déplacement, rotation) |
-| Stick droit haut / bas | visée (souris) |
-| Stick droit gauche / droite | roulade gauche / droite (Ctrl + gauche / droite) |
-| RT | tir |
-| A / B / X / Y | sélectionner (S) / saut / valider / arme suivante |
-| LB / RB | pas à gauche / à droite (Alt + gauche / droite) |
-| L3 / R3 | Maj / se baisser ou se lever (Ctrl + bas) |
-| Croix | utiliser l'objet / trousse / objet précédent / objet suivant |
+| Left stick | arrows (movement, turning) |
+| Right stick up / down | aim (mouse) |
+| Right stick left / right | roll left / right (Ctrl + left / right) |
+| RT | fire |
+| A / B / X / Y | select (S) / jump / confirm / next weapon |
+| LB / RB | step left / right (Alt + left / right) |
+| L3 / R3 | Shift / crouch or stand up (Ctrl + down) |
+| D-pad | use item / medkit / previous item / next item |
 | Start | menu |
 
-Dans les menus : croix = flèches, stick droit = souris, A = Entrée, B et Start = Échap.
+In menus: D-pad = arrows, right stick = mouse, A = Enter, B and Start = Esc.

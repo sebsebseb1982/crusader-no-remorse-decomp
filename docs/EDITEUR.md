@@ -1,98 +1,98 @@
-# Éditeur de niveaux
+# Level editor
 
-`crusader-editor` crée et modifie les cartes de *Crusader: No Remorse* : le décor, les objets, les PNJ et tout ce qui pilote les scripts du jeu (œufs, déclencheurs, téléportations, liens entre objets). Il travaille sur les mêmes fichiers que le jeu d'origine et dessine la carte avec le moteur de rendu du portage : ce qu'on voit dans l'éditeur est ce qu'on verra en jeu.
+`crusader-editor` creates and edits the maps of *Crusader: No Remorse*: the scenery, the objects, the NPCs, and everything that drives the game's scripts (eggs, triggers, teleports, links between objects). It works on the same files as the original game and draws the map with the port's renderer, so what you see in the editor is what you get in the game.
 
-Les données d'origine ne sont jamais modifiées. L'éditeur enregistre dans un **dossier de mod**, que le jeu charge par-dessus les données avec `--mod`.
+The original data is never modified. The editor saves to a **mod folder**, which the game loads on top of the data with `--mod`.
 
-## Lancer
+## Running it
 
 ```sh
-crusader-editor data                                # dossier des données du jeu, mod par défaut : mods/mon-niveau
+crusader-editor data                                # game data folder, default mod: mods/mon-niveau
 crusader-editor data --mod mods/base-secrete --map 3
 ```
 
-Pour jouer le niveau, **F5** dans l'éditeur (ou *Fichier > Tester dans le jeu*) enregistre puis lance :
+To play the level, press **F5** in the editor (or *File > Test in game*), which saves and then launches:
 
 ```sh
 crusader data --mod mods/base-secrete --map 3 --egg 0x1E
 ```
 
-`--map` commence une nouvelle partie sur cette carte, sur l'œuf d'arrivée `--egg` (0x1E par défaut, l'œuf où commence chaque mission). Si un œuf d'arrivée est sélectionné, F5 part de celui-ci. Les parties sauvegardées d'un mod vont dans `<mod>/SAVEGAME`.
+`--map` starts a new game on that map, at the arrival egg `--egg` (0x1E by default, the egg where every mission starts). If an arrival egg is selected, F5 starts from it. A mod's saved games go in `<mod>/SAVEGAME`.
 
-## Ce que contient un niveau
+## What a level contains
 
-Le format est celui des niveaux d'origine ; l'éditeur relit et réécrit les 63 cartes et les 3 072 globs du jeu à l'octet près (test `editor_data_tests`).
+The format is the one used by the original levels; the editor reads and rewrites the game's 63 maps and 3,072 globs byte for byte (`editor_data_tests` test).
 
-| Fichier | Contenu | Dans l'éditeur |
+| File | Contents | In the editor |
 |---|---|---|
-| `STATIC/FIXED.DAT` | une entrée par carte (1 à 255) : enregistrements de 16 octets (x, y, z, forme, image, drapeaux, qualité, n° PNJ, n° carte) | la carte ouverte |
-| `STATIC/GLOB.FLX` | les globs : groupes de pièces (sols, murs) posés par un œuf de glob | onglet *Globs*, éditeur de globs |
-| `STATIC/SHAPES.FLX`, `TYPEFLAG.DAT` | les formes (sprites) et leurs propriétés | onglet *Formes* (lecture seule) |
-| `USECODE/EUSECODE.FLX` | les scripts (classes usecode) | onglet *Scripts* (lecture seule) |
-| `STATIC/DTABLE.FLX` | les types de PNJ | onglet *Œufs* (lecture seule) |
+| `STATIC/FIXED.DAT` | one entry per map (1 to 255): 16-byte records (x, y, z, shape, frame, flags, quality, NPC number, map number) | the open map |
+| `STATIC/GLOB.FLX` | the globs: groups of pieces (floors, walls) placed by a glob egg | *Globs* tab, glob editor |
+| `STATIC/SHAPES.FLX`, `TYPEFLAG.DAT` | the shapes (sprites) and their properties | *Shapes* tab (read-only) |
+| `USECODE/EUSECODE.FLX` | the scripts (usecode classes) | *Scripts* tab (read-only) |
+| `STATIC/DTABLE.FLX` | the NPC types | *Eggs* tab (read-only) |
 
-Le jeu lit `FIXED.DAT`, `GLOB.FLX`, `SHAPES.FLX`, `TYPEFLAG.DAT`, `DAMAGE.FLX`, `ANIM.DAT`, `DTABLE.FLX`, `EUSECODE.FLX` et `UNKDS.DAT` dans le mod quand ils y sont, sinon dans les données.
+The game reads `FIXED.DAT`, `GLOB.FLX`, `SHAPES.FLX`, `TYPEFLAG.DAT`, `DAMAGE.FLX`, `ANIM.DAT`, `DTABLE.FLX`, `EUSECODE.FLX` and `UNKDS.DAT` from the mod when they are there, and from the data otherwise.
 
-### Les globs
+### Globs
 
-Les sols et les murs d'une carte viennent presque tous de **globs** : un œuf de glob (forme 0x010, famille 3) de qualité *n* pose les pièces du glob *n* dans la case de 512 × 512 unités où il se trouve. Seule la case compte, pas la position exacte de l'œuf : l'éditeur les déplace donc de case en case.
+Nearly all of a map's floors and walls come from **globs**: a glob egg (shape 0x010, family 3) with quality *n* places the pieces of glob *n* in the 512 × 512-unit cell it sits in. Only the cell matters, not the egg's exact position, so the editor moves them from cell to cell.
 
-- Onglet *Globs* : clic = pinceau, double clic = ouvrir dans l'éditeur de globs.
-- *Édition > Créer un glob avec la sélection* : du décor simple pris dans une même case devient un nouveau glob, remplacé par son œuf.
-- *Dégrouper le glob* : l'inverse, l'œuf devient ses pièces.
-- Un glob est partagé par tous ses œufs, sur toutes les cartes : pour ne changer qu'un endroit, *Enregistrer comme nouveau glob*.
+- *Globs* tab: click = brush, double click = open in the glob editor.
+- *Edit > Create a glob from the selection*: plain scenery taken from a single cell becomes a new glob, replaced by its egg.
+- *Ungroup glob*: the reverse; the egg becomes its pieces.
+- A glob is shared by all its eggs, on every map: to change only one place, use *Save as new glob*.
 
-### Les œufs : comment les niveaux sont scriptés
+### Eggs: how levels are scripted
 
-Les niveaux d'origine n'ont pas de script propre à la carte. Les concepteurs posaient des **œufs** et réglaient les octets *qualité*, *n° PNJ* et *n° carte* des objets, que lisent le moteur et les classes usecode. Le panneau *Propriétés > Rôle dans le niveau* les décode :
+The original levels have no map-specific script. The designers placed **eggs** and set the *quality*, *NPC number* and *map number* bytes of objects, which the engine and the usecode classes read. The *Properties > Role in the level* panel decodes them:
 
-| Œuf | Forme | Paramètres |
+| Egg | Shape | Parameters |
 |---|---|---|
-| Arrivée de téléportation | 0x194 image 1 | id = qualité basse ; la mission commence sur l'id 0x1E |
-| Départ de téléportation | 0x194 image 0 | vers l'œuf (qualité basse) de la carte (n° carte, 0 = celle-ci), attente si qualité haute ≠ 0, zone de déclenchement |
-| Déclencheur | 0x011 | classe 0x900 + qualité basse (`TRIGEGG`, `ONCEEGG`, `DOOREGG`, `CAMERA`, `MUSIC`, `MISS1EGG`…), paramètre = qualité haute, id = n° carte, zone de déclenchement |
-| Monstre (PNJ) | 0x24F | type de PNJ (`DTABLE.FLX`), direction, difficulté minimale, autre arme, trois activités (au départ, en voyant le joueur, quand on lui tire dessus) ; ces trois dernières sont rangées dans le modèle que l'œuf contient |
-| Marqueur | 0x476 | objet que donne le coffre de même qualité basse, ou objet coupé par un `TRIGGER` |
+| Teleport arrival | 0x194 frame 1 | id = low quality; the mission starts on id 0x1E |
+| Teleport departure | 0x194 frame 0 | to the egg (low quality) of the map (map number, 0 = this one), delay if high quality ≠ 0, trigger zone |
+| Trigger | 0x011 | class 0x900 + low quality (`TRIGEGG`, `ONCEEGG`, `DOOREGG`, `CAMERA`, `MUSIC`, `MISS1EGG`…), parameter = high quality, id = map number, trigger zone |
+| Monster (NPC) | 0x24F | NPC type (`DTABLE.FLX`), direction, minimum difficulty, other weapon, three activities (at start, on seeing the player, when shot at); the last three are stored in the template the egg contains |
+| Marker | 0x476 | object given by the chest with the same low quality, or object cut by a `TRIGGER` |
 
-La **zone de déclenchement** (demi-largeurs × 32 unités, rangées dans le n° PNJ ; le joueur doit aussi être à moins de 0x30 en z) est dessinée en rose ; les départs de téléportation sont reliés à leur arrivée par un trait vert.
+The **trigger zone** (half-widths × 32 units, stored in the NPC number; the player must also be within 0x30 in z) is drawn in pink; teleport departures are joined to their arrival by a green line.
 
-Beaucoup d'objets se répondent par leur **qualité basse** : interrupteur → murs d'énergie ou portes (`TRIGGER`), vanne → vapeur, coffre → marqueurs, caméra → alarme. Quand un objet est sélectionné, ceux qui partagent sa qualité basse et ont un script sont encadrés en cyan, et *Sélectionner les objets liés* les prend tous.
+Many objects answer each other through their **low quality**: switch → energy walls or doors (`TRIGGER`), valve → steam, chest → markers, camera → alarm. When an object is selected, the ones that share its low quality and have a script are outlined in cyan, and *Select linked objects* takes them all.
 
-La section *Script (usecode)* donne la classe de l'objet et les événements qu'elle traite (`use`, `gotHit` pour les dalles et plaques, `hatch` pour les œufs, `equip` pour la mise en marche…).
+The *Script (usecode)* section gives the object's class and the events it handles (`use`, `gotHit` for slabs and plates, `hatch` for eggs, `equip` for switching on…).
 
-### Nouveau niveau
+### New level
 
-- *Carte > Nouvelle carte* : un emplacement libre de `FIXED.DAT`, 3 × 3 cases du sol le plus courant de la mission 1, et l'œuf de départ 0x1E.
-- *Carte > Copier cette carte vers un emplacement libre* : part d'une carte d'origine.
+- *Map > New map*: a free slot in `FIXED.DAT`, 3 × 3 cells of the most common floor in mission 1, and the start egg 0x1E.
+- *Map > Copy this map to a free slot*: starts from an original map.
 
-Attention, une carte copiée garde ses œufs de mission (`MISS1EGG`…) et ses téléportations, qui visent souvent d'autres cartes.
+Note that a copied map keeps its mission eggs (`MISS1EGG`…) and its teleports, which often point to other maps.
 
-## Commandes
+## Controls
 
-| Action | Commande |
+| Action | Control |
 |---|---|
-| Sélectionner, ajouter à la sélection | clic, Ctrl+clic ou Maj+clic |
-| Objet suivant sous le pointeur | Alt+clic répété |
-| Sélection par rectangle | glisser dans le vide |
-| Déplacer | glisser la sélection (aimanté à la grille ; Alt : sans aimant), flèches, PgPréc / PgSuiv pour z |
-| Poser un objet | choisir un pinceau (Formes, Globs, Œufs), puis clic ; clic droit ou Échap pour le lâcher |
-| Faire défiler, zoomer | clic droit ou molette enfoncée et glisser, flèches sans sélection ; molette |
-| Centrer sur la sélection | F |
-| Dupliquer, supprimer | Ctrl+D, Suppr |
-| Annuler, rétablir | Ctrl+Z, Ctrl+Y |
-| Enregistrer, tester | Ctrl+S, F5 |
+| Select, add to the selection | click, Ctrl+click or Shift+click |
+| Next object under the pointer | repeated Alt+click |
+| Rectangle selection | drag on empty space |
+| Move | drag the selection (snapped to the grid; Alt: no snapping), arrows, PgUp / PgDn for z |
+| Place an object | pick a brush (Shapes, Globs, Eggs), then click; right click or Esc to drop it |
+| Scroll, zoom | right click or middle button and drag, arrows with no selection; mouse wheel |
+| Center on the selection | F |
+| Duplicate, delete | Ctrl+D, Del |
+| Undo, redo | Ctrl+Z, Ctrl+Y |
+| Save, test | Ctrl+S, F5 |
 
-*Coupe en z* cache ce qui est plus haut : pour travailler un étage sans les plafonds. *z de travail* est la hauteur où se posent les nouveaux objets. Le menu *Affichage* montre ou cache les marqueurs d'éditeur (les œufs ne sont pas dessinés en jeu), les objets invisibles, les globs, les zones et les liens.
+*Z cut* hides everything above it, so you can work on one floor without the ceilings. *Working z* is the height at which new objects are placed. The *View* menu shows or hides the editor markers (eggs are not drawn in the game), invisible objects, globs, zones and links.
 
-## Limites
+## Limits
 
-- Le jeu garde au plus 9 984 objets en mémoire, pièces des globs proches comprises. La carte la plus chargée du jeu a 7 855 enregistrements ; la barre d'état prévient au-delà de 8 000.
-- Le joueur commence toujours avec l'équipement d'une nouvelle partie (datalink).
-- Formes, scripts et types de PNJ sont en lecture seule pour l'instant.
+- The game keeps at most 9,984 objects in memory, including the pieces of nearby globs. The most loaded map in the game has 7,855 records; the status bar warns above 8,000.
+- The player always starts with the equipment of a new game (datalink).
+- Shapes, scripts and NPC types are read-only for now.
 
-## Suite prévue
+## Planned next
 
-1. **Scripts** : désassembleur usecode dans l'onglet *Scripts*, puis assembleur pour écrire de nouvelles classes d'œufs (0x91E et suivantes) et de nouvelles fonctions.
-2. **Sprites** : import d'images PNG dans `SHAPES.FLX` (nouvelles formes et images, palette du jeu) et édition de `TYPEFLAG.DAT` (emprise, famille, solidité).
-3. **PNJ** : édition des types de `DTABLE.FLX` (points de vie, armes, forme).
-4. **Contenu des missions** : textes des ordinateurs, codes des claviers, musique, enchaînement des cartes.
+1. **Scripts**: a usecode disassembler in the *Scripts* tab, then an assembler to write new egg classes (0x91E and following) and new functions.
+2. **Sprites**: import of PNG images into `SHAPES.FLX` (new shapes and frames, game palette) and editing of `TYPEFLAG.DAT` (footprint, family, solidity).
+3. **NPCs**: editing of the `DTABLE.FLX` types (hit points, weapons, shape).
+4. **Mission content**: computer texts, keypad codes, music, map sequencing.

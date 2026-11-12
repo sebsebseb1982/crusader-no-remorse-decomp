@@ -34,6 +34,7 @@ The changes fall into four groups:
 17. [Robustness and bug fixes](#17-robustness-and-bug-fixes)
 18. [Known deviations from the original](#18-known-deviations-from-the-original)
 19. [Platforms, technical base and distribution](#19-platforms-technical-base-and-distribution)
+20. [Level editor](#20-level-editor)
 
 ---
 
@@ -549,3 +550,14 @@ These differences are deliberate or not yet resolved. They are documented in the
 - Versions follow SemVer, computed from Conventional Commits. Each release is built and tested on Linux and Windows (see `docs/RELEASING.md`).
 - Unit tests run without game data. End-to-end tests (`e2e/`) run on the real data and on bug-reproduction saves (`e2e/saves`). Several enhancements have their own tests: autosave, keypad, scripted camera, configuration, controller settings.
 - `diffcheck` runs routines of the original executable in an emulator (Unicorn) and compares them with the port on random inputs (directions, throw paths, random generators: no difference over 20,000 to 50,000 inputs each).
+
+## 20. Level editor
+
+**Files:** `src/editor/`, `src/game/game.*` (`game_file`, `set_start`), `docs/EDITEUR.md`
+
+The original ships no editor. `crusader-editor` (Dear ImGui on SDL2, rendered by the port's engine) opens the maps of `FIXED.DAT` and the globs of `GLOB.FLX`, decodes the egg parameters (triggers, teleports, monsters, globs, markers) and the low-quality links, and saves to a mod folder without touching the data. The game reads that folder with `--mod` and starts on a given map with `--map`. Full user guide: `docs/EDITEUR.md`.
+
+**Rules**
+- Unmodified maps and globs are rewritten byte for byte (`editor_data_tests`); container contents keep their raw depth (map 244 contains records that are not objects).
+- A file in the mod replaces the one in the data: `FIXED.DAT`, `GLOB.FLX`, `SHAPES.FLX`, `TYPEFLAG.DAT`, `DAMAGE.FLX`, `ANIM.DAT`, `DTABLE.FLX`, `EUSECODE.FLX`, `UNKDS.DAT`.
+- `--map N`: the new game plays out like the original's, but `MainActor_I_teleportToEgg` receives map N and egg `--egg` instead of 1 and 0x1E (`game_tests --editor-mod`).
