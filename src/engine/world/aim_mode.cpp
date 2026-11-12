@@ -213,8 +213,27 @@ void turn_crosshair(Kernel& kernel, World& world, const AnimDat& anims, std::uin
 void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, int angle, bool draw_when_holstered) {
     GameState::Aim& aim = world.state.aim;
     const ObjId id = world.state.controlled_npc;
-    if (id == 0 || aim.no_stand || aim.turns != 0) return;
+    if (id == 0 || aim.no_stand) return;
     if (!aim.active) {
+        // A side step (0x1C, 0x1D: the strafe of the left stick sideways) is
+        // a turning animation, which leaves the aiming mode until it ends
+        // (aim_after_do_anim): the crosshair would vanish for the whole
+        // strafe. While the stick aims, it stays shown at the stick's angle,
+        // in the mode's own slot, which entering the mode again then moves.
+        // Its process, from do_anim on (the last action is noted only once it
+        // starts).
+        bool side_step = false;
+        kernel.for_each_process([&](const Process& p) {
+            const auto* anim = dynamic_cast<const ActorAnimProcess*>(&p);
+            side_step |= anim && anim->owner() == id && (anim->action() == 0x1C || anim->action() == 0x1D);
+        });
+        if (aim.turns != 0 && side_step) {
+            aim.angle = ((angle % 360) + 360) % 360;
+            place_crosshair(world, anims);
+            return;
+        }
+        drop_stick_crosshair(world);
+        if (aim.turns != 0) return;
         // With the weapon already out (a loaded game), the stick only has to
         // enter the aim mode. Otherwise it draws the weapon, as the fire key
         // does (7, remapped by the weapon; an aiming action, so the aim mode
@@ -225,6 +244,7 @@ void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, int angle,
         else if (draw_when_holstered) do_anim(kernel, world, anims, id, kActionRaise, kDirCurrent);
         return;
     }
+    if (aim.turns != 0) return;
     angle = ((angle % 360) + 360) % 360;
     const int current = npc_dir(world, id);
     const Item* npc = world.get(id);
@@ -243,6 +263,14 @@ void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, int angle,
     if (wanted == current || actor_busy(kernel, id)) return;
     do_anim(kernel, world, anims, id, kneeling(world, id) ? 0x2E : 4, wanted);
     if (world.state.target_designation) search_after_turn(kernel, world, anims, wanted);
+}
+
+// @orig none: port-only directional aiming
+void drop_stick_crosshair(World& world) {
+    GameState::Aim& aim = world.state.aim;
+    if (aim.active || aim.crosshair == -1) return;
+    world.state.screen_sprites.remove(aim.crosshair);
+    aim.crosshair = -1;
 }
 
 std::optional<World::Point> crosshair_aim(const World& world, int z) {

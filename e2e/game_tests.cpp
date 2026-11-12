@@ -3080,6 +3080,41 @@ void test_aim_stick_draws(const std::filesystem::path& data) {
     CHECK(w.get(1)->x != x0 || w.get(1)->y != y0);
     CHECK(std::abs(after.first - before.first) <= 1 && std::abs(after.second - before.second) <= 1);
     CHECK((w.npc_direction(1) & 0xF) == dir_before);
+
+    // A side step (the strafe sideways, 0x1C) leaves the aiming mode until it
+    // ends, but the crosshair stays shown, still ahead of him, at every frame.
+    const std::int32_t x1 = w.get(1)->x, y1 = w.get(1)->y;
+    int frames = 0, hidden = 0, off = 0;
+    bool left_mode = false;
+    for (int step = 0; step < 3; ++step) {
+        do_anim(game.kernel(), w, game.animations(), 1, 0x1C, kDirCurrent);
+        for (int i = 0; i < 400 && actor_busy(game.kernel(), 1); ++i) {
+            game.update(kFrameUs);
+            ++frames;
+            left_mode |= !aim.active;
+            if (!w.state.screen_sprites.get(aim.crosshair)) {
+                ++hidden;
+                continue;
+            }
+            // Placed before the frame's slice moves him: one frame behind
+            // at most (a step is 16 units at most).
+            const auto o = offset();
+            if (std::abs(o.first - before.first) > 16 || std::abs(o.second - before.second) > 16) ++off;
+        }
+    }
+    std::printf("aim stick side steps: moved (%d, %d), %d frames, crosshair hidden %d, off %d, mode left %d\n",
+                w.get(1)->x - x1, w.get(1)->y - y1, frames, hidden, off, left_mode);
+    CHECK(w.get(1)->x != x1 || w.get(1)->y != y1);
+    CHECK(left_mode && hidden == 0 && off == 0);
+    // Released, the stick leaves no crosshair out of the mode.
+    do_anim(game.kernel(), w, game.animations(), 1, 0x1C, kDirCurrent);
+    game.update(kFrameUs);
+    game.update(kFrameUs);
+    game.set_aim_stick(false, 0);
+    game.update(kFrameUs);
+    std::printf("aim stick released in a side step: aim mode %d, crosshair %d\n", aim.active, aim.crosshair);
+    CHECK(aim.active == (aim.crosshair != -1));
+    settle(game);
     CHECK(game.machine().faults().empty());
 }
 

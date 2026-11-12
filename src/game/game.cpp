@@ -797,6 +797,8 @@ void Game::update(std::uint32_t elapsed_us) {
         // Screen east is the world angle 315 degrees, north 225: 315 - screen.
         aim_at_angle(*kernel_, *world_, anims_, static_cast<int>(std::lround(315.0 - aim_stick_deg_)),
                      config_.draw_on_aim);
+    } else if (world_) {
+        drop_stick_crosshair(*world_);
     }
     // Outside the kernel slice: a key repeat can choose a save from within it.
     if (pending_load_) {

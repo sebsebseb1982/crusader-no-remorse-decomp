@@ -92,7 +92,12 @@ void turn_crosshair(Kernel& kernel, World& world, const AnimDat& anims, std::uin
 // the aiming mode, a drawn weapon only has to enter the mode; when
 // `draw_when_holstered` is on, a holstered one is drawn first (action 7, as the
 // fire key does).
+// During a side step (the left stick's strafe sideways), which suspends the
+// mode, the crosshair stays shown at `angle`.
 void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, int angle, bool draw_when_holstered);
+// Removes the crosshair aim_at_angle left shown out of the aiming mode (the
+// stick released, or the side step over without the mode entered again).
+void drop_stick_crosshair(World& world);
 
 std::optional<World::Point> crosshair_aim(const World& world, int z);
 
