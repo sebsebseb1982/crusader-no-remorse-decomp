@@ -127,9 +127,17 @@ int spread_divisor(const World& w, ObjId shooter, int fire_type, std::uint32_t n
 }  // namespace
 
 // @orig 1128:0158
-ObjId find_target(const World& world, ObjId shooter, int dir, bool sixteen_directions) {
+ObjId find_target(const World& world, ObjId shooter, int dir, bool sixteen_directions, const AnimDat* anims) {
     const Item* from = world.get(shooter);
     if (!from) return 0;
+    // Port addition: precise aim. Checked only for an item about to be kept,
+    // which gives the same choice as leaving the unreachable ones out first
+    // (the NPC / preferred flags only come from kept items).
+    const bool reach_only = anims && world.precise_aim() && shooter == world.state.controlled_npc;
+    const auto unreachable = [&](ObjId id) {
+        bool muzzle = false;
+        return fire_distance(world, *anims, shooter, id, dir, 0, 0, 0, &muzzle) == 0 && muzzle;
+    };
     std::uint32_t best_distance = 0xFFFF;
     ObjId best = 0;
     bool found_npc = false, found_preferred = false;
@@ -153,6 +161,7 @@ ObjId find_target(const World& world, ObjId shooter, int dir, bool sixteen_direc
             std::max({std::abs(static_cast<std::int16_t>(from->x - item->x)),
                       std::abs(static_cast<std::int16_t>(from->y - item->y)), std::abs((from->z & 0xFF) - (item->z & 0xFF))}));
         if (distance < best_distance || (npc && !found_npc) || (preferred && !found_preferred)) {
+            if (reach_only && unreachable(id)) continue;
             best_distance = distance;
             best = id;
             found_npc = found_npc || npc;
@@ -240,7 +249,7 @@ Pid fire_weapon(Kernel& kernel, World& world, const AnimDat& anims, ObjId shoote
             const std::uint16_t last =
                 record.empty() ? 0 : static_cast<std::uint16_t>(record[npc::kLastAnim] | record[npc::kLastAnim + 1] << 8);
             const AnimAction* action = anims.action(item->shape, last);
-            target_item = find_target(world, shooter, dir, action && action->sixteen_directions());
+            target_item = find_target(world, shooter, dir, action && action->sixteen_directions(), &anims);
         } else {
             target_item = world.state.controlled_npc;
         }

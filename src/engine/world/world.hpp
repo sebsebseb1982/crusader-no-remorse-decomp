@@ -592,6 +592,11 @@ public:
     // Once a frame: the view follows the NPC's position averaged over about a
     // stride, so the uneven steps of the walk cycle scroll at an even speed.
     void update_follow_camera(std::uint32_t elapsed_us = 16667);
+    // Port addition ("visee precise" in the enhancements window): the
+    // controlled NPC's shots and the target marker only take targets with a
+    // line of fire (find_target, designate).
+    void set_precise_aim(bool on) { precise_aim_ = on; }
+    bool precise_aim() const { return precise_aim_; }
     // The view is put on another target: the follow's goal, the old target's
     // place, is dropped. Following resumes when the new target moves.
     void stop_following() { follow_active_ = false; }
@@ -739,6 +744,7 @@ private:
     void shift_camera(int dx, int dy);  // the view moves by (dx, dy) pixels
     void set_camera_view(std::int32_t x, std::int32_t y, std::int32_t z, int left, int top);
     bool follow_player_ = false;
+    bool precise_aim_ = false;
     bool follow_active_ = false;  // follow_goal_ is set
     std::int32_t follow_goal_[3] = {0, 0, 0};
     struct FollowSample {

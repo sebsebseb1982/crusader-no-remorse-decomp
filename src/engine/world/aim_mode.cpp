@@ -38,8 +38,11 @@ bool markable(const World& world, ObjId id) {
 
 int npc_dir(const World& world, ObjId id) { return world.npc_direction(id) & 0xF; }
 
-// TRACKER_1128_0158 for the controlled NPC, in 16 directions.
-ObjId target_in(const World& world, int dir) { return find_target(world, world.state.controlled_npc, dir, true); }
+// TRACKER_1128_0158 for the controlled NPC, in 16 directions (with precise
+// aim, only a target it can reach).
+ObjId target_in(const World& world, const AnimDat& anims, int dir) {
+    return find_target(world, world.state.controlled_npc, dir, true, &anims);
+}
 
 // 1138:0459 / Item_I_move: where the marker of `target` goes when the target
 // is at (x, y, z).
@@ -78,7 +81,7 @@ int muzzle_height(const World& world, const AnimDat& anims, ObjId id, int dir) {
 }
 
 void search_after_turn(Kernel& kernel, World& world, const AnimDat& anims, int dir) {
-    const ObjId found = target_in(world, dir);
+    const ObjId found = target_in(world, anims, dir);
     if (found == 0) designate(kernel, world, anims, 0);
     else if (found != world.state.aim.target) designate(kernel, world, anims, markable(world, found) ? found : 0);
 }
@@ -296,7 +299,10 @@ void designate(Kernel& kernel, World& world, const AnimDat& anims, ObjId target)
     if (target == 0) return;
     const ObjId npc = world.state.controlled_npc;
     const int dir = npc_dir(world, npc);
-    if (aim.marked_dir == dir) return;
+    // The original quirk (a new target in an unchanged direction stays
+    // unmarked) is left out with precise aim: the marker always shows the
+    // target the shot goes to.
+    if (aim.marked_dir == dir && !world.precise_aim()) return;
     aim.checked_at = kernel.ticks();
     const Item* item = world.get(target);
     if (item && fire_distance(world, anims, npc, target, dir) != 0) {
@@ -312,7 +318,7 @@ void redesignate(Kernel& kernel, World& world, const AnimDat& anims) {
     if (!world.state.target_designation) return;
     if (world.state.aim.target != 0) designate(kernel, world, anims, 0);
     if (!world.state.aim.active) return;
-    const ObjId found = target_in(world, npc_dir(world, world.state.controlled_npc));
+    const ObjId found = target_in(world, anims, npc_dir(world, world.state.controlled_npc));
     if (found != 0 && markable(world, found)) designate(kernel, world, anims, found);
 }
 
@@ -327,7 +333,7 @@ void check_designation(Kernel& kernel, World& world, const AnimDat& anims) {
     const std::uint32_t now = kernel.ticks();
     if (now < aim.checked_at + kRecheckTicks) return;
     aim.checked_at = now;
-    const ObjId found = target_in(world, npc_dir(world, world.state.controlled_npc));
+    const ObjId found = target_in(world, anims, npc_dir(world, world.state.controlled_npc));
     if (found == 0) designate(kernel, world, anims, 0);
     else if (found != aim.target && markable(world, found)) designate(kernel, world, anims, found);
 }
@@ -337,7 +343,7 @@ void designated_target_moved(Kernel& kernel, World& world, const AnimDat& anims,
                              std::int32_t y, std::int32_t z) {
     const ObjId npc = world.state.controlled_npc;
     if (npc == 0 || !world.get(npc) || world.is_dead(npc)) return;
-    const ObjId found = target_in(world, npc_dir(world, npc));
+    const ObjId found = target_in(world, anims, npc_dir(world, npc));
     if (found == target) {
         const World::Point p = marker_place(world, target, x, y, z);
         world.state.screen_sprites.move(world.state.aim.marker, p.x, p.y, static_cast<std::uint8_t>(p.z));

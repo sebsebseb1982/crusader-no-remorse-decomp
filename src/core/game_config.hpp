@@ -46,6 +46,12 @@ public:
     // directional aim stick draws the weapon when it is holstered, without the
     // fire key first.
     bool draw_on_aim = true;
+    // Port addition, written only when set: "preciseaim", the controlled NPC's
+    // shots only lock on a target they can reach (a line of fire from the
+    // muzzle), so an enemy one floor up or down, behind the slab, no longer
+    // takes the shot from the one in sight; the target marker then always
+    // shows the target the shot goes to.
+    bool precise_aim = false;
     // Port addition, written when switched off: "nativeresolution", the view
     // takes the whole screen (more scenery around the camera) instead of the
     // original 640 x 480.

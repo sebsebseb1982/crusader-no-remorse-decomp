@@ -73,7 +73,13 @@ constexpr std::uint16_t kProjectileShape = 0x1D9;
 // is clamped to 0..7 before being doubled, as in the original). NPCs win
 // over other items, then shapes with TYPEFLAG byte 0 bit 4; among equals the
 // nearest (Chebyshev distance, z included). 0 if none or beyond 0x400.
-ObjId find_target(const World& world, ObjId shooter, int dir, bool sixteen_directions);
+// Port addition (World::precise_aim, with `anims`): for the controlled NPC,
+// an item it has no line of fire to in `dir` (fire_distance 0, when its shot
+// action has firing frames) is passed over, as if it were not there: the
+// nearest enemy behind a floor or a ceiling no longer takes the shot from the
+// one in sight, nor does a nearer one behind a wall.
+ObjId find_target(const World& world, ObjId shooter, int dir, bool sixteen_directions,
+                  const AnimDat* anims = nullptr);
 
 // CRUSADER_1130_00ee: the point aimed at on `target`, the centre of its
 // footprint in x and y (Item::I_getCX / CY). In z, with f the footpad height:

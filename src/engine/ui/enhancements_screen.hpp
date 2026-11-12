@@ -9,8 +9,9 @@
 // stick walks the NPC where it points instead of the tank controls, and the
 // "visee directionnelle" toggle (GameConfig::directional_aim): the right stick
 // puts the crosshair where it points, and the "degaine en visant" toggle
-// (GameConfig::draw_on_aim): pushing that stick draws the weapon, and the
-// "resolution native" toggle
+// (GameConfig::draw_on_aim): pushing that stick draws the weapon, the
+// "visee precise" toggle (GameConfig::precise_aim): shots only lock on a
+// target they can reach, and the "resolution native" toggle
 // (GameConfig::native_resolution): the view fills the screen, and its "zoom"
 // row (GameConfig::view_zoom): auto, then pixels of 1 to 4 screen pixels, the
 // "lissage" toggle (GameConfig::smooth_scaling): bilinear filtering, and
@@ -47,8 +48,8 @@ void draw_plus_icon(Surface8& screen, int x, int y, int size, std::uint8_t colou
 class EnhancementsScreen {
 public:
     static constexpr int kPadRow = 0, kFollowRow = 1, kDirectionalRow = 2, kAimRow = 3, kDrawRow = 4,
-                         kNativeRow = 5, kZoomRow = 6, kSmoothRow = 7, kAutosaveRow = 8, kRunRow = 9,
-                         kVibrationRow = 10, kVibrationIntensityRow = 11, kBackRow = 12, kRows = 13;
+                         kPreciseAimRow = 5, kNativeRow = 6, kZoomRow = 7, kSmoothRow = 8, kAutosaveRow = 9,
+                         kRunRow = 10, kVibrationRow = 11, kVibrationIntensityRow = 12, kBackRow = 13, kRows = 14;
     static constexpr int kFont = 14;
 
     struct Rect {

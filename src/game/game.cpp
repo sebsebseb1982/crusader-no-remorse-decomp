@@ -787,7 +787,10 @@ void Game::new_game(int difficulty) {
 // @orig 11D8:31CF
 void Game::update(std::uint32_t elapsed_us) {
     // The enhancements window edits config_ in place.
-    if (world_) world_->set_follow_player(config_.follow_player);
+    if (world_) {
+        world_->set_follow_player(config_.follow_player);
+        world_->set_precise_aim(config_.precise_aim);
+    }
     // The right stick aims for whichever NPC is controlled (a robot taken over
     // too), with the fire key's conditions (CombatControl::handle_key): not
     // for a dead NPC, nor for the player held in stasis.

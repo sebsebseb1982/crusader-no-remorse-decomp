@@ -2907,6 +2907,90 @@ void test_aiming(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
+// Port addition, precise aim (GameConfig::precise_aim): two NPCs in the
+// direction of the shot, the nearer one a floor up, standing on a slab that
+// cuts the line of fire. The original locks on the nearer one (the shot ends
+// in the slab); with the option, on the one on the player's floor, which the
+// shot hits.
+void test_precise_aim(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save(13);
+    for (int i = 0; i < 5; ++i) game.update(kFrameUs);
+    World& w = game.world();
+    const AnimDat& anims = game.animations();
+    const Item* player = w.get(1);
+    std::vector<ObjId> victims;
+    for (ObjId id = 2; id < 256 && victims.size() < 2; ++id) {
+        const Item* it = w.get(id);
+        if (it && !w.is_dead(id) && (it->z & 0xFF) != 254 && w.npc_hp(id) > 0 && w.is_trackable(it->shape))
+            victims.push_back(id);
+    }
+    CHECK(victims.size() == 2);
+    if (victims.size() != 2) return;
+    const ObjId upstairs = victims[0], level = victims[1];
+    std::vector<ObjId> others;
+    for (ObjId id : w.tracked())
+        if (id != 0 && id != upstairs && id != level) others.push_back(id);
+    for (ObjId id : others) w.set_broken(*w.get(id));
+    for (Pid pid = 1; pid < 400; ++pid)
+        if (Process* p = game.kernel().get(pid); p && (p->owner() == upstairs || p->owner() == level)) p->fail();
+    const int dir = 4;  // +x
+    const std::int32_t px = player->x, py = player->y, pz = player->z & 0xFF;
+    // NPCs of another map, brought here: put in the map's cells by the move.
+    w.get(upstairs)->off_map = w.get(level)->off_map = false;
+    w.move_item(upstairs, px + 256, py - 40, pz + 96);
+    w.move_item(level, px + 320, py + 24, pz);
+    w.npc_record(1)[npc::kDirection] = static_cast<std::uint8_t>(dir);
+    w.npc_record(1)[npc::kLastAnim] = 8;
+    w.npc_record(1)[npc::kLastAnim + 1] = 0;
+    CHECK(find_target(w, 1, dir, true) == upstairs);  // the nearer (Chebyshev 256 against 320)
+
+    // The upper floor: a slab (0x2E, 128 x 32 x 16) at the height of the
+    // upper NPC's feet, placed where it cuts the line of fire to it only (the
+    // muzzle is 64 above the player's feet: the line to the other NPC stays
+    // under the slab).
+    const ObjId slab = w.create(0x2E, 0);
+    w.pop_to_coords(px, py, pz + 80);
+    bool placed = false;
+    for (int x = 64; x <= 192 && !placed; x += 16) {
+        for (int y = -32; y <= 8 && !placed; y += 8) {
+            w.move_item(slab, px + x, py + y, pz + 80);
+            placed = fire_distance(w, anims, 1, upstairs, dir) == 0 && fire_distance(w, anims, 1, level, dir) != 0;
+        }
+    }
+    const Item* si = w.get(slab);
+    std::printf("precise aim: slab %u at (%d, %d, +80), cuts only the line to the upper NPC %d\n", slab,
+                si ? si->x - px : 0, si ? si->y - py : 0, placed);
+    CHECK(placed);
+    if (!placed) return;
+    // Another slab under the upper NPC's feet, or it falls down to the
+    // player's floor (and becomes a fair target there).
+    w.create(0x2E, 0);
+    w.pop_to_coords(px + 256, py - 40, pz + 80);
+    CHECK(fire_distance(w, anims, 1, level, dir) != 0);
+
+    // Off: the original choice, the nearer one.
+    game.update(kFrameUs);
+    CHECK(find_target(w, 1, dir, true, &anims) == upstairs);
+    // On: the one in sight; the shot hits it, not the other.
+    game.config().precise_aim = true;
+    game.update(kFrameUs);
+    CHECK(w.precise_aim());
+    CHECK(find_target(w, 1, dir, true, &anims) == level);
+    CHECK(find_target(w, 1, dir, true) == upstairs);  // without the line of fire check
+    const int up_hp = w.npc_hp(upstairs), level_hp = w.npc_hp(level);
+    bool hit = false;
+    for (int shot = 0; shot < 5 && !hit; ++shot) {  // the pistol's spread may miss
+        fire_from_muzzle(game, 1, dir, 11, true);
+        for (int frames = 0; frames < 300 && projectiles(game) != 0; ++frames) game.update(kFrameUs);
+        hit = w.npc_hp(level) < level_hp;
+    }
+    std::printf("precise aim: NPC on the floor hp %d -> %u, upper NPC hp %d -> %u at z %d\n", level_hp,
+                w.npc_hp(level), up_hp, w.npc_hp(upstairs), w.get(upstairs)->z & 0xFF);
+    CHECK(hit && w.npc_hp(upstairs) == up_hp);
+    CHECK(game.machine().faults().empty());
+}
+
 // Milestone 6: the aiming mode and target designation (aim_mode.hpp), on
 // SAVEGAME.13.
 void test_aim_mode(const std::filesystem::path& data) {
@@ -5578,6 +5662,13 @@ int main(int argc, char** argv) {
         test_jump_down_ends_standing(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--precise-aim") {
+        test_aiming(data);
+        test_precise_aim(data);
+        test_aim_mode(data);
+        std::printf(failures ? "%d failure(s)\n" : "all checks passed\n", failures);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--conveyor") {
         test_conveyor_passenger(data);
         return failures ? 1 : 0;
@@ -5713,6 +5804,7 @@ int main(int argc, char** argv) {
     test_other_map_npc_out_of_fast_area(data);
     test_processes_end_with_their_item(data);
     test_aiming(data);
+    test_precise_aim(data);
     test_aim_mode(data);
     test_aim_stick_draws(data);
     test_crosshair_shot_height(data);

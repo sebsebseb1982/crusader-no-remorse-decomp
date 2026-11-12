@@ -113,6 +113,7 @@ GameConfig GameConfig::parse(std::string_view text) {
         else if (key == "autosave") c.autosave = value != "false";
         else if (key == "directionalaim") c.directional_aim = value == "true";
         else if (key == "drawonaim") c.draw_on_aim = value != "false";
+        else if (key == "preciseaim") c.precise_aim = value == "true";
         else if (key == "togglerun") c.toggle_run = value == "true";
         else if (key == "vibration") c.vibration = value != "false";
         else if (key == "vibrationintensity") c.vibration_intensity = std::clamp(number(value), 0, 100);
@@ -166,6 +167,8 @@ std::string GameConfig::text() const {
     else out.erase("directionalaim");
     if (!draw_on_aim) out.set("drawonaim", "false");
     else out.erase("drawonaim");
+    if (precise_aim) out.set("preciseaim", "true");
+    else out.erase("preciseaim");
     if (toggle_run) out.set("togglerun", "true");
     else out.erase("togglerun");
     if (!vibration) out.set("vibration", "false");

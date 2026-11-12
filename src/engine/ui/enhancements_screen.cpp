@@ -10,9 +10,10 @@ namespace crusader {
 
 namespace {
 
-constexpr int kPanelX0 = 100, kPanelY0 = 50, kPanelX1 = 539, kPanelY1 = 455;
-constexpr int kTitleY = 82, kIconSize = 14, kIconGap = 8;
-constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 106, kRowStep = 26, kRowHeight = 24;
+// 14 rows: the panel spans almost the whole 480 lines.
+constexpr int kPanelX0 = 100, kPanelY0 = 34, kPanelX1 = 539, kPanelY1 = 465;
+constexpr int kTitleY = 66, kIconSize = 14, kIconGap = 8;
+constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 90, kRowStep = 26, kRowHeight = 24;
 constexpr int kTextDrop = 17, kRowPad = 18;  // glyphs hang from their baseline
 constexpr std::uint8_t kFrameColour = 0x57, kGreen = 0x0C, kDimGreen = 0x75;
 
@@ -93,7 +94,8 @@ void EnhancementsScreen::draw(Surface8& screen) const {
         const int tint = focused ? kGreen : kDimGreen;
         draw_rounded_box(screen, r.x0, r.y0, r.x1, r.y1, -1, static_cast<std::uint8_t>(tint));
         const TextWriter writer(*fonts_, kFont);
-        if (row == kFollowRow || row == kDirectionalRow || row == kAimRow || row == kDrawRow || row == kNativeRow ||
+        if (row == kFollowRow || row == kDirectionalRow || row == kAimRow || row == kDrawRow ||
+            row == kPreciseAimRow || row == kNativeRow ||
             row == kZoomRow || row == kSmoothRow || row == kAutosaveRow || row == kRunRow || row == kVibrationRow ||
             row == kVibrationIntensityRow) {
             // The name on the left, its state on the right.
@@ -132,6 +134,9 @@ void EnhancementsScreen::draw(Surface8& screen) const {
             } else if (row == kAimRow) {
                 name = tr("VISEE DIRECTIONNELLE", "DIRECTIONAL AIM");
                 on = config_->directional_aim;
+            } else if (row == kPreciseAimRow) {
+                name = tr("VISEE PRECISE", "PRECISE AIM");
+                on = config_->precise_aim;
             } else {
                 name = tr("DEGAINE EN VISANT", "DRAW ON AIM");
                 on = config_->draw_on_aim;
@@ -172,6 +177,8 @@ void EnhancementsScreen::activate(int row) {
         config_->directional_aim = !config_->directional_aim;
     } else if (row == kDrawRow) {
         config_->draw_on_aim = !config_->draw_on_aim;
+    } else if (row == kPreciseAimRow) {
+        config_->precise_aim = !config_->precise_aim;
     } else if (row == kVibrationRow) {
         config_->vibration = !config_->vibration;
     } else if (row == kVibrationIntensityRow) {

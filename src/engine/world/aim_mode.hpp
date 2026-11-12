@@ -53,6 +53,9 @@
 // check_designation, 02F3), when the target moves (designated_target_moved,
 // Item_I_move: the marker follows it while it stays the one found) and when
 // it is destroyed (Item_forget). The death of the controlled NPC clears it.
+// Port addition, precise aim (World::precise_aim): the target searched is
+// one the NPC has a line of fire to (find_target), and the quirk of the
+// unchanged direction is left out.
 
 #include "core/anim_dat.hpp"
 #include "engine/kernel.hpp"

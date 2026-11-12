@@ -119,6 +119,17 @@ void check_config() {
     check(!GameConfig::parse(drawing.text()).draw_on_aim && drawing.text().find("drawonaim=false") != std::string::npos,
           "config drawonaim off round trip");
 
+    // "preciseaim" (port addition): off by default, written only when set.
+    GameConfig precise = GameConfig::parse("irq=7\r\n");
+    check(!precise.precise_aim && precise.text().find("preciseaim") == std::string::npos,
+          "config preciseaim default off, not written");
+    precise.precise_aim = true;
+    check(GameConfig::parse(precise.text()).precise_aim && precise.text().find("preciseaim=true") != std::string::npos,
+          "config preciseaim on round trip");
+    GameConfig precise_off = GameConfig::parse(precise.text());
+    precise_off.precise_aim = false;
+    check(precise_off.text().find("preciseaim") == std::string::npos, "config preciseaim off erased");
+
     // Controller settings (port addition): defaults, not written until changed.
     GameConfig p = GameConfig::parse("irq=7\r\n");
     check(p.pad.is_default() && p.text().find("pad") == std::string::npos, "config pad defaults not written");
