@@ -52,7 +52,7 @@ You must supply it yourself (no game file is shipped) and put it in **`ports/cru
 
 - or the CD image: the `.iso` file in `data/` (extracted on first launch, then no longer needed).
 
-Supported versions: French 1.08 and US 1.23. The game writes its saves (`SAVEGAME/`) and `CRUSADER.CFG` in `data/`: when updating, keep that folder (only replace `crusader/crusader` and `ROMS/Ports/Crusader.sh`, which `scripts/update-rg40xx.ps1` does). If `data/` is empty, the launcher shows "Game data missing" and exits (see `log.txt`).
+Supported versions: French 1.08 and US 1.23. The game writes its saves (`SAVEGAME/`) and `CRUSADER.CFG` in `data/`: when updating, keep that folder (only replace `crusader/crusader` and `ROMS/Ports/Crusader.sh`). `scripts/update-rg40xx.ps1` does that and also copies the PC's `data/SAVEGAME/SAVEGAME.<n>` over the console's (`-SkipSaves` to keep the console's saves). If `data/` is empty, the launcher shows "Game data missing" and exits (see `log.txt`).
 
 The port's sources are in `tools/portmaster/port/` (`port.json`, `README.md`, `gameinfo.xml`, launcher). A `screenshot.png` (4:3, ≥ 640×480, taken in game) must be added to that folder before the PortMaster PR.
 
