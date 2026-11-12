@@ -229,10 +229,11 @@ void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, int angle,
     const int current = npc_dir(world, id);
     const Item* npc = world.get(id);
     if (!npc) return;
-    if (aim.angle != angle || aim.crosshair == -1) {
-        aim.angle = angle;
-        place_crosshair(world, anims);
-    }
+    // Placed again at every call, not only when the angle changes: the NPC
+    // moving while aiming (a strafe with the left stick) carries the crosshair
+    // along, instead of leaving it where it was and turning round it.
+    aim.angle = angle;
+    place_crosshair(world, anims);
     const ScreenSprite* cross = world.state.screen_sprites.get(aim.crosshair);
     if (!cross) return;
     const ShapeInfo* info = world.shape_info(npc->shape);

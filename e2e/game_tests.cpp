@@ -3054,6 +3054,32 @@ void test_aim_stick_draws(const std::filesystem::path& data) {
     CHECK(aim.active);
     // Action 7, left as is by a weapon that keeps the actions, else 0xC.
     CHECK(raised == 7 || raised == 0xC);
+
+    // Moving while the stick aims (a strafe towards the crosshair, 0x24)
+    // carries the crosshair along: it stays 200 units ahead of him, and he
+    // keeps his direction instead of turning round where it was.
+    auto offset = [&] {
+        const Item* p = w.get(1);
+        const ShapeInfo* info = w.shape_info(p->shape);
+        const ScreenSprite* cross = w.state.screen_sprites.get(aim.crosshair);
+        const int cx = static_cast<std::uint16_t>(p->x - info->footpad_x * 8);
+        const int cy = static_cast<std::uint16_t>(p->y - info->footpad_y * 8);
+        return std::pair<int, int>{cross->x - cx, cross->y - cy};
+    };
+    const auto before = offset();
+    const int dir_before = w.npc_direction(1) & 0xF;
+    const std::int32_t x0 = w.get(1)->x, y0 = w.get(1)->y;
+    for (int step = 0; step < 4; ++step) {
+        do_anim(game.kernel(), w, game.animations(), 1, 0x24, kDirCurrent);
+        settle(game);
+    }
+    const auto after = offset();
+    std::printf("aim stick while moving: moved (%d, %d), offset (%d, %d) -> (%d, %d), direction %d -> %d\n",
+                w.get(1)->x - x0, w.get(1)->y - y0, before.first, before.second, after.first, after.second,
+                dir_before, w.npc_direction(1) & 0xF);
+    CHECK(w.get(1)->x != x0 || w.get(1)->y != y0);
+    CHECK(std::abs(after.first - before.first) <= 1 && std::abs(after.second - before.second) <= 1);
+    CHECK((w.npc_direction(1) & 0xF) == dir_before);
     CHECK(game.machine().faults().empty());
 }
 
