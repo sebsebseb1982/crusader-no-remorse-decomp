@@ -73,3 +73,5 @@ The game reads the gamepad itself (SDL_GameController): `gptokeyb` is not used (
 | Start | menu |
 
 In menus: D-pad = arrows, right stick = mouse, A = Enter, B and Start = Esc.
+
+Saving: there is no keyboard to type a name, so the launcher passes `--auto-save-names`: choosing a slot on the Save screen proposes the date and time (`12/11/2026 14:32`), A saves under it, B cancels.

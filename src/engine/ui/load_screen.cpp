@@ -5,6 +5,7 @@
 #include "engine/ui/gump_keys.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <exception>
 #include <string_view>
 
@@ -119,7 +120,18 @@ void LoadScreen::choose(int i) {
         return;
     }
     editing_ = true;
-    name_ = (*names_)[i];
+    name_ = auto_name_ ? auto_name_() : (*names_)[i];
+}
+
+// @orig none: port addition (save names without a keyboard)
+std::string LoadScreen::dated_name(const std::tm& local) {
+    if (local.tm_year + 1900 < 2020) return tr("SAUVEGARDE", "SAVED GAME");
+    const int a = us_version() ? local.tm_mon + 1 : local.tm_mday;
+    const int b = us_version() ? local.tm_mday : local.tm_mon + 1;
+    char text[32];
+    std::snprintf(text, sizeof text, "%02d/%02d/%04d %02d:%02d", a, b, local.tm_year + 1900, local.tm_hour,
+                  local.tm_min);
+    return text;
 }
 
 // @orig 1008:089C 1008:041A

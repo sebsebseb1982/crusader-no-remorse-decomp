@@ -7,6 +7,7 @@
 #include "core/dtable.hpp"
 #include "core/language.hpp"
 #include "core/png_writer.hpp"
+#include "engine/ui/load_screen.hpp"
 #include "engine/ui/message_gump.hpp"
 #include "engine/ui/weasel_gump.hpp"
 #include "engine/usecode/intrinsic_numbering.hpp"
@@ -84,6 +85,13 @@ void test_english_texts(const std::filesystem::path& data) {
     CHECK(game.data_language() == "US" && text_language() == Language::English);
     CHECK(std::string(dtable::item_name(0x4D4)) == "DATA LINK");
     CHECK(std::string(dtable::ammo_name(831)) == "RP-22 CLIP");
+    // The proposed save name (--auto-save-names): month first, every
+    // character drawn by the slots' font.
+    std::tm t{};
+    t.tm_year = 2026 - 1900, t.tm_mon = 10, t.tm_mday = 12, t.tm_hour = 23, t.tm_min = 59;
+    CHECK(LoadScreen::dated_name(t) == "11/12/2026 23:59");
+    const TextWriter writer(game.fonts(), LoadScreen::kFont);
+    for (char c : std::string("0123456789/: ")) CHECK(writer.char_width(static_cast<unsigned char>(c)) > 0);
 }
 
 // The start of mission 1, as test_new_game does on the French data: the

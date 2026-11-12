@@ -225,6 +225,7 @@ void MainMenu::activate(int i) {
         if (!no_game_) {
             load_ = std::make_unique<LoadScreen>(*gumps_, *res_.fonts, *res_.save_names, shared_->selected_slot,
                                                  LoadScreen::Mode::kSave);
+            load_->set_auto_name(res_.auto_save_name);
         }
         break;
     case kCredits:

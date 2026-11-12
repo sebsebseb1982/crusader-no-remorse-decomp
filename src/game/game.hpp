@@ -272,6 +272,10 @@ public:
     // the build; empty hides the line) and the version of the game data
     // detected in CRUSADER.EXE ("CRUSADER:  No Remorse Vx.yy"), with its language.
     void set_port_version(std::string version) { port_version_ = std::move(version); }
+    // Port addition, for consoles without a keyboard (--auto-save-names, given
+    // by the PortMaster launcher): the save screens propose the date and time
+    // as the name (LoadScreen::set_auto_name), confirmed with the pad's A.
+    void set_auto_save_names(bool on) { auto_save_names_ = on; }
     // CRUSYS_1050_093D: the "-laurie" argument enables the cheats (DS:08F0),
     // without turning them on (cheats.hpp).
     void enable_cheats() { world_->state.cheats.enabled = true; }
@@ -284,6 +288,9 @@ public:
     int shots_fired() const { return shots_fired_; }
 
 private:
+    // The save screens' name proposer (LoadScreen::set_auto_name): the local
+    // date and time with set_auto_save_names, else none.
+    std::function<std::string()> auto_save_name_function() const;
     void fire_frame(ObjId actor, int muzzle_a, int muzzle_b, int muzzle_z);
     void vibrate(std::uint16_t low_frequency, std::uint16_t high_frequency, std::uint32_t duration_ms,
                  bool preview = false);
@@ -400,6 +407,7 @@ private:
     // A movie of Weasel's shop: the game palette and the colour cycling come
     // back after it (13E0:0CD8).
     bool weasel_movie_ = false;
+    bool auto_save_names_ = false;     // set_auto_save_names
     bool weasel_intro_played_ = false;  // DS:5ECF
     // The game process's pass count (type 0x245, +0x40 / +0x44) and its value
     // at the last animation pass of the scenery (DS:2D3B), item_anim.hpp.

@@ -161,6 +161,14 @@ In menus, message boxes and screens, some inputs are **fixed**, whatever the bin
 ### 2.8 Quitting
 Holding **Select + Start** together quits the game. It is the only way out on handhelds (PortMaster), where `gptokeyb` is not used.
 
+### 2.8b Save names without a keyboard (PortMaster)
+Handhelds have no keyboard to type a save's name, and the original refuses to save under an empty one. With **`--auto-save-names`**, which only the PortMaster launcher (`Crusader.sh`) passes:
+- choosing a slot on the Save screen (F9 or the menu's "save game") proposes the **local date and time** as its name, in place of the slot's: `12/11/2026 14:32` (French: day first), `11/12/2026 14:32` (US: month first);
+- **A** saves under it, **B** leaves the slot as it was; a keyboard plugged in can still edit the name;
+- a console whose clock is not set (before 2020) gets `SAUVEGARDE` / `SAVED GAME` instead.
+
+Files: `src/engine/ui/load_screen.*` (`set_auto_name`, `dated_name`), `src/game/game.cpp` (`auto_save_name_function`), `src/game/main.cpp`.
+
 ### 2.9 Controller screen
 - Opened from row 0 of the Enhancements screen.
 - Two columns, rows 18 px apart:

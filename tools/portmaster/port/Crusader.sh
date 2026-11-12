@@ -43,7 +43,9 @@ chmod +x "$GAMEDIR/crusader"
 # The game reads the controller itself (SDL_GameController, Select + Start quits);
 # gptokeyb is not used: its default key mapping would double every input.
 # CRUSADER_PAD_DEBUG=1 logs the controller and its inputs in log.txt.
+# No keyboard to type a save's name: --auto-save-names proposes the date and
+# time, confirmed with A.
 pm_platform_helper "$GAMEDIR/crusader"
-./crusader --fullscreen data
+./crusader --fullscreen --auto-save-names data
 
 pm_finish

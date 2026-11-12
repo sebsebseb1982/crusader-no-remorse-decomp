@@ -5054,6 +5054,64 @@ void test_save_game(const std::filesystem::path& data) {
     std::filesystem::remove_all(dir);
 }
 
+// Port addition, for consoles without a keyboard (--auto-save-names, the
+// PortMaster launcher): choosing a slot to save proposes the date and time,
+// Enter (the pad's A) saves under it; Escape (B) leaves the slot as it was.
+void test_auto_save_names(const std::filesystem::path& data) {
+    std::tm t{};
+    t.tm_year = 2026 - 1900, t.tm_mon = 10, t.tm_mday = 12, t.tm_hour = 9, t.tm_min = 5;
+    CHECK(LoadScreen::dated_name(t) == "12/11/2026 09:05");
+    std::tm unset{};
+    unset.tm_year = 70;
+    CHECK(LoadScreen::dated_name(unset) == "SAUVEGARDE");
+
+    const auto dir = std::filesystem::temp_directory_path() / "crusader_auto_save_name_test";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    std::filesystem::copy_file(test_saves(data) / "SAVEGAME.1", dir / "SAVEGAME.1");
+    Game game(data, test_saves(data));
+    game.set_save_dir(dir);
+    game.set_auto_save_names(true);
+    game.load_save(1);
+    settle(game);
+    // Every character of the proposed name has a glyph in the slots' font, and
+    // the name with '_' fits a slot as a typed one must.
+    const TextWriter writer(game.fonts(), LoadScreen::kFont);
+    for (char c : std::string("0123456789/: ")) CHECK(writer.char_width(static_cast<unsigned char>(c)) > 0);
+    CHECK(writer.measure("28/12/2026 23:59_").width <= 314 - 4);
+
+    // F9, down: slot 1 (empty); Escape leaves it, Enter again proposes the
+    // date and saves under it.
+    press(game, 0x43, false);
+    press(game, 0x50, true);
+    press(game, 0x1C, false, 0x0D);
+    press(game, 0x01, false, 0x1B);
+    CHECK(game.screen() && game.save_names()[1].empty());
+    press(game, 0x1C, false, 0x0D);
+    press(game, 0x1C, false, 0x0D);
+    CHECK(!game.screen());
+    const std::string name = game.save_names()[1];
+    CHECK(name.size() == 16 && name[2] == '/' && name[5] == '/' && name[13] == ':');
+    CHECK(LoadScreen::read_names(dir)[1] == name);
+
+    // The menu's "save game" on slot 0 ("SEB"): the date replaces its name.
+    press(game, 0x01, false, 0x1B);
+    CHECK(game.menu());
+    if (!game.menu()) return;
+    const auto b = game.menu()->button(MainMenu::kSave);
+    game.mouse_button(true, b.x0 + 5, b.y0 + 5);
+    game.mouse_button(false, b.x0 + 5, b.y0 + 5);
+    press(game, 0x48, true);
+    press(game, 0x1C, false, 0x0D);
+    CHECK(game.menu() && game.menu()->load_screen() && game.menu()->load_screen()->editing() &&
+          game.menu()->load_screen()->name().size() == 16);
+    press(game, 0x1C, false, 0x0D);
+    CHECK(!game.menu());
+    CHECK(LoadScreen::read_names(dir)[0].size() == 16);
+    CHECK(game.machine().faults().empty());
+    std::filesystem::remove_all(dir);
+}
+
 // Item::I_destroy (10A8:1365): what rests on a crate falls when the crate is
 // destroyed. For items carried by crates in the saved games, every crate
 // under the item is destroyed on a fresh load; the item must end lower (an
@@ -5522,6 +5580,7 @@ int main(int argc, char** argv) {
     test_menu(data);
     test_load_from_menu(data);
     test_save_game(data);
+    test_auto_save_names(data);
     test_crate_destroyed(data);
     test_created_weapon_has_a_clip(data);
 

@@ -73,6 +73,9 @@ If `data/` is empty at launch, the game shows "Game data missing" and exits; see
 
 Buttons can be remapped in Options > Enhancements > Gamepad.
 
+Saving: pick a slot with A; the save is named after the current date and time
+(set your console's clock), A again saves, B cancels.
+
 ## Compiling
 
 `python tools/portmaster/build.py` (Zig cross-compiler), see the repository.

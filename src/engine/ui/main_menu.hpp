@@ -90,6 +90,9 @@ public:
         // detected); an empty line is not drawn.
         std::string port_version;
         std::string data_version;
+        // Port addition: the save screen's proposed name (LoadScreen::set_auto_name),
+        // empty for the original's.
+        std::function<std::string()> auto_save_name;
     };
     MainMenu(const Resources& res, Shared& shared, bool no_game);
 
