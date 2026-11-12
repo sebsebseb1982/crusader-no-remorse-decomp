@@ -3116,9 +3116,12 @@ void test_player_combat_flag(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
-// Issue #8, port addition: a run begun with the weapon holstered ends holstered
-// (the armed run shows the weapon); begun with it out, it stays out.
-void test_run_stop_holsters(const std::filesystem::path& data) {
+// Issue #8: with a weapon, the run is armed (3 -> 0x31) and so is its stop
+// (0x27 -> 0x19, Actor_remap_action 1130:2105). The original, seen under
+// DOSBox (SEB3, holstered, Shift + Up then Up released), ends the stop in its
+// combat stance with the weapon out, whether it was out before the run or
+// not: nothing holsters it.
+void test_run_stop_stays_armed(const std::filesystem::path& data) {
     for (const bool drawn : {false, true}) {
         Game game(data, test_saves(data));
         game.load_save(3);
@@ -3135,7 +3138,8 @@ void test_run_stop_holsters(const std::filesystem::path& data) {
         settle(game);
         std::printf("run stop, weapon out before %d: last action 0x%X, in combat %d\n", drawn, last_action(game),
                     in_combat(w, 1));
-        CHECK(in_combat(w, 1) == drawn);
+        CHECK(last_action(game) == 0x19);
+        CHECK(in_combat(w, 1));
         game.key(kScShift, false, false, 0);
         CHECK(game.machine().faults().empty());
     }
@@ -5445,7 +5449,7 @@ int main(int argc, char** argv) {
         return failures ? 1 : 0;
     }
     if (argc > 2 && std::string(argv[2]) == "--run-stop") {
-        test_run_stop_holsters(data);
+        test_run_stop_stays_armed(data);
         return failures ? 1 : 0;
     }
     if (argc > 2 && std::string(argv[2]) == "--floor-pad") {
@@ -5535,7 +5539,7 @@ int main(int argc, char** argv) {
     test_aim_stick_draws(data);
     test_crosshair_shot_height(data);
     test_player_combat_flag(data);
-    test_run_stop_holsters(data);
+    test_run_stop_stays_armed(data);
     test_weapon_out_movement(data);
     test_leave_surface(data);
     test_enemies(data);
