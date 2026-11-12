@@ -1135,7 +1135,10 @@ void World::update_fast_area(std::int32_t x, std::int32_t y) {
     const FastArea before = fast_area_;
     const FastArea after = FastArea::around(x, y, fast_half_s_, fast_half_d_);
     if (after == before) return;
-    auto on_map = [](const Item& i) { return i.parent == 0 && !(i.flags & (kItemContained | kItemEthereal)); };
+    // The original walks the chains of the cells left and reached (fn_01e7,
+    // fn_02c7): an NPC of another map, linked to no cell (off_map), is never
+    // met. Taking it by its coordinates woke it up on the current map, where
+    // it fought unseen (SEB25: two guards of map 13 shooting on map 15).
     auto in = [](const FastArea& area, const Item& i) { return area.contains(i.x, i.y); };
 
     // Cells left behind: falling items drop first, then the items leave.

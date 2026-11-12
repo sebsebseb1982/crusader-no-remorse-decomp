@@ -4267,6 +4267,31 @@ void test_other_map_npc_hidden(const std::filesystem::path& data) {
     CHECK(robot && robot->map_number == 9 && robot->off_map);
 }
 
+// SEB25, shot dead by an invisible enemy: NPCs 36 and 40, guards of map 13,
+// stand off the map at coordinates that map 15 (the current one) also has.
+// Rebuilding the fast area on loading, and any later move of the camera,
+// took them in by their coordinates: their activity 5 attacked the player,
+// who could not see them. The original enters only the items linked to the
+// cells reached (FastArea_update, US 10B0:13DD).
+void test_other_map_npc_out_of_fast_area(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "ennemi-invisible-tire.sav");
+    World& w = game.world();
+    CHECK(w.current_map() == 15);
+    int awake = 0;
+    w.for_each([&](const Item& i) {
+        if (is_npc_id(i.id) && i.off_map && (i.flags & kItemFastArea)) ++awake;
+    });
+    int processes = 0;
+    game.kernel().for_each_process([&](const Process& p) { processes += p.owner() == 36 || p.owner() == 40; });
+    const int hp = w.npc_hp(1);
+    for (int f = 0; f < 300; ++f) game.update(kFrameUs);
+    std::printf("other map NPCs: %d in the fast area, %d processes, player hp %d -> %d\n", awake, processes, hp,
+                w.npc_hp(1));
+    CHECK(awake == 0 && processes == 0);
+    CHECK(w.npc_hp(1) == hp);
+}
+
 // TEST15 (docs/bugs.md, "un garde mort qui est toujours debout"): a guard
 // killed out of the fast area. Its death waits there (ANIMPRIM.C 1908) and
 // plays once the camera brings it in. Before, it played at once with no
@@ -5448,7 +5473,7 @@ int main(int argc, char** argv) {
     if (argc > 2 && std::string(argv[2]) == "--death-out-of-fast-area") {
         test_death_out_of_fast_area(data);
         test_other_map_npc_hidden(data);
-    test_other_map_npc_hidden(data);
+        test_other_map_npc_out_of_fast_area(data);
         return failures ? 1 : 0;
     }
     if (argc > 2 && std::string(argv[2]) == "--inventory-keys") {
@@ -5565,6 +5590,7 @@ int main(int argc, char** argv) {
     test_saved_death_plays_on(data);
     test_death_out_of_fast_area(data);
     test_other_map_npc_hidden(data);
+    test_other_map_npc_out_of_fast_area(data);
     test_processes_end_with_their_item(data);
     test_aiming(data);
     test_aim_mode(data);
