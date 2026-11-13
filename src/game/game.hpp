@@ -330,8 +330,10 @@ private:
     // The game process's pass (1038:01B1) and the animation of the scenery
     // it asks for (DS:2C52), unless a modal screen pauses the game.
     void animate_scenery();
-    // The game view and the status bar, without the cursor.
-    void render_view(Surface8& screen, RenderStats* stats = nullptr);
+    // The game view and the status bar, without the cursor. With `keep_view`
+    // (a movie's background), under a modal screen or during a movie, the
+    // view keeps its size: a screen of another size gets its centre.
+    void render_view(Surface8& screen, RenderStats* stats = nullptr, bool keep_view = false);
     template <typename Draw>
     void draw_window(Surface8& screen, int x0, int y0, Draw&& draw);
     Surface8 window_;  // 640 x 480 scratch for draw_window

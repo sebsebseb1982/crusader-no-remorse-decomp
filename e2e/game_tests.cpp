@@ -5104,6 +5104,63 @@ void test_weasel(const std::filesystem::path& data) {
     CHECK(!game.screen());
 }
 
+// Issue #13: Weasel's shop, drawn at a native resolution larger than 640 x
+// 480. The snapshot under each of Weasel's movies (640 x 480) resized the
+// view, so the fast area: items entering it again started their usecode at
+// the shop's raised kernel level, the booth's endless idle animation (type
+// 0x21B) among them. That level stayed up after the shop, the game below never
+// ran again and the Silencer stayed in stasis. The user's TEST23: in front of
+// the booth at the base, the shop opened by the selection (S, Enter).
+void test_weasel_native_view(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "weasel-silencer-fige-en-resolution-native.sav");
+    World& w = game.world();
+    Surface8 screen(1280, 720);
+    const auto frame = [&] {
+        game.update(kFrameUs);
+        game.render(screen);
+    };
+    const auto frames = [&](int n) {
+        for (int i = 0; i < n; ++i) frame();
+    };
+    const auto gump = [&game] { return dynamic_cast<const WeaselGump*>(game.screen()); };
+    // Enter, held after the movie's fade in, skips it.
+    const auto skip_movie = [&] {
+        for (int n = 0; n < 10 && !game.movie(); ++n) frame();
+        CHECK(game.movie() != nullptr);
+        frames(90);
+        game.key(0x1C, false, true, 0, 0x0D);
+        frames(8);
+        game.key(0x1C, false, false, 0);
+        frames(3);
+        CHECK(!game.movie());
+    };
+    frames(60);
+    press(game, 0x1F, false, 's');
+    press(game, 0x1C, false, 0x0D);
+    for (int f = 0; f < 300 && !gump(); ++f) frame();
+    CHECK(gump() != nullptr);
+    if (!gump()) return;
+    skip_movie();
+    press(game, 0x01, false, 0x1B);  // exit, nothing bought
+    skip_movie();
+    press(game, 0x31, false, 'n');  // nothing else
+    frames(120);
+    std::printf("weasel native view: screen %d, stasis %d, kernel level %u\n", game.screen() != nullptr,
+                static_cast<int>(w.state.avatar_in_stasis), game.kernel().level());
+    CHECK(!game.screen() && !w.state.avatar_in_stasis && game.kernel().level() == 1);
+    // Facing east (free there), the Silencer walks.
+    const Item start = *w.get(1);
+    if (auto r = w.npc_record(1); !r.empty()) r[npc::kDirection] = 4;
+    game.key(0x48, true, true, 0);
+    frames(120);
+    game.key(0x48, true, false, 0);
+    const Item& now = *w.get(1);
+    std::printf("weasel native view: walked from (%d, %d) to (%d, %d)\n", start.x, start.y, now.x, now.y);
+    CHECK(now.x != start.x || now.y != start.y);
+    CHECK(game.machine().faults().empty());
+}
+
 // Milestone 7: saving with F9 (the save screen and its name), F5 (quick
 // save) and the menu's "save game", in a copy of the saves, then loading back.
 void test_save_game(const std::filesystem::path& data) {
@@ -5636,6 +5693,10 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (!have_test_saves(data)) return 1;
+    if (argc > 2 && std::string(argv[2]) == "--weasel-native-view") {
+        test_weasel_native_view(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--weasel-ammo") {
         test_destroyed_clip_leaves_its_slot(data);
         test_weasel_buys_ammo_after_spent_clips(data);
@@ -5785,6 +5846,7 @@ int main(int argc, char** argv) {
     test_end_credits(data);
     test_start_up(data);
     test_weasel(data);
+    test_weasel_native_view(data);
     test_destroyed_clip_leaves_its_slot(data);
     test_weasel_buys_ammo_after_spent_clips(data);
     test_barrels(data);
