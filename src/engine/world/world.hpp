@@ -597,6 +597,12 @@ public:
     // line of fire (find_target, designate).
     void set_precise_aim(bool on) { precise_aim_ = on; }
     bool precise_aim() const { return precise_aim_; }
+    // Port addition ("correctifs" in the enhancements window,
+    // GameConfig::fix_original_bugs): corrects bugs of the original game's
+    // scripts and data, e.g. Container::I_destroyContents on a dying NPC
+    // drops its keycards instead of destroying them.
+    void set_fix_original_bugs(bool on) { fix_original_bugs_ = on; }
+    bool fix_original_bugs() const { return fix_original_bugs_; }
     // The view is put on another target: the follow's goal, the old target's
     // place, is dropped. Following resumes when the new target moves.
     void stop_following() { follow_active_ = false; }
@@ -745,6 +751,7 @@ private:
     void set_camera_view(std::int32_t x, std::int32_t y, std::int32_t z, int left, int top);
     bool follow_player_ = false;
     bool precise_aim_ = false;
+    bool fix_original_bugs_ = false;
     bool follow_active_ = false;  // follow_goal_ is set
     std::int32_t follow_goal_[3] = {0, 0, 0};
     struct FollowSample {

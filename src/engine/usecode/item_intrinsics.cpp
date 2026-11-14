@@ -364,10 +364,24 @@ std::vector<std::uint16_t> register_item_intrinsics(UCMachine& m, World& w) {
     bound.push_back(0x00A);
     // Container::I_destroyContents (10A8:14AF): for a container (family 6 or
     // 7), Item::I_destroy on each content (SHAPHAND_1090_05cb).
+    // Port addition (World::fix_original_bugs): on an NPC, its keycards
+    // (0x111) are put down where it stands instead. NPCDEATH gives the card of
+    // a group's keycard egg (0x4E7) to the first NPC of the group to die, then
+    // empties the NPCs that leave no body (the courier 0x45D, 0x385, 0x4E6):
+    // in mission 10, killing the courier first lost the green card 9.
     bind({0x02D}, [&m, &w](Item& i, Args) -> std::uint32_t {
         const std::uint8_t family = w.family_of(i.shape);
         if (family != kFamilyContainer && family != kFamilyActorContainer) return 0;
-        for (ObjId c : std::vector<ObjId>(i.contents)) destroy_item(m.kernel(), w, c);
+        const World::Point at = w.location(i);
+        for (ObjId c : std::vector<ObjId>(i.contents)) {
+            const Item* content = w.get(c);
+            if (w.fix_original_bugs() && is_npc_id(i.id) && content && content->shape == 0x111) {
+                w.push(c);
+                w.pop_to_coords(at.x, at.y, at.z);
+                continue;
+            }
+            destroy_item(m.kernel(), w, c);
+        }
         return 0;
     });
 

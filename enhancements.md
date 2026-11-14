@@ -25,6 +25,7 @@ The changes fall into four groups:
 7. [Zoom](#7-zoom)
 8. [Autosave](#8-autosave)
 9. [Toggle run](#9-toggle-run)
+   - [9b. Original game bug fixes](#9b-original-game-bug-fixes)
 10. [Keypad navigation with arrows or gamepad](#10-keypad-navigation-with-arrows-or-gamepad)
 11. [Window, fullscreen, mouse and picture](#11-window-fullscreen-mouse-and-picture)
 12. [Version lines on the main menu](#12-version-lines-on-the-main-menu)
@@ -53,7 +54,7 @@ The original has nothing like it. This screen gathers every option the port adds
 **Look**
 - The screen is cleared. A double red frame (colour `0x57`, corners cut over 3 pixels like the original buttons) fills (100,34)–(539,465).
 - The title is green (`0x0C`), with the "+" icon.
-- 14 rows, 26 px apart. The focused row is bright green (`0x0C`); the others are dark green (`0x75`).
+- 15 rows, 25 px apart. The focused row is bright green (`0x0C`); the others are dark green (`0x75`).
 - An on/off option shows its name on the left and its value on the right: ON / OFF (French: MARCHE / ARRET).
 
 | # | Row (EN / FR) | Effect | CFG key |
@@ -69,9 +70,10 @@ The original has nothing like it. This screen gathers every option the port adds
 | 8 | SMOOTHING / LISSAGE | Bilinear filtering of the picture | `smoothscaling` |
 | 9 | AUTOSAVE / SAUVEGARDE AUTO | Toggles the autosave | `autosave` |
 | 10 | TOGGLE RUN / COURSE PERMANENTE | Toggles toggle-run mode | `togglerun` |
-| 11 | VIBRATION / VIBRATIONS | Controller rumble | `vibration` |
-| 12 | INTENSITY / INTENSITE | Rumble strength, 0 to 100 % by 10 (left / right) | `vibrationintensity` |
-| 13 | BACK / RETOUR | Closes the screen | — |
+| 11 | ORIGINAL BUG FIXES / CORRECTIFS ORIGINAL | Corrects bugs of the original game that can block a mission | `fixoriginalbugs` |
+| 12 | VIBRATION / VIBRATIONS | Controller rumble | `vibration` |
+| 13 | INTENSITY / INTENSITE | Rumble strength, 0 to 100 % by 10 (left / right) | `vibrationintensity` |
+| 14 | BACK / RETOUR | Closes the screen | — |
 
 **Controls**
 - Up or `8`, down or `2`: moves between rows. The focus stops at the first and last row; it does not wrap.
@@ -370,6 +372,22 @@ A write error is logged to stderr and does not stop the game.
 - The Shift press itself is not passed to the game.
 - The movement controller sees Shift held **exactly while running is on**, whatever the physical state of the key.
 - Turning the option off resets running to "off".
+
+---
+
+## 9b. Original game bug fixes
+
+**Option:** ORIGINAL BUG FIXES / CORRECTIFS ORIGINAL (`fixoriginalbugs`, off by default)
+
+Some bugs are in the original game itself, in its scripts (usecode) or its level data, and the port plays them as they are. This option corrects those that can block a mission. Off, the game behaves exactly as the original. The crashes and misbehaviours of the original executable are a different matter: the port always avoids them (section 17).
+
+**Keycards lost with an NPC that leaves no body**
+**Files:** `src/engine/usecode/item_intrinsics.cpp` (`Container::I_destroyContents`)
+- **Original**: many keycards are not placed in a level but handed out when an NPC dies. A keycard egg (shape `0x4E7`) belongs to a group of NPCs. The death script (`NPCDEATH`) creates the card in the inventory of the **first NPC of the group to die**, then moves that inventory into the body. Some NPCs leave no body: the courier robot (`0x45D`) and the shapes `0x385` and `0x4E6`. For them, the script destroys the inventory, card included.
+- **Example**: mission 10. Behind the teleporter to the chemist's room, the courier, the chemist and two guards share the group of the green keycard 9, which opens the lift further on. If the courier dies first, the card is gone. Checked in the original under DOSBox. The mission can still be finished with a second green card, hidden on a shelf of a nearby lab.
+- **With the option**: when the inventory of an NPC is destroyed this way, its keycards (`0x111`) are put down on the floor where it stood instead.
+- Groups with such an NPC were also found on maps 13, 17 and 29.
+- Test: `game_tests --courier-keycard`.
 
 ---
 

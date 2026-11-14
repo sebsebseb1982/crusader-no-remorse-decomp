@@ -10,10 +10,10 @@ namespace crusader {
 
 namespace {
 
-// 14 rows: the panel spans almost the whole 480 lines.
+// 15 rows: the panel spans almost the whole 480 lines.
 constexpr int kPanelX0 = 100, kPanelY0 = 34, kPanelX1 = 539, kPanelY1 = 465;
-constexpr int kTitleY = 66, kIconSize = 14, kIconGap = 8;
-constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 90, kRowStep = 26, kRowHeight = 24;
+constexpr int kTitleY = 64, kIconSize = 14, kIconGap = 8;
+constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 84, kRowStep = 25, kRowHeight = 23;
 constexpr int kTextDrop = 17, kRowPad = 18;  // glyphs hang from their baseline
 constexpr std::uint8_t kFrameColour = 0x57, kGreen = 0x0C, kDimGreen = 0x75;
 
@@ -96,8 +96,8 @@ void EnhancementsScreen::draw(Surface8& screen) const {
         const TextWriter writer(*fonts_, kFont);
         if (row == kFollowRow || row == kDirectionalRow || row == kAimRow || row == kDrawRow ||
             row == kPreciseAimRow || row == kNativeRow ||
-            row == kZoomRow || row == kSmoothRow || row == kAutosaveRow || row == kRunRow || row == kVibrationRow ||
-            row == kVibrationIntensityRow) {
+            row == kZoomRow || row == kSmoothRow || row == kAutosaveRow || row == kRunRow || row == kFixBugsRow ||
+            row == kVibrationRow || row == kVibrationIntensityRow) {
             // The name on the left, its state on the right.
             std::string name;
             bool on = false;
@@ -122,6 +122,9 @@ void EnhancementsScreen::draw(Surface8& screen) const {
             } else if (row == kRunRow) {
                 name = tr("COURSE PERMANENTE", "TOGGLE RUN");
                 on = config_->toggle_run;
+            } else if (row == kFixBugsRow) {
+                name = tr("CORRECTIFS ORIGINAL", "ORIGINAL BUG FIXES");
+                on = config_->fix_original_bugs;
             } else if (row == kVibrationRow) {
                 name = tr("VIBRATIONS", "VIBRATION");
                 on = config_->vibration;
@@ -171,6 +174,8 @@ void EnhancementsScreen::activate(int row) {
         config_->autosave = !config_->autosave;
     } else if (row == kRunRow) {
         config_->toggle_run = !config_->toggle_run;
+    } else if (row == kFixBugsRow) {
+        config_->fix_original_bugs = !config_->fix_original_bugs;
     } else if (row == kNativeRow) {
         config_->native_resolution = !config_->native_resolution;
     } else if (row == kAimRow) {

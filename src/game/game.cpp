@@ -790,6 +790,7 @@ void Game::update(std::uint32_t elapsed_us) {
     if (world_) {
         world_->set_follow_player(config_.follow_player);
         world_->set_precise_aim(config_.precise_aim);
+        world_->set_fix_original_bugs(config_.fix_original_bugs);
     }
     // The right stick aims for whichever NPC is controlled (a robot taken over
     // too), with the fire key's conditions (CombatControl::handle_key): not

@@ -5686,6 +5686,57 @@ void test_weasel_buys_ammo_after_spent_clips(const std::filesystem::path& data) 
     CHECK(refused == 0);
 }
 
+// Mission 10, SEB40 (before the teleporter to the chemist's room): arriving
+// at teleport egg 13 makes the courier (0x45D), the chemist and two guards,
+// all of group 19, that of the green keycard 9 (egg 0x4E7 7453). NPCDEATH
+// gives the card to the first of them to die, and empties the courier, which
+// leaves no body (Container::I_destroyContents): killing it first loses the
+// card, in the original too (checked under DOSBox). With the original bug
+// fixes, the card is put down where the courier stood.
+void test_courier_keycard(const std::filesystem::path& data) {
+    constexpr ObjId kCardEgg = 7453, kShelfCard = 6486;
+    for (const bool fix : {false, true}) {
+        Game game(data, test_saves(data));
+        game.load_save_file(test_saves(data) / "mission10-chimiste-vivant.sav");
+        game.config().fix_original_bugs = fix;
+        World& w = game.world();
+        start_teleport_to_egg(game.kernel(), w, 19, 13, false, false);
+        const Item* egg = w.get(kCardEgg);
+        CHECK(egg && egg->quality == 0x0313);
+        if (!egg) return;
+        ObjId courier = 0;
+        for (int f = 0; f < 10 && !courier; ++f) {
+            game.update(kFrameUs);
+            for (ObjId id = 2; id < 256 && !courier; ++id) {
+                const Item* a = w.get(id);
+                if (a && a->shape == 0x45D && !a->parent && std::abs(a->x - egg->x) < 1500 &&
+                    std::abs(a->y - egg->y) < 1500)
+                    courier = id;
+            }
+        }
+        CHECK(courier != 0 && w.npc_record(courier)[npc::kEggQuality] == 19);
+        if (!courier) return;
+        const std::int32_t cx = w.get(courier)->x, cy = w.get(courier)->y;
+        apply_damage(game.kernel(), w, game.animations(), courier, 1, 0, 500, 2);
+        for (int f = 0; f < 600; ++f) game.update(kFrameUs);
+        const Item* card = nullptr;
+        w.for_each([&](const Item& i) {
+            if (i.shape == 0x111 && (i.quality & 0xFF) == 9 && i.id != kShelfCard) card = &i;
+        });
+        std::printf("courier keycard (fix %d): courier %u %s, egg 0x%04X, card %u parent %u at %d %d\n", fix,
+                    courier, w.get(courier) && !w.is_dead(courier) ? "alive" : "dead", w.get(kCardEgg)->quality,
+                    card ? card->id : 0u, card ? card->parent : 0u, card ? card->x - cx : 0, card ? card->y - cy : 0);
+        CHECK(w.get(kCardEgg)->quality == 0x0013);  // the card was given
+        if (!fix) {
+            CHECK(card == nullptr);
+        } else {
+            CHECK(card != nullptr && card->parent == 0 && card->frame == 2);
+            CHECK(card && std::abs(card->x - cx) < 256 && std::abs(card->y - cy) < 256);
+        }
+        CHECK(game.machine().faults().empty());
+    }
+}
+
 int main(int argc, char** argv) {
     const std::filesystem::path data = argc > 1 ? argv[1] : "data";
     if (!std::filesystem::exists(data / "STATIC/FIXED.DAT")) {
@@ -5705,6 +5756,10 @@ int main(int argc, char** argv) {
     if (argc > 2 && std::string(argv[2]) == "--editor-mod") {
         test_editor_mod(data);
         std::printf(failures ? "%d failure(s)\n" : "all checks passed\n", failures);
+        return failures ? 1 : 0;
+    }
+    if (argc > 2 && std::string(argv[2]) == "--courier-keycard") {
+        test_courier_keycard(data);
         return failures ? 1 : 0;
     }
     if (argc > 2 && std::string(argv[2]) == "--blinking-scenery") {
@@ -5849,6 +5904,7 @@ int main(int argc, char** argv) {
     test_weasel_native_view(data);
     test_destroyed_clip_leaves_its_slot(data);
     test_weasel_buys_ammo_after_spent_clips(data);
+    test_courier_keycard(data);
     test_barrels(data);
     test_mines(data);
     test_station_pads(data);

@@ -17,7 +17,9 @@
 // "lissage" toggle (GameConfig::smooth_scaling): bilinear filtering, and
 // the "sauvegarde auto" toggle (GameConfig::autosave): the game saves itself
 // at the key moments of a mission, "course toggle" (GameConfig::toggle_run),
-// and controller vibration (GameConfig::vibration / vibration_intensity).
+// "correctifs original" (GameConfig::fix_original_bugs): bugs of the original
+// game's scripts are corrected, and controller vibration
+// (GameConfig::vibration / vibration_intensity).
 //
 // Look: the screen cleared, a small red framed window (colour 0x57) in the
 // middle, the title with the "+" icon in green, and one row per entry
@@ -49,7 +51,8 @@ class EnhancementsScreen {
 public:
     static constexpr int kPadRow = 0, kFollowRow = 1, kDirectionalRow = 2, kAimRow = 3, kDrawRow = 4,
                          kPreciseAimRow = 5, kNativeRow = 6, kZoomRow = 7, kSmoothRow = 8, kAutosaveRow = 9,
-                         kRunRow = 10, kVibrationRow = 11, kVibrationIntensityRow = 12, kBackRow = 13, kRows = 14;
+                         kRunRow = 10, kFixBugsRow = 11, kVibrationRow = 12, kVibrationIntensityRow = 13,
+                         kBackRow = 14, kRows = 15;
     static constexpr int kFont = 14;
 
     struct Rect {
