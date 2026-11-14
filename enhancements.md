@@ -386,6 +386,7 @@ Some bugs are in the original game itself, in its scripts (usecode) or its level
 - **Original**: many keycards are not placed in a level but handed out when an NPC dies. A keycard egg (shape `0x4E7`) belongs to a group of NPCs. The death script (`NPCDEATH`) creates the card in the inventory of the **first NPC of the group to die**, then moves that inventory into the body. Some NPCs leave no body: the courier robot (`0x45D`) and the shapes `0x385` and `0x4E6`. For them, the script destroys the inventory, card included.
 - **Example**: mission 10. Behind the teleporter to the chemist's room, the courier, the chemist and two guards share the group of the green keycard 9, which opens the lift further on. If the courier dies first, the card is gone. Checked in the original under DOSBox. The mission can still be finished with a second green card, hidden on a shelf of a nearby lab.
 - **With the option**: when the inventory of an NPC is destroyed this way, its keycards (`0x111`) are put down on the floor where it stood instead.
+- Origin fixed it the same way in *No Regret*: its `NPCDEATH` puts the card on the floor where the NPC stood when the NPC is a robot that leaves no body (`NPC` function 42: shapes `0x2CB`, `0x45D`, `0x338`, `0x385`, `0x4E6`, `0x383`, `0x30C`, `0x319`, `0x5E2`), before emptying it. The No Regret port therefore needs no option for it.
 - Groups with such an NPC were also found on maps 13, 17 and 29.
 - Test: `game_tests --courier-keycard`.
 
