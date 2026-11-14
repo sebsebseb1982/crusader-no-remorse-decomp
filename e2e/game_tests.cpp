@@ -5727,6 +5727,42 @@ void test_jump_down_ends_standing(const std::filesystem::path& data) {
     CHECK(!actor_busy(game.kernel(), 1));
 }
 
+// SEB88: the chemist NPC 128 (CHEMSUIT, map 29), off screen, behind the laser
+// barrier. Off screen an animation plays two frames at once unless its current
+// frame is one of the last two (US 1158:1906), so it never passes the last
+// frame. The port tested the frame after the current one: the 11-frame death
+// went 8, 9, then 11 and ended without frame 10 (220) and its calledFromAnim
+// event. No NPCDEATH: the chemist stayed lying as an NPC and his DEATHBOX 4951
+// never stopped the TIMER 2105 that re-arms the barrier (SEB91, "barriere
+// laser qui se referme").
+void test_offscreen_death_reaches_last_frame(const std::filesystem::path& data) {
+    constexpr ObjId kChemist = 128;
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "chimiste-128-vivant-avant-barriere.sav");
+    World& w = game.world();
+    for (int f = 0; f < 30; ++f) game.update(kFrameUs);
+    const Item* chemist = w.get(kChemist);
+    CHECK(chemist && chemist->shape == 758 && !w.is_dead(kChemist));
+    if (!chemist) return;
+    CHECK(!w.is_partly_on_screen(*chemist));
+    std::set<ObjId> ids_before;
+    w.for_each([&](const Item& i) { ids_before.insert(i.id); });
+    apply_damage(game.kernel(), w, game.animations(), kChemist, 1, 0, 250, 1);
+    CHECK(w.is_dead(kChemist));
+    std::set<int> frames;
+    for (int f = 0; f < 300 && w.get(kChemist); ++f) {
+        game.update(kFrameUs);
+        if (const Item* c = w.get(kChemist); c && c->parent == 0 && !c->off_map) frames.insert(c->frame);
+    }
+    int bodies = 0;
+    w.for_each([&](const Item& i) { bodies += !ids_before.count(i.id) && i.parent == 0 && i.shape != 758; });
+    std::printf("off-screen death: frames %d..%d, chemist %s, %d new items\n", frames.empty() ? -1 : *frames.begin(),
+                frames.empty() ? -1 : *frames.rbegin(), w.get(kChemist) ? "still there" : "set aside", bodies);
+    CHECK(frames.count(220) == 1);
+    CHECK(w.get(kChemist) == nullptr || w.get(kChemist)->parent != 0 || w.get(kChemist)->z == 254);
+    CHECK(game.machine().faults().empty());
+}
+
 
 // A clip destroyed (spent, or by the usecode) leaves the player's ammunition
 // slot it held: Item_forget pushes it out of the world (10B0:1C21), which
@@ -5860,6 +5896,10 @@ int main(int argc, char** argv) {
         test_void_panel_behind_wall(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--offscreen-death") {
+        test_offscreen_death_reaches_last_frame(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--jump-down") {
         test_jump_down_ends_standing(data);
         return failures ? 1 : 0;
@@ -5979,6 +6019,7 @@ int main(int argc, char** argv) {
     test_mouse_in_play(data);
     test_hard_landing(data);
     test_jump_down_ends_standing(data);
+    test_offscreen_death_reaches_last_frame(data);
     test_blocked_step(data);
     test_shot_kills(data);
     test_death_called_from_anim(data);

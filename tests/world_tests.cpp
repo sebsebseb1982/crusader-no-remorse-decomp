@@ -765,6 +765,9 @@ void test_walk_alignment() {
         w.add_with_id(player);
         w.set_camera(100, 100, 0);
         w.state.controlled_npc = 1;
+        // On screen: no frame skipping (1158:1906 plays two frames at once
+        // for an actor out of view).
+        w.set_frame_lookup([](std::uint16_t, std::uint16_t) { return std::optional<FrameBox>{{4000, 4000, 2000, 2000}}; });
         Kernel k;
         do_anim(k, w, anims, 1, 1, 4);
         for (int f = 0; f < 10; ++f) {

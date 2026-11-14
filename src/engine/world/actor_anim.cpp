@@ -304,9 +304,14 @@ bool ActorAnimProcess::step(bool skip_frames, bool& skipped_frames) {
                 skipped_frames = intermediate != nullptr;
             }
         } else {
-            const int next = index + 1;
-            if (next != count - 1 && next != count - 2 && action_ != 58 && !world_.state.avatar_in_stasis) {
-                index = next;
+            // US 1158:1906: two frames at once unless the current frame is one
+            // of the last two, so the skip never passes the last frame. Testing
+            // the frame after it instead went from count - 2 to count: an
+            // 11-frame death off screen stopped one frame short, without its
+            // calledFromAnim event (no NPCDEATH: no body, no death triggers).
+            const int current = index - 1;
+            if (current != count - 1 && current != count - 2 && action_ != 58 && !world_.state.avatar_in_stasis) {
+                index = current + 2;
                 intermediate = a->frame(dir_, static_cast<std::size_t>(index - 1));
                 skipped_frames = intermediate != nullptr;
             }
