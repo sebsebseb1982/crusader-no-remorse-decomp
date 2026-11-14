@@ -6,6 +6,8 @@ A C++20/SDL2 reimplementation of the *Crusader: No Remorse* (Origin, 1995) engin
 
 ![Gameplay screenshot](docs/images/screenshot.png)
 
+The maintainer has played through the whole game with this port, from start to finish, and fixed every bug met along the way. Other playthroughs may still turn up some: please report them (see [Contribution](#contribution)).
+
 This repository contains **no game files**: you need your own copy of the original game. The following versions are currently supported:
 
 - The **French version 1.08** (dated 12 October 1995) — ISO SHA-256: `B370436F2BA380500E918262A83293FBB89600253CC3F4579895D45FDB63B802`
