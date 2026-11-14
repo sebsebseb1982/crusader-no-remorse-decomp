@@ -125,6 +125,7 @@ target_link_libraries(crusader_engine PUBLIC crusader_core)
 add_library(crusader_platform
   src/platform/sdl_presenter.cpp
   src/platform/sdl_input.cpp
+  src/platform/real_shift.cpp
   src/platform/sdl_gamepad.cpp
   src/platform/sdl_audio.cpp)
 target_link_libraries(crusader_platform PUBLIC crusader_engine ${SDL2_TARGET})

@@ -3,6 +3,7 @@
 
 #define SDL_MAIN_HANDLED
 #include "engine/input/mouse_queue.hpp"
+#include "platform/real_shift.hpp"
 #include "platform/sdl_gamepad.hpp"
 #include "platform/sdl_input.hpp"
 
@@ -635,12 +636,50 @@ void test_gamepad_directional_turn_back() {
     CHECK(keys.size() == 1 && keys[0].scancode == 0x4D && !keys[0].pressed);
 }
 
+// Issue #14: Shift + keypad with Num Lock on. The Raw Input reports Windows
+// gave for left Shift, keypad 8, keypad 6 down and up, 8 up, Shift up (traced
+// with SendInput): the fake Shift reports carry the keypad key's scancode,
+// one around the last Shift release has the real one but repeats the release.
+void test_real_shift() {
+    constexpr std::uint16_t kShift = 0x10, kBreak = 1, kE0 = 2;
+    RealShift s;
+    auto c = s.raw_key(kShift, 0x2A, 0);  // Shift down
+    CHECK(c && !c->right && c->pressed && !c->repeat && s.left());
+    CHECK(!s.raw_key(kShift, 0x48, 0));       // fake release before keypad 8
+    CHECK(!s.raw_key(0x26, 0x48, 0));         // keypad 8 (as the up arrow)
+    CHECK(!s.raw_key(kShift, 0x4D, 0));       // fake press, fake release before keypad 6
+    CHECK(!s.raw_key(kShift, 0x4D, 0));
+    CHECK(!s.raw_key(0x27, 0x4D, kBreak));    // keypad 6 up
+    CHECK(!s.raw_key(kShift, 0x4D, kBreak));  // fake press after it
+    CHECK(s.left());
+    CHECK((s.apply(KMOD_NUM) & KMOD_LSHIFT) && (s.apply(KMOD_NUM) & KMOD_NUM) && !(s.apply(KMOD_NUM) & KMOD_RSHIFT));
+    CHECK(!s.raw_key(kShift, 0x48, kBreak));  // around keypad 8 up
+    c = s.raw_key(kShift, 0x2A, kBreak);      // Shift up (sent twice)
+    CHECK(c && !c->pressed && !s.left());
+    CHECK(!s.raw_key(kShift, 0x2A, kBreak));
+    CHECK(s.apply(KMOD_LSHIFT | KMOD_CAPS) == KMOD_CAPS);
+
+    // Held: the typematic presses are repeats. The keyboard's E0 2A is fake.
+    s.raw_key(kShift, 0x36, 0);
+    c = s.raw_key(kShift, 0x36, 0);
+    CHECK(c && c->right && c->pressed && c->repeat && s.right());
+    CHECK(!s.raw_key(kShift, 0x2A, kE0 | kBreak) && !s.left() && s.right());
+    // Losing the keyboard lets go of what is held.
+    const auto released = s.release_all();
+    CHECK(released.size() == 1 && released[0].right && !released[0].pressed && !s.right());
+    CHECK(s.release_all().empty());
+    // A Shift sent by virtual key only (no scancode) counts.
+    c = s.raw_key(0xA1, 0, 0);
+    CHECK(c && c->right && c->pressed);
+}
+
 }  // namespace
 
 int main() {
     SDL_SetMainReady();
     test_scancodes();
     test_keys();
+    test_real_shift();
     test_mouse();
     test_mouse_queue();
     test_gamepad();
