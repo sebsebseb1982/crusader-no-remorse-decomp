@@ -6,6 +6,7 @@
 #include "engine/world/sprite_process.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <initializer_list>
 
 namespace crusader {
@@ -80,6 +81,64 @@ int muzzle_height(const World& world, const AnimDat& anims, ObjId id, int dir) {
     return 0;
 }
 
+// The centre of the controlled NPC (getCX, getCY), where the crosshair turns.
+World::Point npc_centre(const World& world, const Item& npc) {
+    const ShapeInfo* info = world.shape_info(npc.shape);
+    return {static_cast<std::uint16_t>(npc.x - (info ? info->footpad_x : 0) * 8),
+            static_cast<std::uint16_t>(npc.y - (info ? info->footpad_y : 0) * 8), npc.z & 0xFF};
+}
+
+double wrap_degrees(double deg) {
+    deg = std::fmod(deg, 360.0);
+    return deg < 0 ? deg + 360.0 : deg;
+}
+
+// Port addition, precise aim with the right stick: the target the stick points
+// at on screen. The candidates are those find_target could take (tracked, in
+// the combat zone, within 0x400) that the NPC has a line of fire to in their
+// own direction. Each is seen from the crosshair's centre (the NPC's centre at
+// the muzzle's height) to its aim point, projected as the screen shows it,
+// height included: a target on the floor below shows lower than its place on
+// the ground. The nearest in angle to the stick within kStickCone wins; the
+// current one is kept unless another is clearly nearer.
+constexpr double kStickCone = 20.0;
+constexpr double kStickKeep = 5.0;
+
+// @orig none: port-only directional aiming
+ObjId stick_pick(const World& world, const AnimDat& anims, double screen_deg) {
+    const ObjId id = world.state.controlled_npc;
+    const Item* npc = world.get(id);
+    if (!npc) return 0;
+    const World::Point centre = npc_centre(world, *npc);
+    const int eye = (npc->z & 0xFF) + muzzle_height(world, anims, id, npc_dir(world, id));
+    ObjId best = 0;
+    double best_off = kStickCone;
+    for (const ObjId t : world.tracked()) {
+        const Item* item = t != 0 && t != id ? world.get(t) : nullptr;
+        if (!item || (is_npc_id(t) && world.is_dead(t)) || !world.is_partly_in_combat_zone(*item)) continue;
+        const int reach =
+            std::max({std::abs(static_cast<std::int16_t>(npc->x - item->x)), std::abs(static_cast<std::int16_t>(npc->y - item->y)),
+                      std::abs((npc->z & 0xFF) - (item->z & 0xFF))});
+        if (reach > 0x400) continue;
+        const World::Point a = aim_point(world, id, t);
+        // render.hpp: sx = x/4 - y/4, sy = x/8 + y/8 - z, with x and y doubled
+        // from the items' units.
+        const double dx = static_cast<std::int16_t>(a.x - centre.x), dy = static_cast<std::int16_t>(a.y - centre.y);
+        const double sx = (dx - dy) / 2, sy = (dx + dy) / 4 - (a.z - eye);
+        if (std::abs(sx) + std::abs(sy) < 8) continue;
+        double off = std::abs(wrap_degrees(std::atan2(-sy, sx) * 180.0 / 3.14159265358979 - screen_deg));
+        off = std::min(off, 360.0 - off);
+        if (t == world.state.aim.stick_target) off -= kStickKeep;
+        if (off >= best_off) continue;
+        const int dir = closest_direction_in_range(npc->x, npc->y, item->x, item->y, 16, 0, 15);
+        bool muzzle = false;
+        if (fire_distance(world, anims, id, t, dir, 0, 0, 0, &muzzle) == 0 && muzzle) continue;
+        best = t;
+        best_off = off;
+    }
+    return best;
+}
+
 void search_after_turn(Kernel& kernel, World& world, const AnimDat& anims, int dir) {
     const ObjId found = target_in(world, anims, dir);
     if (found == 0) designate(kernel, world, anims, 0);
@@ -140,6 +199,7 @@ void leave_aim_mode(Kernel& kernel, World& world) {
         aim.marker = -1;
     }
     aim.target = 0;
+    aim.stick_target = 0;
 }
 
 // @orig 1138:0708
@@ -213,7 +273,18 @@ void turn_crosshair(Kernel& kernel, World& world, const AnimDat& anims, std::uin
 }
 
 // @orig none: port-only directional aiming
-void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, int angle, bool draw_when_holstered) {
+int world_angle_of_screen(double screen_deg) {
+    // render.hpp: a step (x, y) on the ground shows as (x - y, (x + y) / 2)
+    // on screen (y down). Inverted: the screen direction (c, -s) comes from
+    // the ground direction (c - 2 s, -c - 2 s).
+    const double r = screen_deg * 3.14159265358979 / 180.0;
+    const double c = std::cos(r), s = std::sin(r);
+    const double deg = std::atan2(-c - 2 * s, c - 2 * s) * 180.0 / 3.14159265358979;
+    return static_cast<int>(std::lround(wrap_degrees(deg))) % 360;
+}
+
+// @orig none: port-only directional aiming
+void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, double screen_deg, bool draw_when_holstered) {
     GameState::Aim& aim = world.state.aim;
     const ObjId id = world.state.controlled_npc;
     if (id == 0 || aim.no_stand) return;
@@ -231,7 +302,7 @@ void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, int angle,
             side_step |= anim && anim->owner() == id && (anim->action() == 0x1C || anim->action() == 0x1D);
         });
         if (aim.turns != 0 && side_step) {
-            aim.angle = ((angle % 360) + 360) % 360;
+            aim.angle = world_angle_of_screen(screen_deg);
             place_crosshair(world, anims);
             return;
         }
@@ -248,22 +319,40 @@ void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, int angle,
         return;
     }
     if (aim.turns != 0) return;
-    angle = ((angle % 360) + 360) % 360;
     const int current = npc_dir(world, id);
     const Item* npc = world.get(id);
     if (!npc) return;
+    const World::Point centre = npc_centre(world, *npc);
+    // With precise aim, the target the stick points at on screen: the
+    // crosshair points at it on the ground, the NPC faces it in the direction
+    // find_target sees it in, and its shots take it first. Otherwise the
+    // crosshair goes where the stick points, at the muzzle's height.
+    const ObjId previous = aim.stick_target;
+    aim.stick_target = world.precise_aim() ? stick_pick(world, anims, screen_deg) : 0;
+    const Item* target = aim.stick_target ? world.get(aim.stick_target) : nullptr;
+    if (target) {
+        const World::Point a = aim_point(world, id, aim.stick_target);
+        const double deg = std::atan2(static_cast<std::int16_t>(a.y - centre.y), static_cast<std::int16_t>(a.x - centre.x)) *
+                           180.0 / 3.14159265358979;
+        aim.angle = static_cast<int>(std::lround(wrap_degrees(deg))) % 360;
+    } else {
+        aim.angle = world_angle_of_screen(screen_deg);
+    }
     // Placed again at every call, not only when the angle changes: the NPC
     // moving while aiming (a strafe with the left stick) carries the crosshair
     // along, instead of leaving it where it was and turning round it.
-    aim.angle = angle;
     place_crosshair(world, anims);
     const ScreenSprite* cross = world.state.screen_sprites.get(aim.crosshair);
     if (!cross) return;
-    const ShapeInfo* info = world.shape_info(npc->shape);
-    const std::int32_t cx = static_cast<std::uint16_t>(npc->x - (info ? info->footpad_x : 0) * 8);
-    const std::int32_t cy = static_cast<std::uint16_t>(npc->y - (info ? info->footpad_y : 0) * 8);
-    const int wanted = direction_16(cx, cy, cross->x, cross->y);
-    if (wanted == current || actor_busy(kernel, id)) return;
+    const int wanted = target ? closest_direction_in_range(npc->x, npc->y, target->x, target->y, 16, 0, 15)
+                              : direction_16(centre.x, centre.y, cross->x, cross->y);
+    if (wanted == current) {
+        // Another target in the same direction: marked at once.
+        if (aim.stick_target != previous && world.state.target_designation)
+            search_after_turn(kernel, world, anims, current);
+        return;
+    }
+    if (actor_busy(kernel, id)) return;
     do_anim(kernel, world, anims, id, kneeling(world, id) ? 0x2E : 4, wanted);
     if (world.state.target_designation) search_after_turn(kernel, world, anims, wanted);
 }

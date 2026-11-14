@@ -33,6 +33,7 @@
 #include "test_saves.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -3103,6 +3104,89 @@ void test_aim_mode(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
+// Port addition: the right stick aims where it points on screen
+// (aim_mode.cpp, aim_at_angle). The bug's save: the Silencer on a catwalk,
+// soldier 110 on the floor below (88 lower), a camera (8430) in the
+// neighbouring direction behind a pillar. The stick pushed at the soldier as
+// the screen shows him used to give that neighbouring direction (a mere
+// rotation of the screen, and the soldier's height left out): the shot went
+// to the camera, or with precise aim to the crosshair, over his head.
+void test_stick_aim_floor_below(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "visee-etage-inferieur.sav");
+    GameConfig config = game.config();
+    config.precise_aim = false;
+    config.draw_on_aim = true;
+    game.set_config(config);
+    for (int i = 0; i < 5; ++i) game.update(kFrameUs);
+    World& w = game.world();
+    const AnimDat& anims = game.animations();
+    const GameState::Aim& aim = w.state.aim;
+    constexpr ObjId kSoldier = 110, kCamera = 8430;
+    const Item* soldier = w.get(kSoldier);
+    CHECK(soldier && soldier->shape == 0x371 && !w.is_dead(kSoldier) && w.get(kCamera));
+    if (!soldier || !w.get(kCamera)) return;
+    // Held still: the aim is checked, not the fight.
+    for (Pid pid = 1; pid < 400; ++pid)
+        if (Process* p = game.kernel().get(pid); p && p->owner() == kSoldier) p->fail();
+    const Item* player = w.get(1);
+    const ShapeInfo* info = w.shape_info(player->shape);
+    const int cx = static_cast<std::uint16_t>(player->x - info->footpad_x * 8);
+    const int cy = static_cast<std::uint16_t>(player->y - info->footpad_y * 8);
+    // A screen angle of the offset (dx, dy, dz) from the crosshair's centre.
+    auto screen_deg = [](double dx, double dy, double dz) {
+        return std::atan2(-((dx + dy) / 4 - dz), (dx - dy) / 2) * 180.0 / 3.14159265358979;
+    };
+
+    // The world's x axis shows at 26.6 degrees below screen east: the stick
+    // there puts the crosshair on it (a rotation gave 342 degrees).
+    game.set_aim_stick(true, screen_deg(1, 0, 0));
+    settle(game);
+    for (int i = 0; i < 5; ++i) game.update(kFrameUs);
+    const ScreenSprite* cross = w.state.screen_sprites.get(aim.crosshair);
+    std::printf("stick aim: x axis -> angle %d, crosshair offset (%d, %d), direction %d\n", aim.angle,
+                cross ? cross->x - cx : 0, cross ? cross->y - cy : 0, w.npc_direction(1) & 0xF);
+    CHECK(aim.active && aim.angle == 0 && aim.stick_target == 0);
+    CHECK(cross && std::abs(cross->y - cy) <= 1 && (w.npc_direction(1) & 0xF) == 4);
+    CHECK(world_angle_of_screen(0) == 315 && world_angle_of_screen(-90) == 45 && world_angle_of_screen(90) == 225);
+
+    // The soldier as the screen shows him, from the crosshair's height.
+    const World::Point a = aim_point(w, 1, kSoldier);
+    const double at = screen_deg(static_cast<std::int16_t>(a.x - cx), static_cast<std::int16_t>(a.y - cy),
+                                 a.z - (static_cast<int>(cross ? cross->z : player->z)));
+    const int soldier_dir = closest_direction_in_range(player->x, player->y, soldier->x, soldier->y, 16, 0, 15);
+    // Precise aim: the stick takes him, the Silencer faces him, the shot and
+    // the marker take him.
+    config.precise_aim = true;
+    game.set_config(config);
+    game.set_aim_stick(true, at + 12);  // within the 20 degrees of the stick
+    settle(game);
+    for (int i = 0; i < 5; ++i) game.update(kFrameUs);
+    const int dir = w.npc_direction(1) & 0xF;
+    std::printf("stick aim: soldier at %.1f degrees on screen, direction %d (his %d), stick target %u, shot target %u\n",
+                at, dir, soldier_dir, aim.stick_target, find_target(w, 1, dir, true, &anims));
+    CHECK(aim.stick_target == kSoldier && dir == soldier_dir);
+    CHECK(find_target(w, 1, dir, true, &anims) == kSoldier);
+    const int hp = w.npc_hp(kSoldier);
+    bool hit = false;
+    for (int shot = 0; shot < 5 && !hit; ++shot) {  // the spread may miss
+        fire_from_muzzle(game, 1, dir, 11, true);
+        for (int frames = 0; frames < 300 && projectiles(game) != 0; ++frames) game.update(kFrameUs);
+        hit = w.npc_hp(kSoldier) < hp;
+    }
+    std::printf("stick aim: soldier hp %d -> %u\n", hp, w.npc_hp(kSoldier));
+    CHECK(hit);
+    // The camera, in the next direction, stays out of reach behind its pillar:
+    // the stick pointed at it takes nothing.
+    game.set_aim_stick(true, at - 45);
+    for (int i = 0; i < 5; ++i) game.update(kFrameUs);
+    std::printf("stick aim: 45 degrees off, stick target %u\n", aim.stick_target);
+    CHECK(aim.stick_target != kCamera && aim.stick_target != kSoldier);
+    game.set_aim_stick(false, 0);
+    settle(game);
+    CHECK(game.machine().faults().empty());
+}
+
 // Port addition: pushing the aim stick of directional aiming draws the weapon
 // by itself (aim_mode.cpp, aim_at_angle), without the fire key first.
 void test_aim_stick_draws(const std::filesystem::path& data) {
@@ -5783,6 +5867,7 @@ int main(int argc, char** argv) {
     if (argc > 2 && std::string(argv[2]) == "--precise-aim") {
         test_aiming(data);
         test_precise_aim(data);
+        test_stick_aim_floor_below(data);
         test_aim_mode(data);
         std::printf(failures ? "%d failure(s)\n" : "all checks passed\n", failures);
         return failures ? 1 : 0;
@@ -5927,6 +6012,7 @@ int main(int argc, char** argv) {
     test_precise_aim(data);
     test_aim_mode(data);
     test_aim_stick_draws(data);
+    test_stick_aim_floor_below(data);
     test_crosshair_shot_height(data);
     test_player_combat_flag(data);
     test_run_stop_stays_armed(data);

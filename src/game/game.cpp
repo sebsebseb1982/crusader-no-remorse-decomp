@@ -798,9 +798,7 @@ void Game::update(std::uint32_t elapsed_us) {
     const ObjId aim_npc = world_ ? world_->state.controlled_npc : 0;
     if (aim_stick_ && aim_npc != 0 && !modal() && !movie_ && !world_->is_dead(aim_npc) &&
         !(aim_npc == 1 && world_->state.avatar_in_stasis)) {
-        // Screen east is the world angle 315 degrees, north 225: 315 - screen.
-        aim_at_angle(*kernel_, *world_, anims_, static_cast<int>(std::lround(315.0 - aim_stick_deg_)),
-                     config_.draw_on_aim);
+        aim_at_angle(*kernel_, *world_, anims_, aim_stick_deg_, config_.draw_on_aim);
     } else if (world_) {
         drop_stick_crosshair(*world_);
     }

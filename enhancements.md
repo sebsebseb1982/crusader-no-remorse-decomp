@@ -235,15 +235,16 @@ The right stick puts the crosshair directly in the direction it points.
 - In play only. In this mode the right stick **no longer turns** the avatar and **no longer moves the mouse**.
 - On above 16000, off below 10000 (hysteresis).
 - With **DRAW ON AIM** on, pushing the stick while the weapon is holstered **draws it at once** (action `7`, remapped by the weapon), exactly as the fire key does, and the aim mode follows. The trigger no longer has to be pressed first. If the avatar is busy (walking, rolling...) the draw waits until it is free while the stick stays pushed. Switched off, the stick does nothing until the trigger has drawn the weapon, as before.
-- Angle conversion: world angle = `315° − screen angle`, because screen east is 315° in the world.
+- Angle conversion (`world_angle_of_screen`): the crosshair goes **where the stick points on screen**, at the muzzle's height. The isometric view shows a step `(x, y)` on the ground as `(x − y, (x + y) / 2)` (y down), so the conversion inverts that projection: screen east is 315° in the world, south 45°, but the world's axes show 26.6° off the screen's horizontal, not 45°. (A mere rotation, `315° − screen angle`, was up to 18.4° off along the world's axes, the corridors' directions: a target there fell in the next 16-way direction.)
 - On each update, `aim_at_angle` applies when all of these hold:
   - aiming (combat) mode is active, or the weapon is holstered, **DRAW ON AIM** is on and the avatar is free (it is then drawn);
   - standing up is not forbidden and no turn-around is in progress;
   - no modal window or cutscene is open;
   - the player is not in stasis and controls the Silencer (NPC 1).
-- The crosshair is moved when the angle changes.
-- If the avatar does not face the crosshair (16-way direction measured from its feet) and is not busy, it turns with its guard animation: `0x2E` kneeling, `4` standing.
-- If target designation is active, the target search runs again after the turn.
+- The crosshair is placed again on every update (it follows the avatar when it strafes).
+- With **PRECISE AIM**, the stick also picks a target on screen (see [4b](#4b-precise-aim)): the crosshair then points at it on the ground.
+- If the avatar does not face the crosshair (16-way direction measured from its centre; that of the target picked by the stick) and is not busy, it turns with its guard animation: `0x2E` kneeling, `4` standing.
+- If target designation is active, the target search runs again after the turn, or at once when the stick picks another target in the same direction.
 - **Leaving the aiming mode**: releasing the stick does not leave it, as in the original. Walking with the left stick (not aiming) leaves it at once; a **side step** or a **roll** leaves it for the duration of the animation. To put the weapon away, double-click the **right mouse button**; on the controller, the **jump** action (B by default) holsters a drawn weapon first, then jumps.
 
 ---
@@ -251,7 +252,7 @@ The right stick puts the crosshair directly in the direction it points.
 ## 4b. Precise aim
 
 **Option:** PRECISE AIM / VISEE PRECISE (`preciseaim`, off by default)
-**Files:** `src/engine/world/projectile.cpp` (`find_target`), `src/engine/world/aim_mode.cpp` (`designate`)
+**Files:** `src/engine/world/projectile.cpp` (`find_target`), `src/engine/world/aim_mode.cpp` (`designate`, `stick_pick`)
 
 In the original, a shot of the player locks on the **nearest** target in the 16-way direction it is fired in (`TRACKER_1128_0158`), wherever it is in height and whether or not it can be reached. In levels with several floors, the nearest enemy is often one floor up or down, behind the slab: the shot flies to it and ends in the floor or the ceiling, while the enemy in sight on the player's floor is left alone. A nearer enemy behind a wall does the same.
 
@@ -262,6 +263,16 @@ In the original, a shot of the player locks on the **nearest** target in the 16-
 - A shooter whose shot animation has no firing frame is not filtered (the test cannot be made).
 - The target marker (target designation, **R**) uses the same search, so it **always shows the target the shot goes to**. The original quirk where a new target in an unchanged direction stayed unmarked is left out with the option.
 - Unchanged: the 16 (or 8) directions, the 0x400 range, the spread of the shots.
+
+**With the right stick (directional aiming)**
+
+The search above works on the ground, in 16-way directions. A target on another floor does not show where its place on the ground is: one floor below (96 units) it shows 96 pixels lower, and pointing the stick at it gave another direction. With the option, the stick picks its target **as the screen shows it**:
+- The candidates are those the search could take (tracked, in the combat zone, within 0x400) that the avatar has a line of fire to, each in its own direction.
+- Each is seen from the crosshair's centre (the avatar's centre, at the muzzle's height) to its aim point, projected with its height. The one nearest in angle to the stick, **within 20°**, is taken; the one already taken stays unless another is more than 5° nearer.
+- The avatar faces it (in the 16-way direction the search sees it in), the crosshair points at it on the ground, and as long as it stays in that direction the shots take it **first** (`GameState::Aim::stick_target`), as does the marker.
+- No such target: the crosshair goes where the stick points, as without the option.
+- The stick target is dropped when the aiming mode is left.
+- Test: `test_stick_aim_floor_below` (save `visee-etage-inferieur.sav`: the Silencer on a catwalk, a soldier on the floor below; a camera in the next direction stays out of reach behind a pillar).
 
 ---
 

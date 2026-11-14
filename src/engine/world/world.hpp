@@ -194,6 +194,10 @@ struct GameState {
         int marked_dir = 0x10;         // DS:2890, direction of the last designation
         std::uint32_t checked_at = 0;  // DS:2891, tick of the last designation
         std::uint32_t timer_at = 0;    // DumbTimer +0x40
+        // Port addition (precise aim with the right stick): the target the
+        // stick points at on screen, which the shots of its direction take
+        // first (find_target). 0 when the stick points at none.
+        ObjId stick_target = 0;
     } aim;
     // The mouse turning the controlled NPC (world_mouse.hpp, 13E8:2A13):
     // set while the arrow key it sends is handled (DS:5FF6), with its rate

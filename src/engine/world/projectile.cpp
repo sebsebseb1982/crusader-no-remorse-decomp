@@ -138,6 +138,25 @@ ObjId find_target(const World& world, ObjId shooter, int dir, bool sixteen_direc
         bool muzzle = false;
         return fire_distance(world, *anims, shooter, id, dir, 0, 0, 0, &muzzle) == 0 && muzzle;
     };
+    const auto direction_to = [&](const Item& item) {
+        return sixteen_directions ? closest_direction_in_range(from->x, from->y, item.x, item.y, 16, 0, 15)
+                                  : closest_direction_in_range(from->x, from->y, item.x, item.y, 8, 0, 7) * 2;
+    };
+    const auto distance_to = [&](const Item& item) {
+        return static_cast<std::uint32_t>(
+            std::max({std::abs(static_cast<std::int16_t>(from->x - item.x)),
+                      std::abs(static_cast<std::int16_t>(from->y - item.y)), std::abs((from->z & 0xFF) - (item.z & 0xFF))}));
+    };
+    // Port addition: the target the right stick points at on screen
+    // (aim_at_angle) goes first while it stays a fair one in this direction.
+    if (const ObjId picked = world.state.aim.stick_target; reach_only && picked != 0 && picked != shooter) {
+        const Item* item = world.get(picked);
+        const auto& slots = world.tracked();
+        if (item && std::find(slots.begin(), slots.end(), picked) != slots.end() &&
+            world.is_partly_in_combat_zone(*item) && direction_to(*item) == dir && distance_to(*item) <= 0x400 &&
+            !unreachable(picked))
+            return picked;
+    }
     std::uint32_t best_distance = 0xFFFF;
     ObjId best = 0;
     bool found_npc = false, found_preferred = false;
@@ -153,13 +172,8 @@ ObjId find_target(const World& world, ObjId shooter, int dir, bool sixteen_direc
         const bool preferred = info && info->is(ShapeInfo::kOccludes);  // ITEM_10a8_30a8
         if ((!npc && found_npc) || (!preferred && found_preferred)) continue;
         if (id == shooter || !world.is_partly_in_combat_zone(*item)) continue;
-        const int to = sixteen_directions
-                           ? closest_direction_in_range(from->x, from->y, item->x, item->y, 16, 0, 15)
-                           : closest_direction_in_range(from->x, from->y, item->x, item->y, 8, 0, 7) * 2;
-        if (to != dir) continue;
-        const auto distance = static_cast<std::uint32_t>(
-            std::max({std::abs(static_cast<std::int16_t>(from->x - item->x)),
-                      std::abs(static_cast<std::int16_t>(from->y - item->y)), std::abs((from->z & 0xFF) - (item->z & 0xFF))}));
+        if (direction_to(*item) != dir) continue;
+        const auto distance = distance_to(*item);
         if (distance < best_distance || (npc && !found_npc) || (preferred && !found_preferred)) {
             if (reach_only && unreachable(id)) continue;
             best_distance = distance;

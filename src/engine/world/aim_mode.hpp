@@ -90,14 +90,22 @@ void turn_crosshair(Kernel& kernel, World& world, const AnimDat& anims, std::uin
 // `z`, the muzzle's height in the world (Item::I_fireWeapon adds the
 // shooter's z to the muzzle offset before passing it; low byte kept).
 // Port addition (directional aiming of the controller's right stick): puts the
-// crosshair at `angle` (degrees in the world's x, y plane, like DS:285E) and
-// turns the NPC to face it with its combat stance, when it is not busy. Out of
-// the aiming mode, a drawn weapon only has to enter the mode; when
-// `draw_when_holstered` is on, a holstered one is drawn first (action 7, as the
-// fire key does).
+// crosshair where the stick points on screen (`screen_deg`, counter-clockwise
+// from screen east), at the muzzle's height, and turns the NPC to face it with
+// its combat stance, when it is not busy. With precise aim, a target the NPC
+// can hit that shows on screen within 20 degrees of the stick (height
+// included) is taken instead (GameState::Aim::stick_target): the crosshair
+// points at it on the ground, the NPC faces it and its shots take it first
+// (find_target). Out of the aiming mode, a drawn weapon only has to enter the
+// mode; when `draw_when_holstered` is on, a holstered one is drawn first
+// (action 7, as the fire key does).
 // During a side step (the left stick's strafe sideways), which suspends the
-// mode, the crosshair stays shown at `angle`.
-void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, int angle, bool draw_when_holstered);
+// mode, the crosshair stays shown where the stick points.
+void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, double screen_deg, bool draw_when_holstered);
+// The world angle (degrees in the x, y plane, like DS:285E) of the ground
+// direction that shows on screen at `screen_deg` (the isometric view halves
+// heights: not a mere rotation).
+int world_angle_of_screen(double screen_deg);
 // Removes the crosshair aim_at_angle left shown out of the aiming mode (the
 // stick released, or the side step over without the mode entered again).
 void drop_stick_crosshair(World& world);
