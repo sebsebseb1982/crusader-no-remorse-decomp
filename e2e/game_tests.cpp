@@ -4111,6 +4111,92 @@ void test_station_pads(const std::filesystem::path& data) {
     }
 }
 
+// The turret of a surveillance monitor (issue #15): the monitor gives the
+// player the control of a BASEGUN NPC, which fires through the player's
+// fire key with the weapon of its slot 1. The turret is not a container
+// (family 1), so pop_into leaves that weapon on the map, equipped (0x200)
+// but not contained: a saved game then lost the slot at its load
+// (World::forget_lost_equipment) and the turret turned without firing.
+// - SAVEGAME.1 of the report, new scene: control, fire, back to the player,
+//   save, load, control again, fire.
+// - SAVEGAME.13 of the report, saved with the slot already lost: given back
+//   at the load (the weapon item is still there, equipped).
+void test_player_turret(const std::filesystem::path& data) {
+    constexpr ObjId kMonitor = 2119;  // SURCAMEW, low quality 0xFA
+    // Uses the monitor, dismisses its texts, and returns the NPC it gave.
+    const auto take_control = [](Game& game) {
+        World& w = game.world();
+        use_item(w, kMonitor);
+        for (int f = 0; f < 1500 && w.state.controlled_npc == 1; ++f) {
+            game.update(kFrameUs);
+            if (game.screen() && f % 20 == 0) {
+                game.key(0x1C, false, true, 0, 13);  // Enter
+                game.key(0x1C, false, false, 0, 0);
+            }
+        }
+        for (int f = 0; f < 120; ++f) game.update(kFrameUs);
+        return w.state.controlled_npc;
+    };
+    // Presses the fire key three times; returns the shots they gave.
+    const auto fire = [](Game& game) {
+        const int before = game.shots_fired();
+        for (int press = 0; press < 3; ++press) {
+            game.key(0x39, false, true, 0, ' ');  // Space
+            for (int f = 0; f < 60; ++f) game.update(kFrameUs);
+            game.key(0x39, false, false, 0, 0);
+            for (int f = 0; f < 60; ++f) game.update(kFrameUs);
+        }
+        return game.shots_fired() - before;
+    };
+    const auto weapon_shape = [](const World& w, ObjId npc) {
+        const Item* weapon = w.get(w.active_weapon(npc));
+        return weapon ? weapon->shape : 0;
+    };
+
+    const auto scratch = std::filesystem::temp_directory_path() / "cr_player_turret";
+    std::filesystem::create_directories(scratch);
+    {
+        Game game(data, scratch);
+        game.load_save_file(test_saves(data) / "issue15-tourelle-ne-tire-pas-SAVEGAME.1.sav");
+        for (int f = 0; f < 30; ++f) game.update(kFrameUs);
+        const ObjId turret = take_control(game);
+        const int shots = fire(game);
+        std::printf("player turret: new scene, NPC %u (shape %u), weapon shape %u, %d shots\n", turret,
+                    game.world().get(turret) ? game.world().get(turret)->shape : 0, weapon_shape(game.world(), turret), shots);
+        CHECK(turret > 1 && game.world().get(turret) && game.world().get(turret)->shape == 0x4C8);
+        CHECK(shots >= 3);
+        game.key(0x01, false, true, 0, 0x1B);  // Escape gives the control back
+        game.key(0x01, false, false, 0, 0);
+        for (int f = 0; f < 400; ++f) game.update(kFrameUs);
+        CHECK(game.world().state.controlled_npc == 1);
+
+        game.save_game(5);
+        Game again(data, scratch);
+        again.load_save(5);
+        std::printf("player turret: after save and load, weapon shape %u\n", weapon_shape(again.world(), turret));
+        CHECK(weapon_shape(again.world(), turret) == 909);
+        const ObjId second = take_control(again);
+        const int more = fire(again);
+        std::printf("player turret: after load, NPC %u, %d shots\n", second, more);
+        CHECK(second == turret && more >= 3);
+        CHECK(again.machine().faults().empty() && again.machine().unbound_intrinsic_calls().empty());
+    }
+    {
+        // The save of the report: NPC 24, its slot lost, its weapon 8736 on the map.
+        Game game(data, scratch);
+        game.load_save_file(test_saves(data) / "issue15-tourelle-ne-tire-pas-SAVEGAME.13.sav");
+        for (int f = 0; f < 30; ++f) game.update(kFrameUs);
+        std::printf("player turret: SAVEGAME.13 of the report, NPC 24 weapon shape %u\n", weapon_shape(game.world(), 24));
+        CHECK(game.world().npc_equip(24, 1) == 8736 && weapon_shape(game.world(), 24) == 909);
+        const ObjId turret = take_control(game);
+        const int shots = fire(game);
+        std::printf("player turret: SAVEGAME.13, NPC %u, %d shots\n", turret, shots);
+        CHECK(turret == 24 && shots >= 3);
+        CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
+    }
+    std::filesystem::remove_all(scratch);
+}
+
 // Wall guns (WALLGUN 0xA1A). The search for a target (WALLGUN_0A5F) is a
 // spawned process whose result decides the attack: it often ends at once,
 // so spawn must hand that result over.
@@ -5864,6 +5950,10 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (!have_test_saves(data)) return 1;
+    if (argc > 2 && std::string(argv[2]) == "--player-turret") {
+        test_player_turret(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--weasel-native-view") {
         test_weasel_native_view(data);
         return failures ? 1 : 0;
@@ -6035,6 +6125,7 @@ int main(int argc, char** argv) {
     test_mines(data);
     test_station_pads(data);
     test_turrets(data);
+    test_player_turret(data);
     test_monitors(data);
     test_scenery_animation(data);
     test_steam_valve_save(data);

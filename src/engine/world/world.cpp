@@ -1242,6 +1242,15 @@ ObjId World::pop() {
 
 // @orig none: port repair of saves made before World::destroy unequipped
 int World::forget_lost_equipment() {
+    // An NPC that is not a container (family 6 or 7: the turrets, BASEGUN
+    // among them, are family 1) cannot hold what it equips: pop_into leaves
+    // the item on the map at the NPC's place, flagged equipped (0x200) with
+    // its slot as z, never contained. The original keeps such a weapon in
+    // the slot all the same.
+    const auto equipped_in_place = [](const Item& item, int slot) {
+        return item.parent == 0 && (item.flags & kItemEquipped) && !(item.flags & kItemContained) &&
+               (item.z & 0xFF) == slot;
+    };
     int forgotten = 0;
     for (ObjId npc = 1; npc < 256; ++npc) {
         if (!get(npc)) continue;
@@ -1249,9 +1258,32 @@ int World::forget_lost_equipment() {
             const ObjId id = npc_equip(npc, slot);
             if (id == 0) continue;
             const Item* item = get(id);
-            if (item && item->parent == npc) continue;
+            if (item && (item->parent == npc || equipped_in_place(*item, slot))) continue;
             set_npc_word(npc, 0x1B + 2 * slot, 0);
             ++forgotten;
+        }
+    }
+    // Saves made by 1.40.1 and before had already lost the slot of such a
+    // weapon (the turret of the surveillance monitors, which then could not
+    // fire: issue #15) but not the item, which still sits at its NPC's
+    // place, equipped. The slot is given back, the record's active weapon
+    // (+0x15) having been kept.
+    std::vector<std::pair<ObjId, int>> orphans;
+    for_each([&](const Item& item) {
+        const int slot = item.z & 0xFF;
+        if (!is_npc_id(item.id) && slot >= 1 && slot < 30 && equipped_in_place(item, slot) &&
+            !(item.flags & kItemEthereal)) {
+            orphans.emplace_back(item.id, slot);
+        }
+    });
+    for (const auto& [id, slot] : orphans) {
+        const Item* item = get(id);
+        for (ObjId npc = 2; npc < 256; ++npc) {
+            const Item* owner = get(npc);
+            if (!owner || owner->x != item->x || owner->y != item->y || npc_equip(npc, slot) != 0) continue;
+            if (npc_word(npc, 0x15) != slot) continue;
+            set_npc_word(npc, 0x1B + 2 * slot, id);
+            break;
         }
     }
     return forgotten;
