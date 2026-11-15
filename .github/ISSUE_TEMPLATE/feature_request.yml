@@ -1,0 +1,56 @@
+name: Feature request
+description: Suggest an improvement or a new feature
+title: "[Enhancement] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to suggest an improvement. Please describe the problem or use case your idea would address.
+        This repository contains **no game files**: never attach the game's executables, data or ISO.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of the project should this improvement apply to?
+      options:
+        - Windows game
+        - Linux game
+        - PortMaster
+        - All game versions
+        - Level editor
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What would you like to be able to do, or what is currently difficult or missing?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed improvement
+      description: Describe the change or feature you would like to see.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. Describe any alternative solutions or workarounds you have considered.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Optional. Add relevant details, screenshots, mockups, or examples.
+    validations:
+      required: false
