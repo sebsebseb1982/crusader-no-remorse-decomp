@@ -17,6 +17,6 @@ When a release is due:
 2. the PortMaster build is cross-compiled for aarch64 with Zig (`tools/portmaster/build.py`) and packaged with its launcher;
 3. `SHA256SUMS` is computed and a GitHub release `vX.Y.Z` is created with generated notes and the archives.
 
-Pull requests are checked by [`.github/workflows/ci.yml`](../.github/workflows/ci.yml): commit messages (commitlint) and a build with the tests on Linux and Windows.
+Pushes to `master` and pull requests are checked by [`.github/workflows/ci.yml`](../.github/workflows/ci.yml): commit messages (commitlint) and a build with the tests on Linux and Windows. Pushes to `master` also trigger the release workflow, which analyses the commits and builds and tests the binaries when a release is due.
 
 There is nothing to do by hand: to publish a version, merge or push a `fix:` or `feat:` commit.
