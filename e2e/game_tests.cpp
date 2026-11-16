@@ -991,6 +991,16 @@ void test_fades(const std::filesystem::path& data) {
     CHECK(s.cycle_paused && game.kernel().get(wait) && !game.kernel().get(wait)->terminated());
     for (int i = 0; i < 70; ++i) game.update(kFrameUs);
     CHECK(!s.cycle_paused && s.screen_palette == s.game_palette);
+
+    // The menu opened during a fade that resumes the cycling when it fails:
+    // the cycling stays paused, so the menu palette does not flicker.
+    game.kernel().add(std::make_unique<PaletteFaderProcess>(s.screen_palette, Palette::filled(0, 0, 0), 60, 50, 1,
+                                                            &s.cycle_paused, true));
+    for (int i = 0; i < 4; ++i) game.update(kFrameUs);
+    game.open_menu();
+    const Palette menu = s.screen_palette;
+    for (int i = 0; i < 31; ++i) game.update(kFrameUs);
+    CHECK(game.menu() && s.cycle_paused && s.screen_palette == menu);
 }
 
 // Milestone 3: the credits from the menu.
@@ -6120,6 +6130,10 @@ int main(int argc, char** argv) {
     }
     if (argc > 2 && std::string(argv[2]) == "--floor-pad") {
         test_floor_pad(data);
+        return failures ? 1 : 0;
+    }
+    if (argc > 2 && std::string(argv[2]) == "--fades") {
+        test_fades(data);
         return failures ? 1 : 0;
     }
     test_load_and_run(data);

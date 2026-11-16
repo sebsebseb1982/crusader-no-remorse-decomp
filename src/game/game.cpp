@@ -1173,12 +1173,16 @@ void Game::open_menu(bool no_game) {
     if (menu_) return;
     // WORLD_13e8_0e7d and 10c3: the status bar goes, the cursor shows.
     world_->state.status_bar_visible = false;
-    world_->state.cycle_paused = true;
     apply_status_bar_mouse_range();
     // IRGUMP_13d0_0000: running fades are stopped (Kernel_fail_processes,
     // type 0x206), the menu palette is written.
     kernel_->fail_processes(0, PaletteFaderProcess::kType, kernel_->level());
     world_->state.screen_palette = menu_palette_;
+    // Paused after the fades fail: a failed fade resumes the colour cycling
+    // (FADE_1440_0278), which would write the game's entries 1..14 over the
+    // menu palette. The original's menu is modal (Gump_run_modal), so its
+    // cycling never runs there.
+    world_->state.cycle_paused = true;
     key_daemon_->set_rate(kMenuDaemonRate);
     keyboard_.set_repeat_delay(kMenuRepeatDelay);
     keyboard_.reset();
