@@ -296,7 +296,18 @@ std::vector<std::uint16_t> register_item_intrinsics(UCMachine& m, World& w) {
     }
     bind({0x011}, [](Item& i, Args) { return i.map_number; });  // Actor::I_getMap, same array as getMapArray
     bind({0x041}, [](Item& i, Args) { return i.map_number; });  // Egg::I_getEggId (1098:05C5), same array
-    bind({0x016}, [](Item& i, Args) { return i.shape; });
+    // Item::I_getShape (10A8:068F) reads the shape array with no check, so a
+    // destroyed item's free slot still gives its shape (No Regret's loot of
+    // dead NPCs depends on it).
+    m.set_intrinsic(0x016, [&w](UCMachine& machine, UCProcess&, Args a) -> std::uint32_t {
+        std::array<std::uint8_t, 2> id{};
+        if (!machine.dereference(arg32(a, 0), id)) return 0;
+        const ObjId obj = static_cast<ObjId>(id[0] | id[1] << 8);
+        if (const Item* item = w.get(obj)) return item->shape;
+        const Item* last = w.freed_slot(obj);
+        return last ? last->shape : 0;
+    });
+    bound.push_back(0x016);
     bind({0x024}, [&w](Item& i, Args a) { w.set_shape(i, arg16(a, 4)); return 0u; });
     bind({0x08D, 0x119}, [&w](Item& i, Args) { w.set_broken(i); return 0u; });
     bind({0x010, 0x02E, 0x068, 0x085, 0x0A2, 0x0AF, 0x0D9, 0x0EA, 0x12F},

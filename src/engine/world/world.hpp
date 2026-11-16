@@ -379,6 +379,11 @@ public:
     // taking the slot out of its free list.
     Item& add_with_id(Item item);
     void destroy(ObjId id);  // also destroys contents; the slot becomes free
+    // What a free slot held last (its item arrays are not cleared), or null.
+    const Item* freed_slot(ObjId id) const {
+        const auto it = stale_.find(id);
+        return it == stale_.end() ? nullptr : &it->second;
+    }
     std::size_t item_count() const { return items_.size(); }
 
     const ShapeInfo* shape_info(std::uint16_t shape) const {
