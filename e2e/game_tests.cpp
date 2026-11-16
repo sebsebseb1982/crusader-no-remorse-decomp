@@ -2328,7 +2328,10 @@ void test_keypad(const std::filesystem::path& data) {
 
 // The autosave (port addition): SAVEGAME.12 is written when a keypad's code
 // matches, a keycard is picked up, a mission starts or a movie ends, only when
-// GameConfig::autosave is on, and F6 loads it back.
+// GameConfig::autosave is on, and F6 loads it back. The keypad's waits for
+// the end of its KEYPAD script: saved at once, the keypad kept its busy bit
+// (0x1000) and the door was not open yet, for good once loaded. A keypad
+// saved busy all the same (a save made during that script) is freed.
 void test_autosave(const std::filesystem::path& data) {
     const auto dir = std::filesystem::temp_directory_path() / "crusader_autosave_test";
     const auto autosave = dir / ("SAVEGAME." + std::to_string(Game::kAutoSave));
@@ -2374,8 +2377,12 @@ void test_autosave(const std::filesystem::path& data) {
         enable(game);
         game.load_save(2);
         code(game, true);
+        CHECK(!std::filesystem::exists(autosave) && (game.world().get(5459)->flags & 0x1000));
+        for (int f = 0; f < 600 && !std::filesystem::exists(autosave); ++f) game.update(kFrameUs);
         CHECK(std::filesystem::exists(autosave) && game.autosave_icon_shown());
-        for (int f = 0; f < 200; ++f) game.update(kFrameUs);
+        // The floppy disk goes after 2.5 s (150 frames), before the opened
+        // door's keycard check saves again (I_hasKeycard, ~170 ticks on).
+        for (int f = 0; f < 155; ++f) game.update(kFrameUs);
         CHECK(!game.autosave_icon_shown());
         // It loads like any save (F6 asks, Enter... here the slot directly).
         Game again(data, test_saves(data));
@@ -2383,6 +2390,18 @@ void test_autosave(const std::filesystem::path& data) {
         again.load_save(Game::kAutoSave);
         CHECK(again.world().get(1) && again.world().get(1)->x == game.world().get(1)->x);
         CHECK(again.machine().faults().empty());
+        const std::uint16_t keypad = again.world().get(5459)->flags;
+        std::printf("autosave: keypad flags %04X once loaded\n", keypad);
+        CHECK(!(keypad & 0x1000) && (keypad & 0x0004));
+    }
+    {
+        Game game(data, test_saves(data));
+        game.set_save_dir(dir);
+        game.load_save(2);
+        game.world().get(5459)->flags |= 0x1000;
+        game.save_game(Game::kAutoSave);
+        game.load_save(Game::kAutoSave);
+        CHECK(!(game.world().get(5459)->flags & 0x1000));
     }
     // Switched off: nothing.
     fresh();

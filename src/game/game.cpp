@@ -438,6 +438,7 @@ void Game::reset_world() {
     screen_process_ = nullptr;
     sprites_suspended_ = false;
     autosave_pending_ = false;
+    autosave_after_ = 0;
 }
 
 // @orig none: port-only gamepad vibration
@@ -530,6 +531,19 @@ void Game::load_save_file(const std::filesystem::path& path) {
         world_->set_frame(*steam, frame);
         steam->flags &= static_cast<std::uint16_t>(~0x1000);
     }
+    // A keypad (KEYPADNS, KEYPADEW) holds status 0x1000 while its KEYPAD
+    // script runs: the keypad, then after the code a wait and the door's
+    // TRIGGER. use() does nothing while it is set and the S selection skips
+    // it; saved during that run, the bit stayed with no process to clear it,
+    // the keypad dead and its door shut for good. The run is dropped, as the
+    // other processes: the code is entered again.
+    const UsecodeFile& usecode = machine_->usecode();
+    world_->for_each([&](const Item& i) {
+        if (!(i.flags & 0x1000) || i.parent || !usecode.has_class(i.shape)) return;
+        const std::string cls = usecode.class_name(i.shape);
+        if (cls != "KEYPADNS" && cls != "KEYPADEW") return;
+        if (Item* keypad = world_->get(i.id)) keypad->flags &= static_cast<std::uint16_t>(~0x1000);
+    });
     world_->clear_fast_area();
     world_->set_camera(player->x, player->y, player->z);
     // An NPC saved while its death played (dead, last action 0x12 or 0x14,
@@ -846,7 +860,9 @@ void Game::update(std::uint32_t elapsed_us) {
         left -= step;
         if (!more || movie_ || kernel_->slice_interrupted()) break;
     }
-    if (autosave_pending_ && kernel_->ticks() >= autosave_due_ && !modal() && player_may_act(*world_)) {
+    if (autosave_after_ && !kernel_->get(autosave_after_)) autosave_after_ = 0;
+    if (autosave_pending_ && kernel_->ticks() >= autosave_due_ && !autosave_after_ && !modal() &&
+        player_may_act(*world_)) {
         autosave_pending_ = false;
         autosave();
     }
@@ -1456,8 +1472,14 @@ void Game::show_keypad(std::int16_t code, Pid pid) {
             p->set_call_result(static_cast<std::uint16_t>(screen.result()));
         }
         // Port addition: the code matched, the door or chest is about to
-        // open (autosave).
-        if (code != 0 && static_cast<std::int16_t>(screen.result()) == code) autosave();
+        // open (autosave). Not at once: the KEYPAD script still holds the
+        // keypad's busy bit (0x1000) and has yet to open the door (a wait,
+        // then TRIGGER); saved now, the door stayed shut and the keypad
+        // dead. The autosave waits until that script has ended.
+        if (code != 0 && static_cast<std::int16_t>(screen.result()) == code) {
+            request_autosave();
+            autosave_after_ = pid;
+        }
     });
 }
 

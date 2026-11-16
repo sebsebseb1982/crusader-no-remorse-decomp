@@ -427,6 +427,7 @@ private:
     HelpScreen::Pictures help_pictures_;
     bool autosave_pending_ = false;    // request_autosave, until the player may act
     std::uint32_t autosave_due_ = 0;   // the kernel tick from which it can run
+    Pid autosave_after_ = 0;           // a script that must end first (the keypad's)
     bool run_toggled_ = false;         // GameConfig::toggle_run: running is switched on
     std::uint32_t autosave_icon_us_ = 0;  // what is left of the floppy disk's display
     std::vector<std::uint8_t> floppy_;    // its palette indices (0xFF: transparent), built when first drawn
