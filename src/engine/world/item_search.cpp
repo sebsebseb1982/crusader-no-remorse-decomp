@@ -125,8 +125,16 @@ bool World::matches_loop_script(const Item& item, std::span<const std::uint8_t> 
 // @orig 10C8:0771 10C8:0A8E
 std::vector<ObjId> World::area_search(ObjId centre, std::uint16_t range, std::span<const std::uint8_t> script) const {
     std::vector<ObjId> found;
+    // The original reads the centre's x/y in the item arrays (INTER.C, loop
+    // type 2), which a destroyed item's free slot keeps. MISS5 destroys its
+    // egg, then looks around it for the door its contact comes out by: the
+    // door stayed shut and the contact behind it, unseen (issue #16).
     const Item* c = get(centre);
-    if (!c) return found;
+    if (!c) {
+        const auto last = stale_.find(centre);
+        if (last == stale_.end()) return found;
+        c = &last->second;
+    }
     // Rectangle around the centre's own x/y (16-bit, ITEMFIND.C 0771):
     // negative low bounds become 0, negative high bounds 0x7FFF.
     const auto cx = static_cast<std::int16_t>(c->x), cy = static_cast<std::int16_t>(c->y);

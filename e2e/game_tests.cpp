@@ -2785,17 +2785,25 @@ void test_death_called_from_anim(const std::filesystem::path& data) {
     game.load_save(13);
     for (int i = 0; i < 5; ++i) game.update(kFrameUs);
     World& w = game.world();
-    // A guard put beside the player, where it stands on something.
+    // A guard put near the player, where it stands on something, and away
+    // from the floors that take no blood: NPC fn 32 (NPCDEATH 0CC2) finds
+    // none of these shapes within 160 of the dead guard (CATWALK2 0x132 is
+    // under the player).
+    static constexpr std::uint8_t kNoBlood[] = {
+        'N', 0x2F, 1, 0x65, 3, 0x66, 3, 0xCD, 4, 0x36, 3, 0x90, 2, 0xCD, 0,
+        0x5F, 0, 0xD1, 0, 0x32, 1, 0x5F, 3, 0x62, 3, 0x5E, 3, 0x6C, 3, '$'};
     const ObjId victim = 2;
     const Item* player = w.get(1);
     CHECK(w.get(victim) && w.get(victim)->shape == 0x2FD && !w.is_dead(victim));
     bool placed = false;
     World::Point at{};
-    for (int dir = 0; dir < 16 && !placed; dir += 2) {
-        at = {player->x + kDirectionDx[dir] * 96, player->y + kDirectionDy[dir] * 96, player->z};
-        w.move_item(victim, at.x, at.y, at.z);
-        placed = (support_mask(w, 0x2FD, at.x, at.y, at.z, true, victim) & 0x10) &&
-                 position_free(w, 0x2FD, at, nullptr, victim);
+    for (int step = 1; step <= 6 && !placed; ++step) {
+        for (int dir = 0; dir < 16 && !placed; dir += 2) {
+            at = {player->x + kDirectionDx[dir] * 96 * step, player->y + kDirectionDy[dir] * 96 * step, player->z};
+            w.move_item(victim, at.x, at.y, at.z);
+            placed = (support_mask(w, 0x2FD, at.x, at.y, at.z, true, victim) & 0x10) &&
+                     position_free(w, 0x2FD, at, nullptr, victim) && w.area_search(victim, 160, kNoBlood).empty();
+        }
     }
     CHECK(placed);
     std::set<ObjId> ids_before;
@@ -3375,6 +3383,42 @@ void test_player_combat_flag(const std::filesystem::path& data) {
     for (int i = 0; i < 10; ++i) game.update(kFrameUs);
     CHECK(!in_combat(w, 1));
     CHECK(game.machine().faults().empty());
+}
+
+// Issue #16 (mission 5, English version): the contact who gives the keycard
+// played his movie but stayed unseen. MISS5 (egg type 0x11) destroys its egg,
+// then looks around it for the item 0x21E that leads to the door the contact
+// (NPC 82) comes out by. The original reads the centre's x/y in the item
+// arrays, which a free slot keeps; the port found nothing around a destroyed
+// item, so the door stayed shut and the contact walked into it, behind the
+// wall. The save comes from the English 1.01, whose usecode globals are not
+// laid out as the French ones: the global MISS5 reads the player from
+// (0x3C) is set back.
+void test_mission5_contact_comes_out(const std::filesystem::path& data) {
+    constexpr ObjId kEgg = 6703, kContact = 82;
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "contact-invisible-mission5-issue16.sav");
+    World& w = game.world();
+    const Item* egg = w.get(kEgg);
+    const Item* contact = w.get(kContact);
+    CHECK(egg && egg->quality == 0x11 && contact && contact->shape == 0x4E0);
+    if (!egg || !contact) return;
+    const std::int32_t hidden_y = contact->y;
+    game.machine().globals()[0x3C] = 1;
+    game.machine().globals()[0x3D] = 0;
+    w.teleport(1, egg->x, egg->y, egg->z, w.current_map());
+    int frames = 0;
+    while (!game.movie() && frames < 900) {
+        game.update(kFrameUs);
+        ++frames;
+    }
+    contact = w.get(kContact);
+    const Item* player = w.get(1);
+    std::printf("mission 5 contact: movie after %d frames, egg %s, contact y %d -> %d (player y %d)\n", frames,
+                w.get(kEgg) ? "kept" : "gone", hidden_y, contact ? contact->y : 0, player->y);
+    CHECK(game.movie() != nullptr && !w.get(kEgg));
+    CHECK(contact && !contact->off_map && (contact->flags & kItemFastArea));
+    CHECK(contact && contact->y > hidden_y + 200 && std::abs(contact->y - player->y) < 64);
 }
 
 // Issue #8: with a weapon, the run is armed (3 -> 0x31) and so is its stop
@@ -6019,6 +6063,10 @@ int main(int argc, char** argv) {
         test_other_map_npc_out_of_fast_area(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--mission5-contact") {
+        test_mission5_contact_comes_out(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--inventory-keys") {
         test_inventory_keys(data);
         test_run_after_last_weapon_dropped(data);
@@ -6139,6 +6187,7 @@ int main(int argc, char** argv) {
     test_death_out_of_fast_area(data);
     test_other_map_npc_hidden(data);
     test_other_map_npc_out_of_fast_area(data);
+    test_mission5_contact_comes_out(data);
     test_processes_end_with_their_item(data);
     test_aiming(data);
     test_precise_aim(data);

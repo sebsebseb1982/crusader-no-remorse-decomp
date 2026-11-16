@@ -454,6 +454,10 @@ void test_item_search() {
     w.destroy(c);
     CHECK(w.cells_consistent());
     CHECK((w.area_search(centre, 1000, all) == std::vector<ObjId>{b, centre, d}));
+    // A destroyed centre: its free slot keeps its x/y, which the original
+    // searches around (MISS5's egg, issue #16).
+    w.destroy(centre);
+    CHECK((w.area_search(centre, 1000, all) == std::vector<ObjId>{b, d}));
 
     // Container search: contents in order.
     Item box;
