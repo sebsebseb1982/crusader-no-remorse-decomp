@@ -65,6 +65,14 @@ int weapon_index(std::uint16_t shape);               // DTABLE_1120_0145 (0 if n
 const WeaponRecord& weapon(std::uint16_t shape);     // record of weapon_index()
 const WeaponRecord& weapon_at(int index);            // record `index` (record 0 outside)
 
+// The BA-40 (0x32E, record 1) needs no ammunition at difficulty 1 only:
+// wherever the original sets the difficulty (DS:7E19) it also writes the
+// pistol's ammo type DS:2172 = (difficulty != 1): the difficulty screen
+// (13D0:2975 click, 13D0:29B3 Enter) and loading a game (1058:02F1). Above
+// level 1 it takes BA-41 clips (0x33D, type 1): 20 rounds, an ammo counter,
+// reloading. The table starts with type 0, as in the executable.
+void set_difficulty(int difficulty);
+
 // Shape of the ammunition a weapon uses, 0 for none (DTABLE_1120_027e: word 0
 // of the 8-byte ammo record DS:20D6 + 8 * ammo type).
 std::uint16_t ammo_shape(std::uint16_t weapon_shape);

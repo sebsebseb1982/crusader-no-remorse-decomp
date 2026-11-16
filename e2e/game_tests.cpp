@@ -5655,6 +5655,49 @@ void test_created_weapon_has_a_clip(const std::filesystem::path& data) {
     CHECK(checked > 0 && empty == 0);
 }
 
+// Issue #17: the BA-40 (0x32E) fires forever at difficulty 1 only. Setting the
+// difficulty (difficulty screen 13D0:2975 / 29B3, game load 1058:02F1) also
+// sets its ammo type DS:2172: none at level 1 (no ammo counter), else the
+// BA-41 clips (0x33D, 20 rounds).
+void test_pistol_ammo_by_difficulty(const std::filesystem::path& data) {
+    constexpr std::uint16_t kPistol = 0x32E, kClip = 0x33D;
+    for (int level : {1, 3, 1}) {
+        Game game(data, test_saves(data));
+        game.new_game(level);
+        World& w = game.world();
+        const bool unlimited = level == 1;
+        CHECK(dtable::ammo_shape(kPistol) == (unlimited ? 0 : kClip));
+        CHECK(dtable::clip_size(kPistol) == (unlimited ? 0 : 20));
+        // A pistol created (as MISS1EGG gives it) comes loaded with a clip.
+        const ObjId id = w.create(kPistol, 0);
+        CHECK(id && w.get(id)->quality == (unlimited ? 0 : 20));
+    }
+    // From the difficulty screen: Enter on the level below the selected one
+    // (so above 1), after a level 1 game.
+    {
+        Game g(data, test_saves(data));
+        g.load_save(1);
+        dtable::set_difficulty(1);
+        press(g, 0x01, false, 0x1B);
+        press(g, 0x1C, false, 0x0D);
+        press(g, 0x50, true);  // down
+        press(g, 0x1C, false, 0x0D);
+        g.update(kFrameUs);
+        CHECK(!g.menu() && g.world().state.difficulty >= 2 && dtable::ammo_shape(kPistol) == kClip);
+    }
+    // Loading a game sets it from the saved difficulty, whatever came before:
+    // SAVEGAME.1 is at level 1, garde-mort-debout.sav at level 3.
+    for (int saved : {1, 3}) {
+        const auto save = test_saves(data) / (saved == 1 ? "SAVEGAME.1" : "garde-mort-debout.sav");
+        if (!std::filesystem::exists(save)) continue;
+        Game game(data, test_saves(data));
+        dtable::set_difficulty(saved == 1 ? 3 : 1);
+        game.load_save_file(save);
+        CHECK(game.world().state.difficulty == saved);
+        CHECK(dtable::ammo_shape(kPistol) == (saved == 1 ? 0 : kClip));
+    }
+}
+
 // PBM2: walk forward to the mission's last scene. The avatar must get through
 // the door before 2h.AVI, the NPC runs away, and the prison shot stays visible
 // until the script returns to the room and gives back control.
@@ -6159,6 +6202,10 @@ int main(int argc, char** argv) {
         test_floor_pad(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--pistol-ammo") {
+        test_pistol_ammo_by_difficulty(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--fades") {
         test_fades(data);
         return failures ? 1 : 0;
@@ -6176,6 +6223,7 @@ int main(int argc, char** argv) {
     test_auto_save_names(data);
     test_crate_destroyed(data);
     test_created_weapon_has_a_clip(data);
+    test_pistol_ammo_by_difficulty(data);
 
     test_fades(data);
     test_credits(data);

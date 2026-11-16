@@ -9,8 +9,9 @@ namespace crusader::dtable {
 
 namespace {
 
-// DS:215A .. DS:22D4.
-constexpr std::array<WeaponRecord, 21> kWeapons = {{
+// DS:215A .. DS:22D4. Not constant: the BA-40's ammo type (record 1, +6,
+// DS:2172) is set with the difficulty (set_difficulty).
+std::array<WeaponRecord, 21> kWeapons = {{
     {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
     {{0x2E, 0x03, 0x2C, 0x00, 0x0C, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x02, 0x00, 0x2B, 0x0B, 0x00}},
     {{0x2F, 0x03, 0x2C, 0x00, 0x09, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x2B, 0x0B, 0x00}},
@@ -149,6 +150,13 @@ const WeaponRecord& weapon(std::uint16_t shape) { return kWeapons[weapon_index(s
 
 const WeaponRecord& weapon_at(int index) {
     return index >= 0 && index < static_cast<int>(kWeapons.size()) ? kWeapons[index] : kWeapons[0];
+}
+
+// @orig 1058:02F1 13D0:2975 13D0:29B3
+void set_difficulty(int difficulty) {
+    WeaponRecord& ba40 = kWeapons[1];
+    ba40.raw[6] = difficulty != 1 ? 1 : 0;
+    ba40.raw[7] = 0;
 }
 
 std::uint16_t ammo_shape(std::uint16_t weapon_shape) {

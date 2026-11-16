@@ -17,8 +17,9 @@
 // Mouse (button base class, SEG1310): a press inside a button selects it and
 // captures the mouse; releasing inside chooses it (13D0:2975).
 //
-// Choosing sets the difficulty (DS:7E19) and DS:2172 = (difficulty != 1),
-// whose reader is not identified; the screen closes with the level, or 0.
+// Choosing sets the difficulty (DS:7E19) and DS:2172 = (difficulty != 1), the
+// BA-40's ammo type (dtable::set_difficulty, applied by Game::new_game); the
+// screen closes with the level, or 0.
 
 #include "core/surface.hpp"
 #include "engine/world/render.hpp"

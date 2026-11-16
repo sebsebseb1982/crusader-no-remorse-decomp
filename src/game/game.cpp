@@ -488,6 +488,8 @@ void Game::load_save_file(const std::filesystem::path& path) {
     world_->load_saved_items(save);
     const Item* player = world_->get(1);
     if (!player) throw std::runtime_error("saved game without the player (item 1)");
+    // 1058:02F1 ends by setting the BA-40's ammo type from the difficulty read.
+    dtable::set_difficulty(world_->state.difficulty);
     // Saves made by the port before World::destroy emptied equipment slots
     // keep the ids of spent clips in them (SEB22: four of the five ammunition
     // slots, so Weasel refused the GL-303 clips). The original never leaves
@@ -766,6 +768,9 @@ void Game::new_game(int difficulty) {
     if (audio_) audio_->music.stop();
     GameState& s = world_->state;
     s.difficulty = static_cast<std::uint16_t>(difficulty >= 1 && difficulty <= 4 ? difficulty : 3);
+    // The difficulty screen's choice (13D0:2975 / 29B3): the BA-40 needs
+    // ammunition above level 1.
+    dtable::set_difficulty(s.difficulty);
     // Game_start: the colour cycling stays paused until the mission's
     // scripts fade the game palette in.
     s.cycle_paused = true;
