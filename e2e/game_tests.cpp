@@ -4146,6 +4146,33 @@ void test_mines(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
 }
 
+// The same mine shot from 160 east, by a shot whose spread takes it down
+// to z 0 under the mine: the step that ends at z 0 is swept in parts of 16
+// (SPRITE_1140_1098), meets the mine (1 high, 1 above the floor) on the way
+// down and blows it up. The port ended such a step on nothing, unswept.
+void test_shot_mine(const std::filesystem::path& data) {
+    constexpr ObjId kMine = 6035;
+    Game game(data, test_saves(data));
+    game.load_save(2);
+    World& w = game.world();
+    const Item* mine = w.get(kMine);
+    CHECK(mine && mine->shape == 0x29F && mine->frame == 0);
+    if (!mine) return;
+    w.move_item(1, mine->x + 160, mine->y, mine->z);
+    game.update(kFrameUs);
+    const Item* player = w.get(1);
+    const World::Point start{player->x, player->y, player->z + 40};
+    World::Point target = aim_point(w, 1, kMine);
+    target.z = 0;
+    game.kernel().add(std::make_unique<ProjectileProcess>(w, game.animations(), 1, start, target, 2, 20, 0));
+    for (int f = 0; f < 120 && projectiles(game) != 0; ++f) game.update(kFrameUs);
+    for (int f = 0; f < 60; ++f) game.update(kFrameUs);
+    std::printf("shot mine: mine frame %u status %04X\n", mine->frame, mine->flags);
+    CHECK(projectiles(game) == 0);
+    CHECK(mine->frame >= 2 && (mine->flags & 0x40));
+    CHECK(game.machine().faults().empty());
+}
+
 // The station pads of SAVEGAME.2, walked onto from the south: RECHFLNS 5693
 // (energy) and SICBFLNS 5514 (health). Their gotHit, a contact of the move
 // from the player whose centre is on the pad, holds him in stasis, places
@@ -6204,6 +6231,7 @@ int main(int argc, char** argv) {
     test_courier_keycard(data);
     test_barrels(data);
     test_mines(data);
+    test_shot_mine(data);
     test_station_pads(data);
     test_turrets(data);
     test_player_turret(data);
