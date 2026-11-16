@@ -1,0 +1,32 @@
+name: Stale issues
+
+on:
+  schedule:
+    - cron: "30 3 * * *"   # tous les jours à 03:30 UTC
+  workflow_dispatch:        # lancement manuel depuis l'onglet Actions
+
+permissions:
+  issues: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          # Issues : avertissement après 53 jours sans activité, fermeture 7 jours plus tard (≈ 2 mois)
+          days-before-issue-stale: 53
+          days-before-issue-close: 7
+          stale-issue-label: stale
+          stale-issue-message: >
+            This issue has had no activity for almost two months. It will be closed
+            in 7 days unless someone comments or updates it.
+          close-issue-message: >
+            Closed after two months without activity. Feel free to reopen it if the
+            problem is still there.
+          close-issue-reason: not_planned
+          exempt-issue-labels: pinned,keep-open
+          # Les pull requests ne sont pas concernées
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
+          operations-per-run: 100
