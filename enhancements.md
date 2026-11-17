@@ -25,6 +25,7 @@ The changes fall into four groups:
 7. [Zoom](#7-zoom)
    - [7b. Impact marks](#7b-impact-marks)
 8. [Autosave](#8-autosave)
+   - [8b. Language](#8b-language)
 9. [Toggle run](#9-toggle-run)
    - [9b. Original game bug fixes](#9b-original-game-bug-fixes)
 10. [Keypad navigation with arrows or gamepad](#10-keypad-navigation-with-arrows-or-gamepad)
@@ -95,6 +96,7 @@ The original has nothing like it. This screen gathers every option the port adds
 |---|---|---|
 | AUTOSAVE / SAUVEGARDE AUTO | Toggles the autosave | `autosave` |
 | ORIGINAL BUG FIXES / CORRECTIFS ORIGINAL | Corrects bugs of the original game that can block a mission | `fixoriginalbugs` |
+| LANGUAGE / LANGUE | Cycles the language: AUTO → each folder of `languages` → AUTO; a language's game files need a restart (section 8b) | `language` |
 
 **Controls**
 - Up or `8`, down or `2`: moves between rows. The focus stops at the first and last row; it does not wrap.
@@ -424,6 +426,26 @@ A write error is logged to stderr and does not stop the game.
 
 ---
 
+## 8b. Language
+
+**Option:** LANGUAGE (`language`, AUTO by default)
+**Files:** `src/core/language.*`, `src/core/translation.*`, `src/core/data_files.*`, `languages/<id>/port.txt`, `scripts/update_languages.py`; the process: [docs/TRANSLATING.md](docs/TRANSLATING.md)
+
+The port prints some texts itself: its own screens (Enhancements, controller), and the texts the original keeps in its executable (item names, Weasel's shop, a few messages, the version lines). The code writes them in English (`tr("BACK")`). The `languages` folder next to the executable (else in the current folder) holds one folder per language: `port.txt` translates those texts, and any other file replaces the data folder's file with the same path (pictures, fonts, scripts, subtitles...). The repository ships `en/port.txt` (generated, the reference) and `fr/port.txt` (the French `CRUSADER.EXE` 1.08's texts, and the port's own).
+
+- **AUTO**: the texts of the data's language, `fr` or `en` (as the original, which has the texts of its language only), and no replacement data files.
+- **The folders**, by id: the row shows each `port.txt`'s `@name` (ENGLISH, FRANCAIS...). A text `port.txt` does not translate stays in English.
+- The texts change at once; `port.txt` is read again after each pick, so a translator sees the changes. The data files are read at start-up: when the language picked has other data files than the ones read, the GAME page says "RESTART TO LOAD ITS GAME FILES". `CRUSADER.CFG` keeps the id in lower case (`language=pt-br`); an unknown id gives AUTO. Without the folder, the texts are in English.
+- A data file is looked up in the language folder, then in the mod folder (level editor), then in the data folder. The data's version is still detected from the data folder: a language's files must be translations of that version's. A translated script (`EUSECODE.FLX`) may not load games saved with another language's.
+
+**`port.txt` format** (UTF-8; `src/core/translation.hpp`, docs/TRANSLATING.md)
+- `#` comments, blank lines, `@name = <name>`, then `<English text> = <translation>` lines. `\n` is a line break, `\\` a backslash; an empty translation keeps the English text.
+- The translations are converted to code page 850, the fonts' code page. The fonts must have the letters used (the menus of the port use capitals without accents; a language folder can bring its own `STATIC/FONTS.FLX`).
+- A translation must keep the `%` conversions of its English text, in the same order, or it is ignored (with a message on the error output).
+- `scripts/update_languages.py` writes `en/port.txt` from the sources and brings the other `port.txt` files in line; a test (`language_files`) fails when one is out of date or `fr/port.txt` misses a text.
+
+---
+
 ## 9. Toggle run
 
 **Option:** TOGGLE RUN (`togglerun`, off by default)
@@ -498,7 +520,7 @@ An original executable handles one language. The port accepts the **French 1.08*
 
 **Rules**
 - The language is detected when the data loads. French is the default.
-- The texts stored in `CRUSADER.EXE` (item names, messages, Weasel's shop) are kept in both languages in the port and chosen by language. The US data also names grenades 2 to 4 (CONCUSSION, NERVE GAS, EMP), left "INVALID" in French. The port's own screens follow the same language (`tr(fr, en)`).
+- The texts stored in `CRUSADER.EXE` (item names, messages, Weasel's shop) are written in English in the port, the French ones in `languages/fr/port.txt`, chosen by language. The US data also names grenades 2 to 4 (CONCUSSION, NERVE GAS, EMP), left "INVALID" in French (the port shows the English names). The port's own screens follow the same language (`tr()`, section 8b).
 - The US scripts call the native routines (intrinsics) under **their own numbering**. The port translates it.
 - Some US screens place their buttons for the English images: the port uses the US positions with US data (F4/F5/Alt+X questions, help, main menu, options, difficulty).
 - Save names: the US version refuses `<`, `:` and `;`.
@@ -570,6 +592,7 @@ The original reads much of its data from the CD and needs it in the drive. The p
 | `goremode` | false | `true` |
 | `nativeresolution` | true | `false` |
 | `autosave` | true | `false` |
+| `language` | empty (AUTO) | a language folder is picked: its id (`fr`, `en`, `pt-br`...) |
 | `viewzoom` | 0 (auto), 1..4 with decimals (`1.5`) | ≠ 0 |
 | `padmap` | see section 2.4 | controller config ≠ default. 24 comma-separated action numbers; `-1` = default role; values clamped |
 | `padaim` | 3, clamped to 1..5 | same |

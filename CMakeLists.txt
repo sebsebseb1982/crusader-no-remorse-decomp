@@ -41,6 +41,8 @@ add_library(crusader_core
   src/core/iso_image.cpp
   src/core/dtable.cpp
   src/core/language.cpp
+  src/core/translation.cpp
+  src/core/data_files.cpp
   src/core/typeflags.cpp
   src/core/trig.cpp
   src/core/random.cpp
@@ -146,6 +148,9 @@ target_link_libraries(crusader PRIVATE crusader_game crusader_platform)
 set(CRUSADER_VERSION "0.0.0-dev" CACHE STRING "Version reported by crusader --version")
 configure_file(src/game/version.hpp.in ${CMAKE_BINARY_DIR}/generated/crusader_version.hpp @ONLY)
 target_include_directories(crusader PRIVATE ${CMAKE_BINARY_DIR}/generated)
+# The language files (languages/), next to the executable.
+add_custom_command(TARGET crusader POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/languages $<TARGET_FILE_DIR:crusader>/languages)
 
 add_executable(shapeview src/tools/shapeview.cpp)
 target_link_libraries(shapeview PRIVATE crusader_platform)
@@ -210,6 +215,8 @@ if(CRUSADER_BUILD_EDITOR)
 endif()
 
 enable_testing()
+# The tests read the language files of the sources (the French texts).
+add_compile_definitions(CRUSADER_LANGUAGES_DIR="${CMAKE_SOURCE_DIR}/languages")
 # tests/: no game data needed, run by the GitHub CI.
 # e2e/: end-to-end tests on the original game data and on saved games, none of
 # which is in the repository. They are registered only with
@@ -226,6 +233,13 @@ option(CRUSADER_GAME_DATA_TESTS "Register the end-to-end tests (e2e/) that need 
 add_executable(core_tests tests/core_tests.cpp)
 target_link_libraries(core_tests PRIVATE crusader_core)
 add_test(NAME core_tests COMMAND core_tests)
+
+# The language files are up to date with the sources (scripts/update_languages.py).
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_FOUND)
+  add_test(NAME language_files
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/update_languages.py --check)
+endif()
 
 add_executable(kernel_tests tests/kernel_tests.cpp)
 target_link_libraries(kernel_tests PRIVATE crusader_engine)

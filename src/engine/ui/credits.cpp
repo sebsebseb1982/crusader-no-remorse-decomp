@@ -47,11 +47,11 @@ Palette read_bmp_palette(const std::vector<std::uint8_t>& file) {
 }
 
 // @orig 13F0:003A
-CreditsData CreditsData::load(const std::filesystem::path& static_dir) {
+CreditsData CreditsData::load(const DataFiles& files) {
     CreditsData c;
-    c.background = read_bmp8(read_file(static_dir / "CRED.DAT"));
-    c.palette = Palette::load(static_dir / "CRED.PAL");
-    c.script = read_file(static_dir / "CREDITS.DAT");
+    c.background = read_bmp8(read_file(files.find("STATIC/CRED.DAT")));
+    c.palette = Palette::load(files.find("STATIC/CRED.PAL"));
+    c.script = read_file(files.find("STATIC/CREDITS.DAT"));
     return c;
 }
 

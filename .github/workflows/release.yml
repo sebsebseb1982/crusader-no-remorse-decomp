@@ -94,6 +94,7 @@ jobs:
           cp tools/portmaster/port/Crusader.sh "dist/$pkg/"
           cp tools/portmaster/port/crusader/licenses/* "dist/$pkg/crusader/licenses/"
           cp build-portmaster/crusader "dist/$pkg/crusader/"
+          cp -r languages "dist/$pkg/crusader/"
           cp tools/release/PUT_GAME_DATA_HERE.txt "dist/$pkg/crusader/data/"
           cp tools/portmaster/port/{port.json,README.md,gameinfo.xml} "dist/$pkg/"
           [ -f tools/portmaster/port/screenshot.png ] && cp tools/portmaster/port/screenshot.png "dist/$pkg/"
@@ -112,6 +113,7 @@ jobs:
           else
             cp build/crusader build/crusader-editor "dist/$pkg/"
           fi
+          cp -r languages "dist/$pkg/"
           mkdir "dist/$pkg/data"
           cp tools/release/PUT_GAME_DATA_HERE.txt "dist/$pkg/data/"
           cp README.md "dist/$pkg/"

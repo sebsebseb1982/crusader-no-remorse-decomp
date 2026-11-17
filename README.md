@@ -89,6 +89,12 @@ The maintainer does not own the Steam or EA releases, so this has not been teste
 ./crusader-editor data --mod mods/my-level    # the level editor
 ```
 
+### 4. Language
+
+The `languages` folder next to the executable holds one folder per language (`en`, `fr`...). Each one has the texts the port prints itself (`port.txt`: its menus, and the texts the original keeps in its executable), and may hold translated game data files (pictures, fonts, subtitles, terminal texts) that replace the data's. By default (AUTO) the game follows the data's language. Another one can be picked in the game: **Options**, **+** (Enhancements), **Game**, **Language**.
+
+To translate the game, see [docs/TRANSLATING.md](docs/TRANSLATING.md).
+
 ## Building from source
 
 Requirements: CMake 3.21 or later and a C++20 compiler (Visual Studio 2022, GCC 11+, or Clang 14+).

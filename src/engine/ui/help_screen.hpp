@@ -32,6 +32,7 @@
 // Not reproduced: the keyboard and mouse clicks flushed after a page turn
 // (keyboard_flush, DS:8A80..8A84).
 
+#include "core/data_files.hpp"
 #include "core/palette.hpp"
 #include "engine/ui/modal_gump.hpp"
 #include "engine/ui/shape_dialog.hpp"
@@ -56,7 +57,7 @@ public:
     // The three pictures (STATIC/HELP1.DAT .. HELP3.DAT), read once.
     struct Pictures {
         std::array<std::optional<Page>, 3> pages;
-        static Pictures load(const std::filesystem::path& static_dir);
+        static Pictures load(const DataFiles& files);
     };
 
     // `random(n)` draws 0 .. n - 1 (random_range); `play_sfx` plays a sound.

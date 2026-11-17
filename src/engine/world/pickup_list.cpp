@@ -21,8 +21,8 @@ struct Description {
 
 // @orig 1190:070F
 Description describe(const World& world, const Item& item) {
-    if (item.shape == kKeycard) return {tr("PASSE", "KEYCARD"), 5, static_cast<std::uint16_t>(item.frame + 13)};
-    if (item.shape == kCredits) return {"CREDITS", 3, 13};
+    if (item.shape == kKeycard) return {tr("KEYCARD"), 5, static_cast<std::uint16_t>(item.frame + 13)};
+    if (item.shape == kCredits) return {tr("CREDITS"), 3, 13};
     switch (world.family_of(item.shape)) {
     case 10: return {dtable::weapon_name(item.shape), 3, dtable::weapon_icon(item.shape)};
     case 11: return {dtable::ammo_name(item.shape), 5, dtable::ammo_icon(item.shape)};

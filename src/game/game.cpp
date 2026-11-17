@@ -191,40 +191,41 @@ std::filesystem::path game_file(const std::filesystem::path& data, const std::fi
 
 // @orig none: loads the data and builds the port's subsystems
 Game::Game(const std::filesystem::path& data, const std::filesystem::path& saves, const std::filesystem::path& mod)
-    : shapes_flex_(FlexArchive::open(game_file(data, mod, "STATIC/SHAPES.FLX"))),
-      globs_(FlexArchive::open(game_file(data, mod, "STATIC/GLOB.FLX"))),
-      fixed_(FlexArchive::open(game_file(data, mod, "STATIC/FIXED.DAT"))),
-      typeflags_(load_typeflags(game_file(data, mod, "STATIC/TYPEFLAG.DAT"))),
-      trig_(TrigTables::load(data / "STATIC/TRIG.DAT")),
-      damage_(load_damage_table(game_file(data, mod, "STATIC/DAMAGE.FLX"))),
-      anims_(AnimDat::load(game_file(data, mod, "STATIC/ANIM.DAT"))),
-      weapon_overlay_(WeaponOverlay::load(data / "STATIC/WPNOVLAY.DAT")),
-      palette_(Palette::load(data / "STATIC/GAMEPAL.PAL")),
-      usecode_(UsecodeFile::from_flex(FlexArchive::open(game_file(data, mod, "USECODE/EUSECODE.FLX")))),
+    : files_(data, mod, language_data_folder(GameConfig::load(data / "CRUSADER.CFG").language)),
+      shapes_flex_(FlexArchive::open(files_.find("STATIC/SHAPES.FLX"))),
+      globs_(FlexArchive::open(files_.find("STATIC/GLOB.FLX"))),
+      fixed_(FlexArchive::open(files_.find("STATIC/FIXED.DAT"))),
+      typeflags_(load_typeflags(files_.find("STATIC/TYPEFLAG.DAT"))),
+      trig_(TrigTables::load(files_.find("STATIC/TRIG.DAT"))),
+      damage_(load_damage_table(files_.find("STATIC/DAMAGE.FLX"))),
+      anims_(AnimDat::load(files_.find("STATIC/ANIM.DAT"))),
+      weapon_overlay_(WeaponOverlay::load(files_.find("STATIC/WPNOVLAY.DAT"))),
+      palette_(Palette::load(files_.find("STATIC/GAMEPAL.PAL"))),
+      usecode_(UsecodeFile::from_flex(FlexArchive::open(files_.find("USECODE/EUSECODE.FLX")))),
       shapes_(shapes_flex_, ShapeLayout::World),
-      gumps_flex_(FlexArchive::open(data / "STATIC/GUMPS.FLX")),
+      gumps_flex_(FlexArchive::open(files_.find("STATIC/GUMPS.FLX"))),
       gumps_(gumps_flex_, ShapeLayout::Flat2D),
-      fonts_(FontSet::load(data / "STATIC/FONTS.FLX")),
-      xform_(XformTable::load(data / "STATIC/XFORMPAL.DAT")),
-      npc_types_(dtable::NpcTypes::load(game_file(data, mod, "STATIC/DTABLE.FLX"))),
+      fonts_(FontSet::load(files_.find("STATIC/FONTS.FLX"))),
+      xform_(XformTable::load(files_.find("STATIC/XFORMPAL.DAT"))),
+      npc_types_(dtable::NpcTypes::load(files_.find("STATIC/DTABLE.FLX"))),
       status_bar_(gumps_, fonts_, xform_, npc_types_),
       pickup_area_(gumps_, fonts_, xform_),
-      menu_palette_(Palette::load(data / "STATIC/MISC.PAL")),
-      difficulty_palette_(Palette::load(data / "STATIC/DIFF.PAL")),
-      cursor_(MouseCursor::load(data / "STATIC/MOUSE.SHP")),
+      menu_palette_(Palette::load(files_.find("STATIC/MISC.PAL"))),
+      difficulty_palette_(Palette::load(files_.find("STATIC/DIFF.PAL"))),
+      cursor_(MouseCursor::load(files_.find("STATIC/MOUSE.SHP"))),
       data_(data),
       mod_(mod),
       save_dir_(!saves.empty() ? saves : mod.empty() ? data / "SAVEGAME" : mod / "SAVEGAME"),
       config_(GameConfig::load(data / "CRUSADER.CFG")),
       save_names_(LoadScreen::read_names(save_dir_)),
-      credits_data_(CreditsData::load(data / "STATIC")),
-      help_pictures_(HelpScreen::Pictures::load(data / "STATIC")) {
+      credits_data_(CreditsData::load(files_)),
+      help_pictures_(HelpScreen::Pictures::load(files_)) {
     // The US data has no CRUSADER.CFG (the installer writes it): without one,
     // take the installer's choices, the doubled videos and the subtitles.
     if (!std::filesystem::exists(data / "CRUSADER.CFG")) config_.big_video = config_.subtitles = true;
     // dsfx_init: without SOUND.FLX the game runs silent, as with "sound=off".
-    if (std::filesystem::exists(data / "SOUND/SOUND.FLX")) {
-        audio_ = std::make_unique<Audio>(SoundFlex::open(data / "SOUND/SOUND.FLX"), data / "SOUND");
+    if (std::filesystem::exists(files_.find("SOUND/SOUND.FLX"))) {
+        audio_ = std::make_unique<Audio>(SoundFlex::open(files_.find("SOUND/SOUND.FLX")), data / "SOUND");
     }
     const DataInfo info = detect_data_info(data);
     // Without a known version, the usecode's intrinsics cannot be numbered:
@@ -237,6 +238,8 @@ Game::Game(const std::filesystem::path& data, const std::filesystem::path& saves
     data_language_ = info.language;
     intrinsic_numbering_ = intrinsic_numbering(info);
     set_text_language(info.text_language());
+    // The language whose data files were read (port addition).
+    set_loaded_data_language(files_.language().empty() ? std::string() : config_.language);
     set_config(config_);
     reset_world();
 }
@@ -294,6 +297,8 @@ void Game::set_config(GameConfig config) {
         audio_->mixer.set_sound_volume(config_.sound_volume);
         audio_->mixer.set_filter(config_.filter);
     }
+    // The language of the port's texts (port addition).
+    select_language(config_.language);
 }
 
 // @orig 1028:03F6
@@ -648,7 +653,7 @@ void Game::autosave() {
         return;
     }
     try {
-        set_save_name(kAutoSave, tr("SAUVEGARDE AUTO", "AUTOSAVE"));
+        set_save_name(kAutoSave, tr("AUTOSAVE"));
         save_game(kAutoSave);
         autosave_icon_us_ = kAutosaveIconUs;
     } catch (const std::exception& e) {
@@ -767,7 +772,7 @@ void Game::new_game(int difficulty) {
     reset_world();
     // FLAG_1410_0051(0): the globals' initial values.
     {
-        std::ifstream in(game_file(data_, mod_, "USECODE/UNKDS.DAT"), std::ios::binary);
+        std::ifstream in(files_.find("USECODE/UNKDS.DAT"), std::ios::binary);
         const std::vector<std::uint8_t> bytes{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
         set_globals(bytes);
     }
@@ -929,9 +934,8 @@ void Game::play_movie(const std::string& name, MovieKind kind) {
 
 // @orig 1468:03E3 1468:3ABC
 void Game::start_movie(const std::string& name, MovieKind kind, Surface8 screen) {
-    const std::filesystem::path base = data_ / "FLICS" / movie_base_name(name);
-    std::filesystem::path avi = base;
-    avi += ".AVI";
+    const std::string base = "FLICS/" + movie_base_name(name);
+    const std::filesystem::path avi = files_.find(base + ".AVI");
     std::optional<AviMovie> movie;
     try {
         movie = AviMovie::load(avi);
@@ -940,9 +944,7 @@ void Game::start_movie(const std::string& name, MovieKind kind, Surface8 screen)
     }
     std::vector<MovieSubtitle> subtitles;
     if (config_.subtitles && kind != MovieKind::kOverlay) {
-        std::filesystem::path txt = base;
-        txt += ".TXT";
-        subtitles = load_movie_subtitles(txt, fonts_, MoviePlayer::kSubtitleFont);
+        subtitles = load_movie_subtitles(files_.find(base + ".TXT"), fonts_, MoviePlayer::kSubtitleFont);
     }
     movie_ = std::make_unique<MoviePlayer>(std::move(*movie), kind, std::move(subtitles), config_.big_video,
                                            std::move(screen), world_->state.screen_palette, gumps_, fonts_);
@@ -1206,10 +1208,10 @@ void Game::open_menu(bool no_game) {
     menu_ = std::make_unique<MainMenu>(
         MainMenu::Resources{&gumps_, &fonts_, &save_names_, &credits_data_, &config_, audio_.get(),
                             [this] { save_config(); },
-                            port_version.empty() ? std::string() : tr("PORTAGE V", "PORT V") + port_version,
-                            tr("DONNEES DU JEU ", "GAME DATA ") +
-                                (data_version_.empty() ? std::string(tr("INCONNUES", "UNKNOWN")) : "V" + data_version_) + " " +
-                                (data_language_.empty() ? std::string(tr("LANGUE INCONNUE", "UNKNOWN LANGUAGE")) : data_language_),
+                            port_version.empty() ? std::string() : tr("PORT V") + port_version,
+                            std::string(tr("GAME DATA")) + " " +
+                                (data_version_.empty() ? std::string(tr("UNKNOWN")) : "V" + data_version_) + " " +
+                                (data_language_.empty() ? std::string(tr("UNKNOWN LANGUAGE")) : data_language_),
                             auto_save_name_function()},
         menu_shared_, no_game);
     auto p = std::make_unique<ModalProcess>();
@@ -1503,7 +1505,7 @@ void Game::show_keypad(std::int16_t code, Pid pid) {
 void Game::show_weasel(int level) {
     if (modal() || movie_) return;
     std::vector<std::uint8_t> stuff;
-    if (std::ifstream in{data_ / "STATIC" / "STUFF.DAT", std::ios::binary}) {
+    if (std::ifstream in{files_.find("STATIC/STUFF.DAT"), std::ios::binary}) {
         stuff.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
     }
     enter_menu_mode();

@@ -32,6 +32,7 @@
 // Not reproduced: the music started for the credits (STDINT_1200_0262 0x11),
 // and the end video played when the credits ran to the end (DS:08F0).
 
+#include "core/data_files.hpp"
 #include "core/font.hpp"
 #include "core/palette.hpp"
 #include "core/surface.hpp"
@@ -47,7 +48,7 @@ struct CreditsData {
     Palette palette;
     std::vector<std::uint8_t> script;
 
-    static CreditsData load(const std::filesystem::path& static_dir);
+    static CreditsData load(const DataFiles& files);
 };
 
 // segment 1010: 8-bit BMP (14-byte file header, 40-byte info header, 1024-byte

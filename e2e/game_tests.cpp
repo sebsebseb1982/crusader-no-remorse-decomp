@@ -2,6 +2,7 @@
 // can cross the whole map without usecode errors while the fast area follows.
 
 #include "core/avi_movie.hpp"
+#include "core/language.hpp"
 #include "core/dtable.hpp"
 #include "core/movie_subtitles.hpp"
 #include "engine/palette_fader.hpp"
@@ -1011,7 +1012,7 @@ void test_fades(const std::filesystem::path& data) {
 
 // Milestone 3: the credits from the menu.
 void test_credits(const std::filesystem::path& data) {
-    const auto cd = CreditsData::load(data / "STATIC");
+    const auto cd = CreditsData::load(DataFiles(data));
     CHECK(cd.background.width == 640 && cd.background.height == 480 && cd.script.size() == 3601);
 
     Game game(data, test_saves(data));
@@ -6093,6 +6094,7 @@ void test_courier_keycard(const std::filesystem::path& data) {
 }
 
 int main(int argc, char** argv) {
+    set_languages_dir(CRUSADER_LANGUAGES_DIR);  // the French texts (languages/fr/port.txt)
     const std::filesystem::path data = argc > 1 ? argv[1] : "data";
     if (!std::filesystem::exists(data / "STATIC/FIXED.DAT")) {
         std::printf("no game data, skipped\n");

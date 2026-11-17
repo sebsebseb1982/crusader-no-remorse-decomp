@@ -125,7 +125,7 @@ void LoadScreen::choose(int i) {
 
 // @orig none: port addition (save names without a keyboard)
 std::string LoadScreen::dated_name(const std::tm& local) {
-    if (local.tm_year + 1900 < 2020) return tr("SAUVEGARDE", "SAVED GAME");
+    if (local.tm_year + 1900 < 2020) return tr("SAVED GAME");
     const int a = us_version() ? local.tm_mon + 1 : local.tm_mday;
     const int b = us_version() ? local.tm_mday : local.tm_mon + 1;
     char text[32];

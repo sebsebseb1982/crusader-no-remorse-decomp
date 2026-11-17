@@ -9,6 +9,7 @@
 // time, then render(), once per presented frame.
 
 #include "core/anim_dat.hpp"
+#include "core/data_files.hpp"
 #include "core/game_config.hpp"
 #include "core/dtable.hpp"
 #include "core/font.hpp"
@@ -345,6 +346,9 @@ private:
     void draw_autosave_icon(Surface8& screen);
 
 
+    // Where the data files are read: the language folder picked, the mod
+    // folder, the data folder (data_files.hpp). Before the data it opens.
+    DataFiles files_;
     // Data, kept open for the whole run.
     FlexArchive shapes_flex_;
     FlexArchive globs_;

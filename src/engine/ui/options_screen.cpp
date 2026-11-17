@@ -194,7 +194,7 @@ void OptionsScreen::draw_pad_button(Surface8& screen) const {
     const Rect& r = pad_rect_;
     draw_rounded_box(screen, r.x0, r.y0, r.x1, r.y1, kButtonFill, colour);
     TextWriter writer(*fonts_, kButtonFont);
-    const std::string text = tr("AMELIORATIONS", "ENHANCEMENTS");
+    const std::string text = tr("ENHANCEMENTS");
     constexpr int kIcon = 11, kGap = 6;
     const int width = writer.measure(text).width;
     const int total = kIcon + kGap + width;

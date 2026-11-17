@@ -63,33 +63,23 @@ constexpr std::array<std::uint16_t, 6> kClipSizes = {0, 20, 12, 60, 8, 10};
 // Word 3 of the ammo records: icon in GUMPS.FLX shape 5.
 constexpr std::array<std::uint16_t, 6> kAmmoIcons = {0, 8, 10, 9, 11, 12};
 
-// DS:2350 .. DS:23F3 of the French CRUSADER.EXE: the name pointer tables. The
-// weapon names are the same in the US one.
+// The name pointer tables: DS:2350 .. DS:23F3 of the French CRUSADER.EXE,
+// DS:22EE .. DS:2391 of the US one, which also names family-12 records 2..4
+// ("INVALID" in the French one). The weapon names are the same in both; the
+// others are the US ones, the French ones are in languages/fr/port.txt.
 constexpr std::array<const char*, 14> kWeaponNames = {
     "INVALID", "BA-40", "BA-41", "PA-21", "EM-4", "SG-A1", "RP-22",
     "RP-32",   "AR-7",  "GL-303", "PA-31", "PL-1", "AC-88", "UV-9",
 };
 constexpr std::array<const char*, 12> kItemNames = {
-    "INVALID",          "MEDIKIT",          "DATALINK",            "SCANNER",
-    "GENERATEUR IONIQUE", "CUBE D'ENERGIE",  "GENERATEUR DE PLASMA", "DETPAC",
-    "GENERATEUR GRAVITON", "BATTERIE CHIMIQUE", "BATTERIE A FUSION", "BATTERIE A FISSION",
-};
-constexpr std::array<const char*, 6> kAmmoNames = {
-    "INVALID", "CHARGEUR BA-41", "CHARGEUR SG-A1", "CHARGEUR RP-22", "CHARGEUR AR-7", "CHARGEUR GL-303",
-};
-constexpr std::array<const char*, 9> kFamily12Names = {
-    "INVALID", "GRENADE", "INVALID", "INVALID", "INVALID", "BOMBE AUTOGUIDEE", "MINE", "BOMBE BLASTPAC", "BOMBE A FUSION",
-};
-// US CRUSADER.EXE (DS:22EE .. DS:2391), which also names family-12 records 2..4.
-constexpr std::array<const char*, 12> kItemNamesUs = {
     "INVALID",         "MEDICAL KIT",      "DATA LINK",          "INHIBITOR",
     "IONIC GENERATOR", "ENERGY CUBE",      "PLASMA GENERATOR",   "DET PAC",
     "GRAVITON GENERATOR", "CHEMICAL BATTERY", "FUSION BATTERY", "FISSION BATTERY",
 };
-constexpr std::array<const char*, 6> kAmmoNamesUs = {
+constexpr std::array<const char*, 6> kAmmoNames = {
     "INVALID", "BA-41 CLIP", "SG-A1 CLIP", "RP-22 CLIP", "AR-7 CLIP", "GL-303 CLIP",
 };
-constexpr std::array<const char*, 9> kFamily12NamesUs = {
+constexpr std::array<const char*, 9> kFamily12Names = {
     "INVALID",     "GRENADE",     "CONCUSSION GRENADE", "NERVE GAS GRENADE", "EMP GRENADE",
     "SPIDER BOMB", "LAND MINE",   "BLAST PAC",          "FUSION PAC",
 };
@@ -198,19 +188,19 @@ const char* weapon_name(std::uint16_t shape) {
 // @orig 1120:0474
 const char* item_name(std::uint16_t shape) {
     const int i = inventory_item_index(shape);
-    return tr(kItemNames[i], kItemNamesUs[i]);
+    return tr(kItemNames[i]);
 }
 
 // @orig 1120:02AB
 const char* ammo_name(std::uint16_t shape) {
     const int i = ammo_index(shape);
-    return tr(kAmmoNames[i], kAmmoNamesUs[i]);
+    return tr(kAmmoNames[i]);
 }
 
 // @orig 1120:03C3
 const char* family12_name(std::uint16_t shape) {
     const int i = family12_index(shape);
-    return tr(kFamily12Names[i], kFamily12NamesUs[i]);
+    return tr(kFamily12Names[i]);
 }
 
 // @orig 1120:0240

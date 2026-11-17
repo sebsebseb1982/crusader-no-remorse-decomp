@@ -85,7 +85,7 @@ public:
     static constexpr unsigned char kCursor = 0x5B;
     static constexpr int kSound = 0x33;
     static constexpr std::uint32_t kStarPause = 44;  // ticks, see above
-    static const char* more() { return tr("-SUITE-", "<MORE>"); }  // DS:55AB (US: DS:557F)
+    static const char* more() { return tr("<MORE>"); }  // DS:55AB (US: DS:557F)
 
     // `play_sfx` restarts a sound (dsfx_stop_if, then AudioProcess_I_playSFX).
     ComputerGump(ShapeCache& gumps, const FontSet& fonts, const std::string& text, std::function<void(int)> play_sfx,

@@ -22,11 +22,11 @@ constexpr int kSounds[] = {0xB8, 0x62, 0x67, 0xA, 0xB};
 }  // namespace
 
 // @orig 13E8:3BA5
-HelpScreen::Pictures HelpScreen::Pictures::load(const std::filesystem::path& static_dir) {
+HelpScreen::Pictures HelpScreen::Pictures::load(const DataFiles& files) {
     Pictures p;
     for (int i = 0; i < 3; ++i) {
         try {
-            const auto file = read_file(static_dir / ("HELP" + std::to_string(i + 1) + ".DAT"));
+            const auto file = read_file(files.find("STATIC/HELP" + std::to_string(i + 1) + ".DAT"));
             p.pages[i] = Page{read_bmp8(file), read_bmp_palette(file)};
         } catch (const std::exception&) {
             // missing or unreadable: the page stays black

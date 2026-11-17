@@ -1,8 +1,12 @@
-// Game configuration parsing and writing, data detection (no game data).
+// Game configuration parsing and writing, data detection, language files (no
+// game data).
 
+#include "core/data_files.hpp"
 #include "core/data_info.hpp"
 #include "core/game_config.hpp"
 #include "core/iso_image.hpp"
+#include "core/language.hpp"
+#include "core/translation.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -266,10 +270,115 @@ void check_data_info() {
 
 }  // namespace
 
+// Language files (port addition): parsing, code page 850, picking a language.
+void check_languages() {
+    // UTF-8 to code page 850 and back: the Portuguese letters are in it.
+    check(utf8_to_cp850("a\xC3\xA3\xC3\xA7\xC3\x89") == "a\xC6\x87\x90", "cp850: a, a tilde, c cedilla, E acute");
+    check(utf8_to_cp850("\xE2\x82\xAC\xC3") == "??", "cp850: euro sign and cut sequence");
+    check(cp850_to_utf8("\x82\xC6") == "\xC3\xA9\xC3\xA3", "cp850 to utf-8");
+
+    std::vector<std::string> warnings;
+    const Translation t = Translation::parse(
+        "\xEF\xBB\xBF# comment\r\n"
+        "@name = PORTUGU\xC3\x8AS\r\n"
+        "\r\n"
+        "BACK = VOLTAR\r\n"
+        "  ON=LIGADO  \r\n"
+        "OFF =\r\n"
+        "Do you want\\nanything else? = Quer\\nmais alguma coisa?\n"
+        "Cost:%u = Pre\xC3\xA7o: %3u\n"
+        "Owned:%02u = Seus: %s\n"
+        "no equals sign\n",
+        &warnings);
+    check(t.name() == "PORTUGU\xD2S", "language file: name");
+    check(t.find("BACK") && std::string(t.find("BACK")) == "VOLTAR", "language file: text");
+    check(t.find("ON") && std::string(t.find("ON")) == "LIGADO", "language file: spaces dropped");
+    check(!t.find("OFF"), "language file: empty translation kept out");
+    check(t.find("Do you want\nanything else?") &&
+              std::string(t.find("Do you want\nanything else?")) == "Quer\nmais alguma coisa?",
+          "language file: line breaks");
+    check(t.find("Cost:%u") && std::string(t.find("Cost:%u")) == "Pre\x87o: %3u", "language file: same conversion");
+    check(!t.find("Owned:%02u"), "language file: other conversion dropped");
+    check(warnings.size() == 2 && t.size() == 4, "language file: two warnings");
+
+    // The languages folder.
+    const auto dir = std::filesystem::temp_directory_path() / "crusader_core_tests_languages";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    // A folder per language: port.txt, and data files in subfolders.
+    for (const char* id : {"pt-BR/STATIC", "fr", "en", "de"}) std::filesystem::create_directories(dir / id);
+    std::ofstream(dir / "pt-BR/port.txt", std::ios::binary) << "@name = PORTUGUES\nBACK = VOLTAR\n";
+    std::ofstream(dir / "pt-BR/STATIC/FONTS.FLX", std::ios::binary) << "x";
+    std::ofstream(dir / "fr/port.txt", std::ios::binary) << "@name = FRANCAIS\nBACK = RETOUR\nON = MARCHE\n";
+    std::ofstream(dir / "en/port.txt", std::ios::binary) << "@name = ENGLISH\nBACK = BACK\n";
+    std::ofstream(dir / "not-a-folder.txt", std::ios::binary) << "ON = AN\n";
+    set_languages_dir(dir);
+    const std::vector<LanguageChoice> choices = language_choices();
+    check(choices.size() == 5 && choices[0].id.empty() && choices[0].name == "AUTO" && choices[1].id == "de" &&
+              choices[1].name == "DE" && choices[2].id == "en" && choices[3].id == "fr" &&
+              choices[3].name == "FRANCAIS" && !choices[3].data_files && choices[4].id == "pt-br" &&
+              choices[4].name == "PORTUGUES" && choices[4].data_files,
+          "languages: auto, then the folders by id");
+
+    // Auto: the file of the data's language.
+    set_text_language(Language::English);
+    check(std::string(tr("BACK")) == "BACK" && std::string(tr("ON")) == "ON", "tr: auto, English data");
+    set_text_language(Language::French);
+    check(std::string(tr("BACK")) == "RETOUR" && std::string(tr("ON")) == "MARCHE", "tr: auto, French data");
+    check(std::string(tr("OFF")) == "OFF", "tr: a text the file lacks stays in English");
+    select_language("PT-BR");
+    const char* back = tr("BACK");
+    check(std::string(back) == "VOLTAR" && selected_language().name == "PORTUGUES", "tr: language picked");
+    check(std::string(tr("ON")) == "ON", "tr: a text the file lacks stays in English, French data too");
+    select_language("xx");
+    check(selected_language().id.empty() && std::string(tr("BACK")) == "RETOUR", "tr: unknown language, auto");
+    check(std::string(back) == "VOLTAR", "tr: texts handed out stay valid");
+    // Data files: read at start-up, a restart for another language's.
+    check(language_data_folder("PT-BR") == dir / "pt-BR" && language_data_folder("fr").empty() &&
+              language_data_folder("").empty(),
+          "languages: the folder of the data files");
+    set_loaded_data_language("");
+    select_language("fr");
+    check(!language_needs_restart(), "languages: no data files, no restart");
+    select_language("pt-br");
+    check(language_needs_restart(), "languages: data files picked, restart");
+    set_loaded_data_language("pt-br");
+    check(!language_needs_restart(), "languages: data files read");
+    select_language("");
+    check(language_needs_restart(), "languages: back to auto, restart");
+    set_loaded_data_language("");
+    const DataFiles files(dir / "data", dir / "mod", language_data_folder("pt-br"));
+    check(files.find("STATIC/FONTS.FLX") == dir / "pt-BR/STATIC/FONTS.FLX" &&
+              files.find("STATIC/GUMPS.FLX") == dir / "data/STATIC/GUMPS.FLX",
+          "data files: the language's copy, else the data's");
+    // No folder: English.
+    set_languages_dir({});
+    check(std::string(tr("BACK")) == "BACK", "tr: no language files");
+    std::filesystem::remove_all(dir);
+
+    // The files of the repository: French complete, two-text editor form.
+    set_languages_dir(CRUSADER_LANGUAGES_DIR);
+    check(std::string(tr("<MORE>")) == "-SUITE-" && std::string(tr("Credits:%ld")) == "Cr\x82" "dits :%ld",
+          "languages/fr/port.txt read, in code page 850");
+    set_text_language(Language::English);
+    check(std::string(tr("<MORE>")) == "<MORE>" && std::string(tr("RETOUR", "BACK")) == "BACK",
+          "languages/en/port.txt read; the editor's texts");
+    set_text_language(Language::French);
+    set_languages_dir({});
+
+    // CRUSADER.CFG: written only when picked.
+    GameConfig lang = GameConfig::parse("irq=7\r\n");
+    check(lang.language.empty() && lang.text().find("language") == std::string::npos, "config language default");
+    lang.language = "pt-br";
+    check(GameConfig::parse(lang.text()).language == "pt-br", "config language round trip");
+    check(GameConfig::parse("Language = PT-BR\r\n").language == "pt-br", "config language in lower case");
+}
+
 int main() {
     check_config();
     check_iso();
     check_data_info();
+    check_languages();
     std::printf(failures ? "%d failure(s)\n" : "all checks passed\n", failures);
     return failures ? 1 : 0;
 }

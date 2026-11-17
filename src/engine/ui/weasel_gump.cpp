@@ -6,6 +6,7 @@
 #include "engine/world/inventory.hpp"
 
 #include <cstdio>
+#include <string_view>
 
 namespace crusader {
 
@@ -169,29 +170,27 @@ void WeaselGump::draw(Surface8& screen) const {
     }
     TextWriter text(*fonts_, kFont);
     const auto print = [&](int x, int y, const std::string& s) { text.print(screen, x_ + x, y_ + y, s); };
+    // A question, a line every 8 pixels.
+    const auto print_lines = [&](int x, int y, std::string_view s) {
+        for (std::size_t end; (end = s.find('\n')) != std::string_view::npos; s.remove_prefix(end + 1), y += 8)
+            print(x, y, std::string(s.substr(0, end)));
+        print(x, y, std::string(s));
+    };
     if (state_ == kConfirm) {
-        if (text_language() == Language::English) {
-            print(0x19, 0x5A, "Are you sure you");
-            print(0x19, 0x62, "want to buy this?");
-        } else {
-            print(0x19, 0x5A, "Etes-vous s\x96r de");
-            print(0x19, 0x62, "vouloir acheter");
-            print(0x19, 0x6A, "ceci ?");
-        }
+        print_lines(0x19, 0x5A, tr("Are you sure you\nwant to buy this?"));
     } else if (state_ == kBrowsing && current_ < static_cast<int>(items_.size())) {
         const Item& item = items_[static_cast<std::size_t>(current_)];
         // The original stops with a fatal assertion without an icon.
         if (const std::uint16_t shape = icon_shape(*world_, item.shape)) {
             if (const ShapeFrame* f = frame(shape, icon_frame(item.shape))) f->draw(screen, x_ + 0x6C, y_ + 0x83);
             print(0x19, 0xA3, item_name(item.shape));
-            print(0x19, 0xAD, format(tr("Prix :%u", "Cost:%u"), unsigned{item.price}));
-            print(0x19, 0xB7, format(tr("Achet\x82(s) :%02u", "Purchased:%02u"), static_cast<unsigned>(in_cart(item.shape))));
-            print(0x19, 0xC1, format(tr("Vous en avez :%02u", "Owned:%02u"), static_cast<unsigned>(owned(item.shape))));
+            print(0x19, 0xAD, format(tr("Cost:%u"), unsigned{item.price}));
+            print(0x19, 0xB7, format(tr("Purchased:%02u"), static_cast<unsigned>(in_cart(item.shape))));
+            print(0x19, 0xC1, format(tr("Owned:%02u"), static_cast<unsigned>(owned(item.shape))));
         }
-        print(0x1D, 0x38, format(tr("Cr\x82" "dits :%ld", "Credits:%ld"), static_cast<long>(credits_)));
+        print(0x1D, 0x38, format(tr("Credits:%ld"), static_cast<long>(credits_)));
     } else if (state_ == kQuestion) {
-        print(0x19, 0x5A, tr("Voulez-vous", "Do you want"));
-        print(0x19, 0x62, tr("autre chose ?", "anything else?"));
+        print_lines(0x19, 0x5A, tr("Do you want\nanything else?"));
     }
     // The children, after the gump.
     for (const ButtonState& b : buttons_) {

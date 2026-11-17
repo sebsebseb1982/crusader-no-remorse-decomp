@@ -66,7 +66,7 @@ void GamepadScreen::draw(Surface8& screen) const {
     screen.clear(0);
     outline(screen, kPanelX0, kPanelY0, kPanelX1, kPanelY1, kFrameColour);
     outline(screen, kPanelX0 + 2, kPanelY0 + 2, kPanelX1 - 2, kPanelY1 - 2, kFrameColour);
-    const std::string title = tr("MANETTE", "CONTROLLER");
+    const std::string title = tr("CONTROLLER");
     const int title_width = TextWriter(*fonts_, kFont).measure(title).width;
     print(screen, (screen.width - title_width) / 2, kTitleY, title, kGreen);
 
@@ -81,29 +81,27 @@ void GamepadScreen::draw(Surface8& screen) const {
         std::string label, value;
         if (row < kActionRows) {
             const int action = action_of(row);
-            label = tr(kPadActions[action].label, kPadActions[action].label_en);
+            label = tr(kPadActions[action].label);
             const int button = pad.button_of(action);
-            value = waiting_ && focused ? tr("APPUYEZ SUR UNE TOUCHE...", "PRESS A KEY...")
-                    : button < 0           ? tr("AUCUN", "NONE")
-                                           : tr(kPadButtonLabels[button], kPadButtonLabelsEn[button]);
+            value = waiting_ && focused ? tr("PRESS A KEY...")
+                    : button < 0           ? tr("NONE")
+                                           : tr(kPadButtonLabels[button]);
         } else if (row == kAimRow) {
-            label = tr("VITESSE DE VISEE", "AIM SPEED");
+            label = tr("AIM SPEED");
             value = "< " + std::to_string(pad.aim) + " / " + std::to_string(PadSettings::kAimLevels) + " >";
         } else if (row == kDeadZoneRow) {
-            label = tr("ZONE MORTE", "DEAD ZONE");
+            label = tr("DEAD ZONE");
             value = "< " + std::to_string(pad.dead_zone + 1) + " / " + std::to_string(PadSettings::kDeadZoneLevels) + " >";
         } else {
-            label = row == kDefaultRow ? tr("PAR DEFAUT", "DEFAULTS") : tr("RETOUR", "BACK");
+            label = row == kDefaultRow ? tr("DEFAULTS") : tr("BACK");
         }
         print(screen, kLabelX, y, label, tint);
         if (!value.empty()) print(screen, kValueX0 + 8, y, value, waiting_ && focused ? kGreen : -1);
     }
 
     // A one-line help under the rows, in the dim green of the labels.
-    const std::string hint = waiting_ ? tr("APPUYEZ SUR UN BOUTON OU POUSSEZ UN STICK   ECHAP : ANNULER",
-                                         "PRESS A BUTTON OR PUSH A STICK   ESC: CANCEL")
-                                      : tr("CLIC : ASSIGNER UN BOUTON   SUPPR : RETIRER",
-                                         "CLICK: ASSIGN A BUTTON   DEL: CLEAR");
+    const std::string hint = waiting_ ? tr("PRESS A BUTTON OR PUSH A STICK   ESC: CANCEL")
+                                      : tr("CLICK: ASSIGN A BUTTON   DEL: CLEAR");
     TextWriter hint_writer(*fonts_, kHintFont);
     constexpr int kPad = 4, kAbove = 32, kHeight = 48;
     const int width = hint_writer.measure(hint).width;

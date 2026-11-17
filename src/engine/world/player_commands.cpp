@@ -240,8 +240,8 @@ bool player_command(Kernel& kernel, World& world, const AnimDat& anims, std::uin
         bool& on = world.state.target_designation;
         on = !on;
         if (world.hooks().show_message)
-            world.hooks().show_message(on ? tr("DESIGNATION DE CIBLE ACTIVE.", "TARGETING RETICLE ACTIVE.")
-                                          : tr("DESIGNATION DE CIBLE INACTIVE.", "TARGETING RETICLE INACTIVE."));
+            world.hooks().show_message(on ? tr("TARGETING RETICLE ACTIVE.")
+                                          : tr("TARGETING RETICLE INACTIVE."));
         return true;
     }
     case 0x420:  // Ctrl+D

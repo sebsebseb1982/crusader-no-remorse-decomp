@@ -71,6 +71,10 @@ public:
     // Port addition, written only when set: "goremode", with the blood, much
     // more of it (DamageMarks::bleed).
     bool gore_mode = false;
+    // Port addition, written only when set: "language", the language picked
+    // (language.hpp): the name of a folder of the languages folder, in lower
+    // case ("fr", "en", "pt-br"...); empty for AUTO (the data's).
+    std::string language;
     // Port addition, written only when set: "fixoriginalbugs", bugs of the
     // original game's scripts and data that can block a mission are corrected
     // (enhancements.md, "Original game bug fixes"). Off, the port plays them as

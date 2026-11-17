@@ -74,19 +74,19 @@ constexpr Entry kControlsEntries[] = {Entry::Pad,        Entry::Directional, Ent
                                       Entry::Vibration,  Entry::VibrationIntensity, Entry::Back};
 constexpr Entry kDisplayEntries[] = {Entry::Native, Entry::Zoom, Entry::Smooth, Entry::Follow, Entry::Back};
 constexpr Entry kEffectsEntries[] = {Entry::Impact, Entry::Blood, Entry::Back};
-constexpr Entry kGameEntries[] = {Entry::Autosave, Entry::FixBugs, Entry::Back};
+constexpr Entry kGameEntries[] = {Entry::Autosave, Entry::FixBugs, Entry::Language, Entry::Back};
 
 // The name of a row that opens something (a page, the controller screen,
 // "retour"), shown in its middle.
 // @orig none: port-only enhancements window
 std::string button_label(Entry entry) {
     switch (entry) {
-    case Entry::Controls: return tr("CONTROLES", "CONTROLS");
-    case Entry::Display: return tr("AFFICHAGE", "DISPLAY");
-    case Entry::Effects: return tr("EFFETS", "EFFECTS");
-    case Entry::Game: return tr("JEU", "GAME");
-    case Entry::Pad: return tr("MANETTE", "CONTROLLER");
-    case Entry::Back: return tr("RETOUR", "BACK");
+    case Entry::Controls: return tr("CONTROLS");
+    case Entry::Display: return tr("DISPLAY");
+    case Entry::Effects: return tr("EFFECTS");
+    case Entry::Game: return tr("GAME");
+    case Entry::Pad: return tr("CONTROLLER");
+    case Entry::Back: return tr("BACK");
     default: return {};
     }
 }
@@ -145,7 +145,7 @@ void EnhancementsScreen::draw(Surface8& screen) const {
     draw_rounded_box(screen, kPanelX0, kPanelY0, kPanelX1, panel_y1, -1, kFrameColour);
     draw_rounded_box(screen, kPanelX0 + 3, kPanelY0 + 3, kPanelX1 - 3, panel_y1 - 3, -1, kFrameColour);
 
-    const std::string title = page_ == Page::Main ? tr("AMELIORATIONS", "ENHANCEMENTS")
+    const std::string title = page_ == Page::Main ? tr("ENHANCEMENTS")
                               : page_ == Page::Controls ? button_label(Entry::Controls)
                               : page_ == Page::Display  ? button_label(Entry::Display)
                               : page_ == Page::Effects  ? button_label(Entry::Effects)
@@ -175,74 +175,85 @@ void EnhancementsScreen::draw(Surface8& screen) const {
         std::string value;
         switch (entry) {
         case Entry::Directional:
-            name = tr("MODE DIRECTIONNEL", "DIRECTIONAL MOVE");
+            name = tr("DIRECTIONAL MOVE");
             on = config_->directional_move;
             break;
         case Entry::Aim:
-            name = tr("VISEE DIRECTIONNELLE", "DIRECTIONAL AIM");
+            name = tr("DIRECTIONAL AIM");
             on = config_->directional_aim;
             break;
         case Entry::Draw:
-            name = tr("DEGAINE EN VISANT", "DRAW ON AIM");
+            name = tr("DRAW ON AIM");
             on = config_->draw_on_aim;
             break;
         case Entry::PreciseAim:
-            name = tr("VISEE PRECISE", "PRECISE AIM");
+            name = tr("PRECISE AIM");
             on = config_->precise_aim;
             break;
         case Entry::Run:
-            name = tr("COURSE PERMANENTE", "TOGGLE RUN");
+            name = tr("TOGGLE RUN");
             on = config_->toggle_run;
             break;
         case Entry::Vibration:
-            name = tr("VIBRATIONS", "VIBRATION");
+            name = tr("VIBRATION");
             on = config_->vibration;
             break;
         case Entry::VibrationIntensity:
-            name = tr("INTENSITE", "INTENSITY");
+            name = tr("INTENSITY");
             value = std::to_string(config_->vibration_intensity) + "%";
             break;
         case Entry::Native:
-            name = tr("RESOLUTION NATIVE", "NATIVE RESOLUTION");
+            name = tr("NATIVE RESOLUTION");
             on = config_->native_resolution;
             break;
         case Entry::Zoom: {
-            name = tr("ZOOM", "ZOOM");
+            name = tr("ZOOM");
             const int pct = config_->view_zoom_pct;
-            if (!pct) value = tr("AUTO", "AUTO");
+            if (!pct) value = tr("AUTO");
             else value = "x" + std::to_string(pct / 100) + (pct % 100 == 50 ? ".5" : "");
             break;
         }
         case Entry::Smooth:
-            name = tr("LISSAGE", "SMOOTHING");
+            name = tr("SMOOTHING");
             on = config_->smooth_scaling;
             break;
         case Entry::Follow:
-            name = tr("SUIVI CAMERA", "CAMERA FOLLOW");
+            name = tr("CAMERA FOLLOW");
             on = config_->follow_player;
             break;
         case Entry::Impact:
-            name = tr("IMPACTS", "IMPACT MARKS");
+            name = tr("IMPACT MARKS");
             on = config_->impact_marks;
             break;
         case Entry::Blood:
-            name = tr("SANG", "BLOOD");
-            if (config_->blood_marks && config_->gore_mode) value = tr("GORE", "GORE");
+            name = tr("BLOOD");
+            if (config_->blood_marks && config_->gore_mode) value = tr("GORE");
             else on = config_->blood_marks;
             break;
         case Entry::Autosave:
-            name = tr("SAUVEGARDE AUTO", "AUTOSAVE");
+            name = tr("AUTOSAVE");
             on = config_->autosave;
             break;
         case Entry::FixBugs:
-            name = tr("CORRECTIFS ORIGINAL", "ORIGINAL BUG FIXES");
+            name = tr("ORIGINAL BUG FIXES");
             on = config_->fix_original_bugs;
+            break;
+        case Entry::Language:
+            name = tr("LANGUAGE");
+            value = selected_language().id.empty() ? tr("AUTO") : selected_language().name;
             break;
         default: break;
         }
-        if (value.empty()) value = on ? tr("MARCHE", "ON") : tr("ARRET", "OFF");
+        if (value.empty()) value = on ? tr("ON") : tr("OFF");
         print_tinted(screen, *fonts_, r.x0 + kRowPad, r.y0 + kTextDrop, name, tint);
         print_tinted(screen, *fonts_, r.x1 + 1 - kRowPad - writer.measure(value).width, r.y0 + kTextDrop, value, tint);
+    }
+    // The language's data files (pictures, scripts, subtitles...) are read at
+    // start-up: under the window, a note when the one picked differs.
+    if (page_ == Page::Game && language_needs_restart()) {
+        const std::string note = tr("RESTART TO LOAD ITS GAME FILES");
+        const int width = TextWriter(*fonts_, kFont).measure(note).width;
+        print_tinted(screen, *fonts_, (screen.width - width) / 2, panel_y1 + 30, note, kDimGreen);
     }
 }
 
@@ -310,6 +321,15 @@ void EnhancementsScreen::activate(int row) {
         break;
     case Entry::Autosave: config_->autosave = !config_->autosave; break;
     case Entry::FixBugs: config_->fix_original_bugs = !config_->fix_original_bugs; break;
+    case Entry::Language: {
+        // The next language offered, back to the data's after the last.
+        const auto choices = language_choices();
+        std::size_t i = 0;
+        while (i < choices.size() && choices[i].id != selected_language().id) ++i;
+        config_->language = choices[i + 1 < choices.size() ? i + 1 : 0].id;
+        select_language(config_->language);
+        break;
+    }
     case Entry::Back: back(); break;
     }
 }

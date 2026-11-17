@@ -202,6 +202,7 @@ void test_use_datalink(const std::filesystem::path& data) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    set_languages_dir(CRUSADER_LANGUAGES_DIR);  // the French texts (languages/fr/port.txt)
     std::filesystem::path data = "data_us";
     for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) == "--png" && i + 1 < argc) g_png_dir = argv[++i];
