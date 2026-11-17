@@ -433,7 +433,7 @@ void Game::reset_world() {
         if (config_.impact_marks) damage_marks_.record(*world_, hit, {x, y, z}, fire_type);
     };
     hooks.npc_wounded = [this](const Wound& wound) {
-        if (config_.impact_marks && config_.blood_marks) damage_marks_.bleed(*world_, wound);
+        if (config_.blood_marks) damage_marks_.bleed(*world_, wound);
     };
     world_->set_hooks(hooks);
     menu_.reset();
@@ -1741,9 +1741,9 @@ void Game::render_view(Surface8& screen, RenderStats* stats, bool keep_view) {
     const GameState& s = world_->state;
     const auto list =
         build_display_list(*world_, shapes_, View{s.view_left, s.view_top}, screen.width, screen.height, stats);
-    // Port addition: the impact marks, over each item just drawn.
-    const bool marks = config_.impact_marks;
-    if (marks) damage_marks_.prepare(*world_, world_->state.game_palette);
+    // Port addition: the impact and blood marks, over each item just drawn.
+    const bool marks = config_.impact_marks || config_.blood_marks;
+    if (marks) damage_marks_.prepare(*world_, world_->state.game_palette, config_.impact_marks, config_.blood_marks);
     else if (damage_marks_.size() != 0) damage_marks_.clear();
     // DLIST.C 11A0:05xx: right after item 1, in combat (or holstering,
     // last action 0xB), its weapon (WPNOVLAY.DAT), unmirrored, at the item's

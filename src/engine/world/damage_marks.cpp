@@ -195,7 +195,7 @@ std::vector<MarkPixel> mark_pattern(MarkKind kind, int radius, bool flat, std::u
         if (x < -127 || x > 127 || y < -127 || y > 127) return;
         out.push_back({static_cast<std::int8_t>(x), static_cast<std::int8_t>(y), static_cast<std::uint8_t>(shade)});
     };
-    if (kind == MarkKind::BloodSpray || kind == MarkKind::BloodDrop || kind == MarkKind::BloodPool) {
+    if (is_blood(kind)) {
         // Worked out on the wall, or on the ground at its own proportions
         // (y halved on screen when `flat`); u along `angle`, v across.
         const int r = std::clamp(radius, 1, 20);
@@ -520,12 +520,13 @@ void DamageMarks::add(const Item& host, World::Point surface, MarkKind kind, int
 }
 
 // @orig none: port-only impact marks
-void DamageMarks::prepare(const World& world, const Palette& game_palette) {
+void DamageMarks::prepare(const World& world, const Palette& game_palette, bool impacts, bool blood) {
     if (world.current_map() != map_) {
         clear();
         map_ = world.current_map();
     }
     std::erase_if(marks_, [&](const Mark& m) {
+        if (!(is_blood(m.kind) ? blood : impacts)) return true;
         const Item* item = world.get(m.host);
         return !item || !same_host(m, *item) || !can_host(world, *item);
     });

@@ -1395,6 +1395,17 @@ void test_blood_marks() {
     gore.bleed(w, Wound{7, 3, 1060, 976, 0, 80, true, true});
     CHECK(count(gore, MarkKind::BloodPool, near_tile) == 1);
     CHECK(count(gore, MarkKind::BloodDrop) + count(gore, MarkKind::BloodSpray) >= 4);
+
+    // Each option forgets its own marks only: a hole on the wall's +x face
+    // goes with the impacts, the blood stays; then the blood goes.
+    marks.record(w, wall, {944, 980, 20}, 1);
+    const int blood = count(marks, MarkKind::BloodSpray) + count(marks, MarkKind::BloodDrop);
+    CHECK(count(marks, MarkKind::Bullet, wall) == 1 && blood > 0);
+    marks.prepare(w, pal, false, true);
+    CHECK(count(marks, MarkKind::Bullet) == 0 &&
+          count(marks, MarkKind::BloodSpray) + count(marks, MarkKind::BloodDrop) == blood);
+    marks.prepare(w, pal, true, false);
+    CHECK(marks.size() == 0);
 }
 
 int main() {

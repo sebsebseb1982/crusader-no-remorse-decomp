@@ -10,11 +10,11 @@ namespace crusader {
 
 namespace {
 
-// 16 rows: the panel spans almost the whole 480 lines.
-constexpr int kPanelX0 = 100, kPanelY0 = 34, kPanelX1 = 539, kPanelY1 = 465;
-constexpr int kTitleY = 60, kIconSize = 14, kIconGap = 8;
-constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 78, kRowStep = 24, kRowHeight = 22;
-constexpr int kTextDrop = 16, kRowPad = 18;  // glyphs hang from their baseline
+// 17 rows: the panel spans almost the whole 480 lines.
+constexpr int kPanelX0 = 100, kPanelY0 = 26, kPanelX1 = 539, kPanelY1 = 473;
+constexpr int kTitleY = 54, kIconSize = 14, kIconGap = 8;
+constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 70, kRowStep = 23, kRowHeight = 21;
+constexpr int kTextDrop = 15, kRowPad = 18;  // glyphs hang from their baseline
 constexpr std::uint8_t kFrameColour = 0x57, kGreen = 0x0C, kDimGreen = 0x75;
 
 // Text in one colour: drawn on a scratch surface, copied in `tint`.
@@ -96,7 +96,7 @@ void EnhancementsScreen::draw(Surface8& screen) const {
         const TextWriter writer(*fonts_, kFont);
         if (row == kFollowRow || row == kDirectionalRow || row == kAimRow || row == kDrawRow ||
             row == kPreciseAimRow || row == kNativeRow ||
-            row == kZoomRow || row == kSmoothRow || row == kImpactRow || row == kAutosaveRow || row == kRunRow || row == kFixBugsRow ||
+            row == kZoomRow || row == kSmoothRow || row == kImpactRow || row == kBloodRow || row == kAutosaveRow || row == kRunRow || row == kFixBugsRow ||
             row == kVibrationRow || row == kVibrationIntensityRow) {
             // The name on the left, its state on the right.
             std::string name;
@@ -118,9 +118,10 @@ void EnhancementsScreen::draw(Surface8& screen) const {
                 on = config_->smooth_scaling;
             } else if (row == kImpactRow) {
                 name = tr("IMPACTS", "IMPACT MARKS");
-                value = !config_->impact_marks ? tr("ARRET", "OFF")
-                        : config_->blood_marks ? tr("SANG", "BLOOD")
-                                               : tr("MARCHE", "ON");
+                on = config_->impact_marks;
+            } else if (row == kBloodRow) {
+                name = tr("SANG", "BLOOD");
+                on = config_->blood_marks;
             } else if (row == kAutosaveRow) {
                 name = tr("SAUVEGARDE AUTO", "AUTOSAVE");
                 on = config_->autosave;
@@ -149,7 +150,7 @@ void EnhancementsScreen::draw(Surface8& screen) const {
                 name = tr("DEGAINE EN VISANT", "DRAW ON AIM");
                 on = config_->draw_on_aim;
             }
-            if (row != kZoomRow && row != kVibrationIntensityRow && row != kImpactRow)
+            if (row != kZoomRow && row != kVibrationIntensityRow)
                 value = on ? tr("MARCHE", "ON") : tr("ARRET", "OFF");
             print_tinted(screen, *fonts_, r.x0 + kRowPad, r.y0 + kTextDrop, name, tint);
             print_tinted(screen, *fonts_, r.x1 + 1 - kRowPad - writer.measure(value).width, r.y0 + kTextDrop, value,
@@ -176,16 +177,9 @@ void EnhancementsScreen::activate(int row) {
     } else if (row == kSmoothRow) {
         config_->smooth_scaling = !config_->smooth_scaling;
     } else if (row == kImpactRow) {
-        // Off, then the marks, then the marks and the blood, then off.
-        if (!config_->impact_marks) {
-            config_->impact_marks = true;
-            config_->blood_marks = false;
-        } else if (!config_->blood_marks) {
-            config_->blood_marks = true;
-        } else {
-            config_->impact_marks = false;
-            config_->blood_marks = false;
-        }
+        config_->impact_marks = !config_->impact_marks;
+    } else if (row == kBloodRow) {
+        config_->blood_marks = !config_->blood_marks;
     } else if (row == kAutosaveRow) {
         config_->autosave = !config_->autosave;
     } else if (row == kRunRow) {

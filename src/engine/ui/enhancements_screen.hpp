@@ -15,8 +15,8 @@
 // (GameConfig::native_resolution): the view fills the screen, and its "zoom"
 // row (GameConfig::view_zoom): auto, then pixels of 1 to 4 screen pixels, the
 // "lissage" toggle (GameConfig::smooth_scaling): bilinear filtering, the
-// "impacts" row (GameConfig::impact_marks, blood_marks): off, shots mark
-// the scenery, or they do and the wounded bleed on it ("sang"), and
+// "impacts" toggle (GameConfig::impact_marks): shots mark the scenery, the
+// "sang" toggle (GameConfig::blood_marks): the wounded bleed on it, and
 // the "sauvegarde auto" toggle (GameConfig::autosave): the game saves itself
 // at the key moments of a mission, "course toggle" (GameConfig::toggle_run),
 // "correctifs original" (GameConfig::fix_original_bugs): bugs of the original
@@ -53,8 +53,8 @@ class EnhancementsScreen {
 public:
     static constexpr int kPadRow = 0, kFollowRow = 1, kDirectionalRow = 2, kAimRow = 3, kDrawRow = 4,
                          kPreciseAimRow = 5, kNativeRow = 6, kZoomRow = 7, kSmoothRow = 8, kImpactRow = 9,
-                         kAutosaveRow = 10, kRunRow = 11, kFixBugsRow = 12, kVibrationRow = 13,
-                         kVibrationIntensityRow = 14, kBackRow = 15, kRows = 16;
+                         kBloodRow = 10, kAutosaveRow = 11, kRunRow = 12, kFixBugsRow = 13, kVibrationRow = 14,
+                         kVibrationIntensityRow = 15, kBackRow = 16, kRows = 17;
     static constexpr int kFont = 14;
 
     struct Rect {

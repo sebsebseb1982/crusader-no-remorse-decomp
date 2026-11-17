@@ -44,6 +44,10 @@ enum class MarkKind : std::uint8_t { Bullet, Burn, Scorch, BloodSpray, BloodDrop
 // for the bullets (fire types 1, 2, 0xB, 0xD), a burn otherwise.
 MarkKind mark_kind(int fire_type);
 
+inline bool is_blood(MarkKind kind) {
+    return kind == MarkKind::BloodSpray || kind == MarkKind::BloodDrop || kind == MarkKind::BloodPool;
+}
+
 // For each colour, the palette colour nearest to it darkened to `percent` of
 // its brightness. Colours 1..14 (cycled and translucent) and 0xFF are never
 // chosen; colours 1..14 map to themselves.
@@ -91,10 +95,11 @@ public:
     // An NPC lost hit points (WorldHooks::npc_wounded): its blood.
     void bleed(const World& world, const Wound& wound);
 
-    // Once per frame, before draw: forgets the marks of another map and of
-    // hosts that changed, indexes the others by host and follows the game
-    // palette.
-    void prepare(const World& world, const Palette& game_palette);
+    // Once per frame, before draw: forgets the marks of another map, of
+    // hosts that changed and of a kind switched off (`impacts`: holes,
+    // burns, scorches; `blood`), indexes the others by host and follows the
+    // game palette.
+    void prepare(const World& world, const Palette& game_palette, bool impacts = true, bool blood = true);
 
     // The marks of the item just drawn.
     void draw(Surface8& screen, const DrawItem& d) const;
