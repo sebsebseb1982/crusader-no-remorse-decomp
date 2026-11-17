@@ -13,13 +13,14 @@
 // marks. Marks are not saved; changing map, loading a game or switching the
 // option off forgets them. The oldest go first past kMaxMarks.
 //
-// Blood (GameConfig::blood_marks, with the impact marks): a human hit by a
-// bullet or a blast bleeds on the scenery.
-// A spray on the wall behind (in the shot's direction, with drips running
-// down), drops on the floor around; killed by a blast, a pool under the body,
-// pieces and drops thrown in a fan away from it and sprays on the walls
-// around. Robots, energy weapons (they burn, freeze or melt) and the dead do
-// not bleed. Blood marks follow the same rules as the others.
+// Blood (GameConfig::blood_marks): a
+// human hit by a bullet or a blast bleeds on the scenery. A spray on the wall
+// behind (in the shot's direction, with drips running down), drops on the
+// floor around, a pool under a body; killed by a blast, a bigger pool, pieces
+// and drops thrown in a fan away from it and sprays on the walls around. The
+// gore mode (GameConfig::gore_mode) throws much more of it, further. Robots,
+// energy weapons (they burn, freeze or melt) and the dead do not bleed. Blood
+// marks follow the same rules as the others.
 //
 // Marks only read the world: no random number of the game is drawn, so the
 // game plays the same with or without them.
@@ -92,8 +93,9 @@ public:
     // nothing, a floor below may take the mark).
     void record(const World& world, ObjId hit, World::Point at, int fire_type);
 
-    // An NPC lost hit points (WorldHooks::npc_wounded): its blood.
-    void bleed(const World& world, const Wound& wound);
+    // An NPC lost hit points (WorldHooks::npc_wounded): its blood, much more
+    // of it in `gore` mode (GameConfig::gore_mode).
+    void bleed(const World& world, const Wound& wound, bool gore = false);
 
     // Once per frame, before draw: forgets the marks of another map, of
     // hosts that changed and of a kind switched off (`impacts`: holes,

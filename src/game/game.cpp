@@ -433,7 +433,7 @@ void Game::reset_world() {
         if (config_.impact_marks) damage_marks_.record(*world_, hit, {x, y, z}, fire_type);
     };
     hooks.npc_wounded = [this](const Wound& wound) {
-        if (config_.blood_marks) damage_marks_.bleed(*world_, wound);
+        if (config_.blood_marks) damage_marks_.bleed(*world_, wound, config_.gore_mode);
     };
     world_->set_hooks(hooks);
     menu_.reset();

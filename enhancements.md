@@ -87,7 +87,7 @@ The original has nothing like it. This screen gathers every option the port adds
 | Row (EN / FR) | Effect | CFG key |
 |---|---|---|
 | IMPACT MARKS / IMPACTS | Shots leave marks on the scenery | `impactmarks` |
-| BLOOD / SANG | The wounded bleed on the scenery | `bloodmarks` |
+| BLOOD / SANG | Cycles OFF → ON (the wounded bleed on the scenery) → GORE (much more blood) | `bloodmarks`, `goremode` |
 
 *GAME / JEU*
 
@@ -370,10 +370,11 @@ The original leaves no trace of a shot. With this option the scenery keeps one w
 - Marks only read the world and use their own numbers, never the game's random generators, so the game plays the same with or without them.
 - Palette colours 1..14 (cycled or translucent) are never changed or used.
 
-**Blood** (option BLOOD / SANG, `bloodmarks`, off by default)
+**Blood** (option BLOOD / SANG, `bloodmarks`, `goremode`, off by default; ON or GORE)
 - Who bleeds: an NPC that loses hit points to a shot or a blast, if bullets hurt it fully (the living, not the robots). Energy weapons do not draw blood: they burn, freeze or melt. Blood is drawn in the game palette's reds, mixed with the colour underneath.
-- **A bullet** (or a blast that does not kill): a spray on the first wall behind the victim, along the shot, within 40 + 2 × the hit points lost (up to 140 units), at chest height, with drips running down. It always happens when the hit kills, 55 % of the time otherwise. Drops land on the floor behind: 1, plus 1 per 12 points lost, plus 2 for a kill (6 at most). The drops are stretched the way they flew.
-- **Killed by a blast**: a pool under the body; 16 to 24 pieces and drops thrown up to 150 units away, in a fan of ±80° away from the blast; sprays on the walls met by seven rays across that fan.
+- **A bullet** (or a blast that does not kill): a spray on the first wall behind the victim, along the shot, at chest height, with drips running down: within 48 + 2 × the hit points lost (up to 150 units), always when the hit kills, 75 % of the time otherwise. Drops, stretched the way they flew, land on the floor behind: 2, plus 1 per 10 points lost, plus 2 for a kill (7 at most). A kill leaves a pool under the body.
+- **Killed by a blast**: a bigger pool under the body; 18 to 26 pieces and drops thrown up to 150 units away, in a fan of ±80° away from the blast; sprays on the walls met by seven rays across that fan.
+- **GORE**: every bullet sprays the wall behind, within 80 + 3 × the points lost (up to 200 units), bigger; 4 drops plus 1 per 6 points lost, plus 4 for a kill (14 at most), thrown further. A bullet kill adds two sprays 25° to the sides, a bigger pool and 6 to 10 pieces thrown behind. A blast kill: 32 to 44 pieces up to 200 units away in a fan of ±100°, sprays along thirteen rays, a pool up to 20 pixels.
 - A wall face the camera does not see takes no spray. Blood marks follow the impact marks' rules: on scenery only, gone when it changes, not saved.
 
 ---
@@ -566,6 +567,7 @@ The original reads much of its data from the CD and needs it in the drive. The p
 | `togglerun` | false | `true` |
 | `impactmarks` | false | `true` |
 | `bloodmarks` | false | `true` |
+| `goremode` | false | `true` |
 | `nativeresolution` | true | `false` |
 | `autosave` | true | `false` |
 | `viewzoom` | 0 (auto), 1..4 with decimals (`1.5`) | ≠ 0 |

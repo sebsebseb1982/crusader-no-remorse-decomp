@@ -1395,6 +1395,15 @@ void test_blood_marks() {
     gore.bleed(w, Wound{7, 3, 1060, 976, 0, 80, true, true});
     CHECK(count(gore, MarkKind::BloodPool, near_tile) == 1);
     CHECK(count(gore, MarkKind::BloodDrop) + count(gore, MarkKind::BloodSpray) >= 4);
+    // A bullet that kills leaves a pool too; the gore mode, more of all.
+    CHECK(count(marks, MarkKind::BloodPool) == 1);
+    DamageMarks more;
+    more.bleed(w, Wound{7, 1, 1100, 976, 20, 30, true, true}, true);
+    CHECK(count(more, MarkKind::BloodDrop) > count(marks, MarkKind::BloodDrop));
+    CHECK(count(more, MarkKind::BloodSpray, wall) >= 1);
+    DamageMarks torn;
+    torn.bleed(w, Wound{7, 3, 1060, 976, 0, 80, true, true}, true);
+    CHECK(torn.size() > gore.size());
 
     // Each option forgets its own marks only: a hole on the wall's +x face
     // goes with the impacts, the blood stays; then the blood goes.

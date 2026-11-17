@@ -117,6 +117,7 @@ GameConfig GameConfig::parse(std::string_view text) {
         else if (key == "togglerun") c.toggle_run = value == "true";
         else if (key == "impactmarks") c.impact_marks = value == "true";
         else if (key == "bloodmarks") c.blood_marks = value == "true";
+        else if (key == "goremode") c.gore_mode = value == "true";
         else if (key == "fixoriginalbugs") c.fix_original_bugs = value == "true";
         else if (key == "vibration") c.vibration = value != "false";
         else if (key == "vibrationintensity") c.vibration_intensity = std::clamp(number(value), 0, 100);
@@ -178,6 +179,8 @@ std::string GameConfig::text() const {
     else out.erase("impactmarks");
     if (blood_marks) out.set("bloodmarks", "true");
     else out.erase("bloodmarks");
+    if (gore_mode) out.set("goremode", "true");
+    else out.erase("goremode");
     if (fix_original_bugs) out.set("fixoriginalbugs", "true");
     else out.erase("fixoriginalbugs");
     if (!vibration) out.set("vibration", "false");

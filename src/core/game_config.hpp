@@ -68,6 +68,9 @@ public:
     // Port addition, written only when set: "bloodmarks", the wounded bleed
     // on the scenery (damage_marks.hpp).
     bool blood_marks = false;
+    // Port addition, written only when set: "goremode", with the blood, much
+    // more of it (DamageMarks::bleed).
+    bool gore_mode = false;
     // Port addition, written only when set: "fixoriginalbugs", bugs of the
     // original game's scripts and data that can block a mission are corrected
     // (enhancements.md, "Original game bug fixes"). Off, the port plays them as

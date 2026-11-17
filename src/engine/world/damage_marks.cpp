@@ -252,7 +252,7 @@ std::vector<MarkPixel> mark_pattern(MarkKind kind, int radius, bool flat, std::u
         // A spray: a splash, droplets thrown on in a cone (the further, the
         // smaller, some with a tail), and on a wall drips running down.
         blob(0, 0, r * 1.1, r * 0.85, 0.45, 0.1, 6);
-        const int droplets = 3 * r + 2;
+        const int droplets = 4 * r + 4;
         for (int k = 0; k < droplets; ++k) {
             const double turn = angle + (unit(mix(seed, k, 7)) - 0.5) * 1.4;
             const double dist = r * (0.9 + 2.2 * unit(mix(seed, k, 8)));
@@ -265,7 +265,7 @@ std::vector<MarkPixel> mark_pattern(MarkKind kind, int radius, bool flat, std::u
             if (dist > 1.6 * r) place(gx - std::cos(turn), gy - std::sin(turn), 4);
         }
         if (!flat) {
-            const int drips = 1 + r / 3;
+            const int drips = 2 + r / 3;
             for (int k = 0; k < drips; ++k) {
                 const std::uint32_t h = mix(seed, k, 11);
                 const int x = static_cast<int>(std::lround((unit(h) - 0.5) * r * 1.2));
@@ -428,7 +428,7 @@ bool DamageMarks::spray_wall(const World& world, World::Point from, double ux, d
 }
 
 // @orig none: port-only blood marks
-void DamageMarks::bleed(const World& world, const Wound& wound) {
+void DamageMarks::bleed(const World& world, const Wound& wound, bool gore) {
     if (world.current_map() != map_) {
         clear();
         map_ = world.current_map();
@@ -457,43 +457,71 @@ void DamageMarks::bleed(const World& world, const Wound& wound) {
         tx = ux * std::cos(t) - uy * std::sin(t);
         ty = ux * std::sin(t) + uy * std::cos(t);
     };
+    // Pieces and drops thrown on the floor in a fan of +/- `spread` degrees,
+    // up to `far` units; sprays on the walls met by rays across the fan.
+    const auto fan = [&](int pieces, int spread, int far, int spray_radius, int drop_radius) {
+        for (int k = 0; k < pieces; ++k) {
+            double tx = 0, ty = 0;
+            turned(roll(2 * spread + 1) - spread, tx, ty);
+            const int dist = 12 + roll(far - 11);
+            const World::Point at{centre.x + static_cast<std::int32_t>(std::lround(tx * dist)),
+                                  centre.y + static_cast<std::int32_t>(std::lround(ty * dist)), centre.z};
+            if (k % 2) drop(world, at, MarkKind::BloodSpray, spray_radius + roll(5), tx, ty);
+            else drop(world, at, MarkKind::BloodDrop, drop_radius + roll(4), tx, ty);
+        }
+    };
+    const auto walls = [&](int spread, int step, int reach, int radius) {
+        for (int degrees = -spread; degrees <= spread; degrees += step) {
+            double tx = 0, ty = 0;
+            turned(degrees + roll(11) - 5, tx, ty);
+            spray_wall(world, {centre.x, centre.y, chest}, tx, ty, reach, radius + roll(6));
+        }
+    };
     const bool blast = shot == MarkKind::Scorch;
     if (blast && wound.killed) {
         // Torn apart: a pool under the body, pieces and drops thrown in a
         // fan away from the blast, sprays on the walls around.
-        drop(world, centre, MarkKind::BloodPool, 11 + roll(7), ux, uy);
-        const int pieces = 16 + roll(9);
-        for (int k = 0; k < pieces; ++k) {
-            double tx = 0, ty = 0;
-            turned(roll(161) - 80, tx, ty);
-            const int dist = 12 + roll(140);
-            const World::Point at{centre.x + static_cast<std::int32_t>(std::lround(tx * dist)),
-                                  centre.y + static_cast<std::int32_t>(std::lround(ty * dist)), centre.z};
-            if (k % 2) drop(world, at, MarkKind::BloodSpray, 4 + roll(5), tx, ty);
-            else drop(world, at, MarkKind::BloodDrop, 2 + roll(4), tx, ty);
-        }
-        for (int degrees = -75; degrees <= 75; degrees += 25) {
-            double tx = 0, ty = 0;
-            turned(degrees + roll(11) - 5, tx, ty);
-            spray_wall(world, {centre.x, centre.y, chest}, tx, ty, 150, 7 + roll(6));
+        drop(world, centre, MarkKind::BloodPool, gore ? 15 + roll(6) : 12 + roll(6), ux, uy);
+        if (gore) {
+            fan(32 + roll(13), 100, 200, 5, 2);
+            walls(90, 15, 200, 9);
+        } else {
+            fan(18 + roll(9), 80, 150, 4, 2);
+            walls(75, 25, 150, 7);
         }
         return;
     }
     // A bullet (or a blast that did not kill): a spray on the wall behind,
-    // always when it killed, more than half the time otherwise, and drops on
-    // the floor around, more for a harder hit.
+    // always when it killed, most of the time otherwise (always in gore
+    // mode), and drops on the floor around, more for a harder hit. A kill
+    // leaves a pool under the body; in gore mode also a second and a third
+    // spray to the sides and pieces thrown behind.
     const int strength = std::clamp(wound.dealt, 1, 60);
-    if (wound.killed || roll(100) < 55) {
-        const int radius = std::min(3 + strength / 8 + (wound.killed ? 2 : 0), 10);
-        spray_wall(world, {centre.x, centre.y, chest}, ux, uy, std::min(40 + strength * 2, 140), radius);
+    if (gore || wound.killed || roll(100) < 75) {
+        const int radius = gore ? std::min(6 + strength / 5 + (wound.killed ? 3 : 0), 15)
+                                : std::min(4 + strength / 7 + (wound.killed ? 2 : 0), 11);
+        const int reach = gore ? std::min(80 + strength * 3, 200) : std::min(48 + strength * 2, 150);
+        spray_wall(world, {centre.x, centre.y, chest}, ux, uy, reach, radius);
+        if (gore && wound.killed) {
+            for (int degrees : {-25, 25}) {
+                double tx = 0, ty = 0;
+                turned(degrees, tx, ty);
+                spray_wall(world, {centre.x, centre.y, chest}, tx, ty, reach, radius - 2);
+            }
+        }
     }
-    const int drops = std::min(1 + strength / 12 + (wound.killed ? 2 : 0), 6);
+    const int drops = gore ? std::min(4 + strength / 6 + (wound.killed ? 4 : 0), 14)
+                           : std::min(2 + strength / 10 + (wound.killed ? 2 : 0), 7);
     for (int k = 0; k < drops; ++k) {
-        const int along = 6 + roll(20 + strength * 2);
-        const int aside = blast ? roll(41) - 20 : roll(17) - 8;
+        const int along = 6 + roll((gore ? 40 : 24) + strength * (gore ? 3 : 2));
+        const int aside = blast ? roll(41) - 20 : roll(gore ? 25 : 17) - (gore ? 12 : 8);
         const World::Point at{centre.x + static_cast<std::int32_t>(std::lround(ux * along - uy * aside)),
                               centre.y + static_cast<std::int32_t>(std::lround(uy * along + ux * aside)), centre.z};
-        drop(world, at, MarkKind::BloodDrop, (wound.killed ? 2 : 1) + roll(3), ux, uy);
+        drop(world, at, MarkKind::BloodDrop, (gore || wound.killed ? 2 : 1) + roll(gore ? 4 : 3), ux, uy);
+    }
+    if (wound.killed) {
+        drop(world, centre, MarkKind::BloodPool, gore ? 9 + roll(6) : 5 + roll(4), ux, uy);
+        if (gore) fan(6 + roll(5), 40, 120, 4, 2);
     }
 }
 

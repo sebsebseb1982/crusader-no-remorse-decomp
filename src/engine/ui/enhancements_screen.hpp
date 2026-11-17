@@ -18,7 +18,8 @@
 //   bilinear filtering, and "suivi camera" (GameConfig::follow_player): the
 //   controlled NPC stays at the centre of the screen;
 // - "effets": "impacts" (GameConfig::impact_marks): shots mark the scenery,
-//   and "sang" (GameConfig::blood_marks): the wounded bleed on it;
+//   and "sang" (GameConfig::blood_marks, gore_mode): off, the wounded
+//   bleed on it, or "gore": much more;
 // - "jeu": "sauvegarde auto" (GameConfig::autosave): the game saves itself at
 //   the key moments of a mission, and "correctifs original"
 //   (GameConfig::fix_original_bugs): bugs of the original game's scripts are

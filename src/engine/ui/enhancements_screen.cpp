@@ -227,7 +227,8 @@ void EnhancementsScreen::draw(Surface8& screen) const {
             break;
         case Entry::Blood:
             name = tr("SANG", "BLOOD");
-            on = config_->blood_marks;
+            if (config_->blood_marks && config_->gore_mode) value = tr("GORE", "GORE");
+            else on = config_->blood_marks;
             break;
         case Entry::Autosave:
             name = tr("SAUVEGARDE AUTO", "AUTOSAVE");
@@ -295,7 +296,18 @@ void EnhancementsScreen::activate(int row) {
     case Entry::Smooth: config_->smooth_scaling = !config_->smooth_scaling; break;
     case Entry::Follow: config_->follow_player = !config_->follow_player; break;
     case Entry::Impact: config_->impact_marks = !config_->impact_marks; break;
-    case Entry::Blood: config_->blood_marks = !config_->blood_marks; break;
+    case Entry::Blood:
+        // Off, on, gore, off.
+        if (!config_->blood_marks) {
+            config_->blood_marks = true;
+            config_->gore_mode = false;
+        } else if (!config_->gore_mode) {
+            config_->gore_mode = true;
+        } else {
+            config_->blood_marks = false;
+            config_->gore_mode = false;
+        }
+        break;
     case Entry::Autosave: config_->autosave = !config_->autosave; break;
     case Entry::FixBugs: config_->fix_original_bugs = !config_->fix_original_bugs; break;
     case Entry::Back: back(); break;
