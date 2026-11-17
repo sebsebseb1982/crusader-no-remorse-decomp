@@ -62,6 +62,9 @@ public:
     // Port addition, written only when set: "togglerun", the Shift key switches
     // running on and off at each press instead of running while it is held.
     bool toggle_run = false;
+    // Port addition, written only when set: "impactmarks", shots leave marks
+    // on the scenery they hit (holes, burns, scorches; damage_marks.hpp).
+    bool impact_marks = false;
     // Port addition, written only when set: "fixoriginalbugs", bugs of the
     // original game's scripts and data that can block a mission are corrected
     // (enhancements.md, "Original game bug fixes"). Off, the port plays them as

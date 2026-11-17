@@ -14,7 +14,8 @@
 // target they can reach, and the "resolution native" toggle
 // (GameConfig::native_resolution): the view fills the screen, and its "zoom"
 // row (GameConfig::view_zoom): auto, then pixels of 1 to 4 screen pixels, the
-// "lissage" toggle (GameConfig::smooth_scaling): bilinear filtering, and
+// "lissage" toggle (GameConfig::smooth_scaling): bilinear filtering, the
+// "impacts" toggle (GameConfig::impact_marks): shots mark the scenery, and
 // the "sauvegarde auto" toggle (GameConfig::autosave): the game saves itself
 // at the key moments of a mission, "course toggle" (GameConfig::toggle_run),
 // "correctifs original" (GameConfig::fix_original_bugs): bugs of the original
@@ -50,9 +51,9 @@ void draw_plus_icon(Surface8& screen, int x, int y, int size, std::uint8_t colou
 class EnhancementsScreen {
 public:
     static constexpr int kPadRow = 0, kFollowRow = 1, kDirectionalRow = 2, kAimRow = 3, kDrawRow = 4,
-                         kPreciseAimRow = 5, kNativeRow = 6, kZoomRow = 7, kSmoothRow = 8, kAutosaveRow = 9,
-                         kRunRow = 10, kFixBugsRow = 11, kVibrationRow = 12, kVibrationIntensityRow = 13,
-                         kBackRow = 14, kRows = 15;
+                         kPreciseAimRow = 5, kNativeRow = 6, kZoomRow = 7, kSmoothRow = 8, kImpactRow = 9,
+                         kAutosaveRow = 10, kRunRow = 11, kFixBugsRow = 12, kVibrationRow = 13,
+                         kVibrationIntensityRow = 14, kBackRow = 15, kRows = 16;
     static constexpr int kFont = 14;
 
     struct Rect {

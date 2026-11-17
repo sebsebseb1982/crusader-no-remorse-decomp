@@ -428,6 +428,10 @@ void Game::reset_world() {
     hooks.got_hit = [this](ObjId item, ObjId other, std::uint16_t force) {
         got_hit(*kernel_, *world_, anims_, item, other, force);
     };
+    damage_marks_.clear();
+    hooks.shot_landed = [this](ObjId hit, std::int32_t x, std::int32_t y, std::int32_t z, int fire_type) {
+        if (config_.impact_marks) damage_marks_.record(*world_, hit, {x, y, z}, fire_type);
+    };
     world_->set_hooks(hooks);
     menu_.reset();
     menu_process_ = nullptr;
@@ -1734,10 +1738,15 @@ void Game::render_view(Surface8& screen, RenderStats* stats, bool keep_view) {
     const GameState& s = world_->state;
     const auto list =
         build_display_list(*world_, shapes_, View{s.view_left, s.view_top}, screen.width, screen.height, stats);
+    // Port addition: the impact marks, over each item just drawn.
+    const bool marks = config_.impact_marks;
+    if (marks) damage_marks_.prepare(*world_, world_->state.game_palette);
+    else if (damage_marks_.size() != 0) damage_marks_.clear();
     // DLIST.C 11A0:05xx: right after item 1, in combat (or holstering,
     // last action 0xB), its weapon (WPNOVLAY.DAT), unmirrored, at the item's
     // screen place plus the offsets of the current action, direction, frame.
-    draw_display_list(screen, list, &xform_, [this](Surface8& surface, const DrawItem& d) {
+    draw_display_list(screen, list, &xform_, [this, marks](Surface8& surface, const DrawItem& d) {
+        if (marks) damage_marks_.draw(surface, d);
         if (d.item->id != 1 || d.item->shape != 1) return;
         const auto record = world_->npc_record(1);
         const std::uint16_t last = static_cast<std::uint16_t>(record[npc::kLastAnim] | record[npc::kLastAnim + 1] << 8);

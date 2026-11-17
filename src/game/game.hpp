@@ -35,6 +35,7 @@
 #include "engine/world/avatar_mover.hpp"
 #include "engine/world/combat_control.hpp"
 #include "core/weapon_overlay.hpp"
+#include "engine/world/damage_marks.hpp"
 #include "engine/world/render.hpp"
 #include "engine/world/world.hpp"
 #include "engine/world/world_mouse.hpp"
@@ -355,6 +356,7 @@ private:
     bool aim_stick_ = false;
     double aim_stick_deg_ = 0;
     WeaponOverlay weapon_overlay_;
+    DamageMarks damage_marks_;  // port addition (GameConfig::impact_marks)
     Palette palette_;
     UsecodeFile usecode_;
     ShapeCache shapes_;

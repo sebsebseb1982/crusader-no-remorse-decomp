@@ -23,6 +23,7 @@ The changes fall into four groups:
 5. [Camera follows the player](#5-camera-follows-the-player)
 6. [Native resolution](#6-native-resolution)
 7. [Zoom](#7-zoom)
+   - [7b. Impact marks](#7b-impact-marks)
 8. [Autosave](#8-autosave)
 9. [Toggle run](#9-toggle-run)
    - [9b. Original game bug fixes](#9b-original-game-bug-fixes)
@@ -54,7 +55,7 @@ The original has nothing like it. This screen gathers every option the port adds
 **Look**
 - The screen is cleared. A double red frame (colour `0x57`, corners cut over 3 pixels like the original buttons) fills (100,34)–(539,465).
 - The title is green (`0x0C`), with the "+" icon.
-- 15 rows, 25 px apart. The focused row is bright green (`0x0C`); the others are dark green (`0x75`).
+- 16 rows, 24 px apart. The focused row is bright green (`0x0C`); the others are dark green (`0x75`).
 - An on/off option shows its name on the left and its value on the right: ON / OFF (French: MARCHE / ARRET).
 
 | # | Row (EN / FR) | Effect | CFG key |
@@ -68,12 +69,13 @@ The original has nothing like it. This screen gathers every option the port adds
 | 6 | NATIVE RESOLUTION / RESOLUTION NATIVE | Toggles native resolution | `nativeresolution` |
 | 7 | ZOOM | Cycles AUTO → x1 → x1.5 → x2 → … → xN → AUTO | `viewzoom` |
 | 8 | SMOOTHING / LISSAGE | Bilinear filtering of the picture | `smoothscaling` |
-| 9 | AUTOSAVE / SAUVEGARDE AUTO | Toggles the autosave | `autosave` |
-| 10 | TOGGLE RUN / COURSE PERMANENTE | Toggles toggle-run mode | `togglerun` |
-| 11 | ORIGINAL BUG FIXES / CORRECTIFS ORIGINAL | Corrects bugs of the original game that can block a mission | `fixoriginalbugs` |
-| 12 | VIBRATION / VIBRATIONS | Controller rumble | `vibration` |
-| 13 | INTENSITY / INTENSITE | Rumble strength, 0 to 100 % by 10 (left / right) | `vibrationintensity` |
-| 14 | BACK / RETOUR | Closes the screen | — |
+| 9 | IMPACT MARKS / IMPACTS | Shots leave marks on the scenery | `impactmarks` |
+| 10 | AUTOSAVE / SAUVEGARDE AUTO | Toggles the autosave | `autosave` |
+| 11 | TOGGLE RUN / COURSE PERMANENTE | Toggles toggle-run mode | `togglerun` |
+| 12 | ORIGINAL BUG FIXES / CORRECTIFS ORIGINAL | Corrects bugs of the original game that can block a mission | `fixoriginalbugs` |
+| 13 | VIBRATION / VIBRATIONS | Controller rumble | `vibration` |
+| 14 | INTENSITY / INTENSITE | Rumble strength, 0 to 100 % by 10 (left / right) | `vibrationintensity` |
+| 15 | BACK / RETOUR | Closes the screen | — |
 
 **Controls**
 - Up or `8`, down or `2`: moves between rows. The focus stops at the first and last row; it does not wrap.
@@ -327,6 +329,29 @@ Zoom sets the **maximum size of a game pixel** in native resolution.
 
 ---
 
+## 7b. Impact marks
+
+**Option:** IMPACT MARKS / IMPACTS (`impactmarks`, off by default)
+**Files:** `src/engine/world/damage_marks.*`, `src/engine/world/projectile.cpp`, `src/game/game.cpp`
+
+The original leaves no trace of a shot. With this option the scenery keeps one where a shot ends.
+
+**Marks**
+- **Bullets** (fire types 1, 2, 0xB, 0xD): a hole of about 2 × 2 black pixels with a dark rim and a few chips.
+- **Explosions** (any fire type that splashes: rockets, grenades…): a scorch with a ragged edge, black in the middle. Its radius is 3 × the splash radius, 10 to 32 pixels. It covers the item hit and the scenery around it: a floor gets a scorch squashed to the ground, centred under the blast; a wall face gets it centred across from the blast. The further the face, the smaller the scorch (a quarter of a pixel less per unit). At most 24 items per explosion.
+- **Energy weapons** (every other fire type: lasers, plasma, electric…): a small burn, 3 pixels in radius.
+- A shot that hits nothing marks the floor right under where it ends, if there is one within 16 units below.
+
+**Rules**
+- The mark belongs to the item it lands on and is drawn just after it, inside its opaque pixels, by darkening them through the game palette. Whatever stands in front of the item covers the mark too.
+- Only scenery takes marks: not NPCs, shots, translucent shapes (windows, force fields) or editor markers. A face the camera does not see (the back of a wall) takes none.
+- A mark goes away when its item moves, changes frame or shape, flips or is destroyed. It also goes on a map change, a load, or when the option is switched off. Past 1024 marks the oldest go first.
+- Marks are not saved: a loaded game starts clean.
+- Marks only read the world and use their own numbers, never the game's random generators, so the game plays the same with or without them.
+- Palette colours 1..14 (cycled or translucent) are never changed or used.
+
+---
+
 ## 8. Autosave
 
 **Option:** AUTOSAVE (`autosave`, **on by default**)
@@ -513,6 +538,7 @@ The original reads much of its data from the CD and needs it in the drive. The p
 | `directionalaim` | false | `true` |
 | `drawonaim` | true | `false` |
 | `togglerun` | false | `true` |
+| `impactmarks` | false | `true` |
 | `nativeresolution` | true | `false` |
 | `autosave` | true | `false` |
 | `viewzoom` | 0 (auto), 1..4 with decimals (`1.5`) | ≠ 0 |

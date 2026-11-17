@@ -80,6 +80,7 @@ add_library(crusader_engine
   src/engine/world/gravity.cpp
   src/engine/world/combat_control.cpp
   src/engine/world/projectile.cpp
+  src/engine/world/damage_marks.cpp
   src/engine/world/attack.cpp
   src/engine/world/activity.cpp
   src/engine/world/actor_create.cpp

@@ -234,6 +234,7 @@ Pid fire_weapon(Kernel& kernel, World& world, const AnimDat& anims, ObjId shoote
                 splash_damage(kernel, world, anims, origin, ft->splash(), random_damage(fire_type), fire_type, inside,
                               shooter);
             }
+            if (world.hooks().shot_landed) world.hooks().shot_landed(inside, origin.x, origin.y, origin.z, fire_type);
             if (ft->impact_sprite()) impact_sprite(kernel, world, fire_type, origin);
         }
         return 0;
@@ -620,6 +621,7 @@ void ProjectileProcess::impact(ObjId hit) {
     if (ft && ft->splash() != 0) {
         splash_damage(kernel(), world_, anims_, pos_, ft->splash(), damage_, fire_type_, hit, shooter_);
     }
+    if (world_.hooks().shot_landed) world_.hooks().shot_landed(hit, pos_.x, pos_.y, pos_.z, fire_type_);
     impact_sprite(kernel(), world_, fire_type_, pos_);
     terminate();
 }
@@ -685,6 +687,7 @@ bool ProjectileProcess::ricochet(ObjId blocker, const World::Point& at) {
     const Item* item = world_.get(blocker);
     const ShapeInfo* info = item ? world_.shape_info(item->shape) : nullptr;
     if (fire_type_ != 5 || !info || !info->is(ShapeInfo::kRoof) || ricochets_ >= 5) return false;
+    if (world_.hooks().shot_landed) world_.hooks().shot_landed(blocker, pos_.x, pos_.y, pos_.z, fire_type_);
     impact_sprite(kernel(), world_, fire_type_, at);
     int dx = target_.x - start_.x, dy = target_.y - start_.y;
     if (pos_.x < item->x - info->footpad_x * 16 + 1 || item->x < pos_.x) dx = -dx;

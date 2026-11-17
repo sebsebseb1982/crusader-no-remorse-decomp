@@ -11,6 +11,7 @@
 #include "engine/world/actor_anim.hpp"
 #include "engine/world/attack.hpp"
 #include "engine/world/collision.hpp"
+#include "engine/world/damage_marks.hpp"
 #include "engine/world/gravity.hpp"
 #include "engine/world/pathfind.hpp"
 #include "engine/world/render.hpp"
@@ -1191,7 +1192,133 @@ void test_save_fresh_slots() {
 
 }  // namespace
 
+// Port addition: the impact marks (damage_marks.hpp).
+void test_impact_marks() {
+    CHECK(mark_kind(1) == MarkKind::Bullet && mark_kind(0xD) == MarkKind::Bullet);
+    CHECK(mark_kind(3) == MarkKind::Scorch && mark_kind(0xA) == MarkKind::Scorch);  // they splash
+    CHECK(mark_kind(6) == MarkKind::Burn && mark_kind(7) == MarkKind::Burn);
+
+    // A grey ramp: darker colours, never a cycled one (1..14) nor 0xFF.
+    Palette pal;
+    for (int c = 0; c < 256; ++c) {
+        const auto v = static_cast<std::uint8_t>(c);
+        pal.colors[c] = {v, v, v};
+    }
+    const auto half = shade_table(pal, 50);
+    CHECK(half[200] == 100 && half[100] == 50 && half[20] == 15 && half[5] == 5);
+    for (int c = 0; c < 256; ++c)
+        CHECK(half[c] <= c && (half[c] == c || half[c] > 14 || half[c] == 0) && half[c] != 0xFF);
+
+    CHECK(mark_pattern(MarkKind::Bullet, 1, false, 0).size() >= 3);
+    const auto wall = mark_pattern(MarkKind::Scorch, 12, false, 7), floor = mark_pattern(MarkKind::Scorch, 12, true, 7);
+    CHECK(!wall.empty() && floor.size() < wall.size());
+    for (const MarkPixel& px : floor) CHECK(std::abs(px.dy) <= 6 && std::abs(px.dx) <= 12 && px.shade <= 3);
+
+    // Shape 6: a box of 2 x 3 x 4 footpads (32 x 48 x 32 units); shape 8 a
+    // flat floor of 4 x 4.
+    std::vector<ShapeInfo> tf = test_typeflags();
+    tf[8].footpad_x = 4;
+    tf[8].footpad_y = 4;
+    tf[9].flags = ShapeInfo::kTranslucent;
+    World w(tf);
+    const auto place = [&](std::uint16_t shape, std::int32_t x, std::int32_t y, std::int32_t z) {
+        const ObjId id = w.create(shape, 0);
+        w.pop_to_coords(x, y, z);
+        return id;
+    };
+    const ObjId crate = place(6, 1000, 1000, 0);
+    const ObjId floor_tile = place(8, 1200, 1200, 0);
+    const ObjId glass = place(9, 1400, 1000, 0);
+
+    DamageMarks marks;
+    // A bullet stopped in front of the +x face: marked where it hit, its
+    // screen offset from the crate's anchor.
+    marks.record(w, crate, {1004, 990, 16}, 1);
+    CHECK(marks.size() == 1);
+    if (marks.size() == 1) {
+        const DamageMarks::Mark& m = marks.marks().front();
+        CHECK(m.host == crate && m.kind == MarkKind::Bullet && !m.flat);
+        CHECK(m.dx == ((1000 - 990) >> 1) - 0 && m.dy == ((1000 + 990) >> 2) - 16 - ((2000 >> 2) - 0));
+    }
+    // From behind (the -x face, unseen), on a translucent item: no mark.
+    marks.record(w, crate, {1000 - 32 - 8, 990, 16}, 1);
+    marks.record(w, glass, {1404, 990, 16}, 1);
+    CHECK(marks.size() == 1);
+    // On nothing, over the floor: on the floor, flat.
+    marks.record(w, 0, {1150, 1150, 0}, 0x14);
+    CHECK(marks.size() == 2 && marks.marks().back().host == floor_tile && marks.marks().back().flat &&
+          marks.marks().back().kind == MarkKind::Burn);
+    // In the air: nothing.
+    marks.record(w, 0, {1150, 1150, 60}, 1);
+    CHECK(marks.size() == 2);
+    // An explosion in front of the crate, over the floor: a scorch on each,
+    // none on an NPC; on the floor centred under the blast, squashed.
+    Item npc;
+    npc.id = 5;
+    npc.shape = 6;
+    npc.x = 1010;
+    npc.y = 1020;
+    w.add_with_id(npc);
+    const ObjId floor_near = place(8, 1064, 1064, 0);
+    marks.record(w, 0, {1012, 1012, 8}, 3);
+    std::set<ObjId> scorched;
+    for (const auto& m : marks.marks())
+        if (m.kind == MarkKind::Scorch) scorched.insert(m.host);
+    CHECK(scorched.count(crate) == 1 && scorched.count(floor_near) == 1 && scorched.count(5) == 0);
+    for (const auto& m : marks.marks()) {
+        if (m.kind != MarkKind::Scorch || m.host != floor_near) continue;
+        CHECK(m.flat && m.dx == ((1012 - 1012) >> 1) - 0 && m.dy == ((2024 >> 2) - 0) - (2128 >> 2));
+    }
+
+    // Drawn inside the host's opaque pixels only, darker: the frame's
+    // opaque columns are screen x 28..31, rows 28..35; the hole is at
+    // (32..33, 32..33), its rim at x 31 or 34.
+    DamageMarks one;
+    one.record(w, crate, {1004, 990, 16}, 1);
+    one.prepare(w, pal);
+    CHECK(one.size() == 1);
+    const int mdx = one.marks().front().dx, mdy = one.marks().front().dy;
+    std::vector<std::uint8_t> rle;
+    ShapeFrame frame;
+    frame.width = 8;
+    frame.height = 8;
+    frame.xoff = (32 - mdx) - 28;
+    frame.yoff = (32 - mdy) - 28;
+    for (int y = 0; y < 8; ++y) {
+        frame.lines.push_back(static_cast<std::uint32_t>(rle.size()));
+        rle.insert(rle.end(), {0, 4, 200, 200, 200, 200, 4});
+    }
+    frame.rle = rle;
+    Surface8 screen(64, 64, 200);
+    DrawItem d{};
+    d.item = w.get(crate);
+    d.frame = &frame;
+    d.sx = 32 - mdx;
+    d.sy = 32 - mdy;
+    one.draw(screen, d);
+    int outside = 0;
+    for (int y = 0; y < 64; ++y)
+        for (int x = 0; x < 64; ++x)
+            if (screen.row(y)[x] != 200 && (x < 28 || x > 31 || y < 28 || y > 35)) ++outside;
+    CHECK(outside == 0 && screen.row(32)[32] == 200);
+    // Over a frame opaque all around it (screen x 31..34), the hole is
+    // drawn: almost black.
+    ShapeFrame frame2 = frame;
+    frame2.width = 4;
+    frame2.xoff = (32 - mdx) - 31;
+    d.frame = &frame2;
+    Surface8 screen2(64, 64, 200);
+    one.draw(screen2, d);
+    CHECK(screen2.row(32)[32] < 100 && screen2.row(32)[33] < 100);
+
+    // A host that moves loses its marks.
+    w.move_item(crate, 1010, 1000, 0);
+    one.prepare(w, pal);
+    CHECK(one.size() == 0);
+}
+
 int main() {
+    test_impact_marks();
     test_typeflag_decode();
     test_world_ids();
     test_create_npc_reuses_a_slot();
