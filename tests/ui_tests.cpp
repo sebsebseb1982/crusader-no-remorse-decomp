@@ -109,30 +109,80 @@ void test_keypad_digit_spacing() {
     CHECK(second - first == 4 + 1);
 }
 
+// Port addition: the enhancements window, its first page and its pages.
+using Entry = EnhancementsScreen::Entry;
+using Page = EnhancementsScreen::Page;
+
+// Down to `entry` on the page shown, then Enter.
+void choose(EnhancementsScreen& screen, Entry entry) {
+    const int row = screen.row_of(entry);
+    CHECK(row >= 0);
+    while (screen.focus() > row) screen.key(gump_key::kUp);
+    while (screen.focus() < row) screen.key(gump_key::kDown);
+    screen.key(gump_key::kEnter);
+}
+
 void test_vibration_settings() {
     FontSet fonts;
     GameConfig config;
     int pad_focus = 0;
     int previews = 0;
     EnhancementsScreen screen(fonts, config, pad_focus, [&] { ++previews; });
-
-    for (int i = 0; i < EnhancementsScreen::kVibrationIntensityRow; ++i) screen.key(gump_key::kDown);
+    choose(screen, Entry::Controls);
+    CHECK(screen.page() == Page::Controls);
+    for (int i = 0; i < screen.row_of(Entry::VibrationIntensity); ++i) screen.key(gump_key::kDown);
     screen.key(gump_key::kLeft);
     CHECK(config.vibration_intensity == 90 && previews == 1);
     screen.key(gump_key::kEnter);
     CHECK(config.vibration_intensity == 100 && previews == 2);
     screen.key(gump_key::kRight);
     CHECK(config.vibration_intensity == 100 && previews == 2);
-
-    EnhancementsScreen toggle(fonts, config, pad_focus);
-    for (int i = 0; i < EnhancementsScreen::kVibrationRow; ++i) toggle.key(gump_key::kDown);
-    toggle.key(gump_key::kEnter);
+    choose(screen, Entry::Vibration);
     CHECK(!config.vibration);
 
     EnhancementsScreen smooth(fonts, config, pad_focus);
-    for (int i = 0; i < EnhancementsScreen::kSmoothRow; ++i) smooth.key(gump_key::kDown);
-    smooth.key(gump_key::kEnter);
+    choose(smooth, Entry::Display);
+    choose(smooth, Entry::Smooth);
     CHECK(config.smooth_scaling);
+}
+
+void test_enhancements_pages() {
+    FontSet fonts;
+    GameConfig config;
+    int pad_focus = 0;
+    EnhancementsScreen screen(fonts, config, pad_focus);
+    // The first page: a row per page, "retour" last.
+    CHECK(screen.page() == Page::Main && screen.entries().size() == 5 && screen.entries().back() == Entry::Back);
+    // Every page ends with "retour" and fits the window.
+    for (Entry page : {Entry::Controls, Entry::Display, Entry::Effects, Entry::Game}) {
+        EnhancementsScreen s(fonts, config, pad_focus);
+        choose(s, page);
+        CHECK(s.page() != Page::Main && s.focus() == 0 && s.entries().back() == Entry::Back);
+        CHECK(s.entries().size() <= 9 && s.row_rect(static_cast<int>(s.entries().size()) - 1).y1 < 460);
+    }
+    // Effects: both toggles on their own.
+    choose(screen, Entry::Effects);
+    choose(screen, Entry::Blood);
+    CHECK(config.blood_marks && !config.impact_marks);
+    choose(screen, Entry::Impact);
+    CHECK(config.impact_marks && config.blood_marks);
+    // Escape goes back to the first page on the page's row, then closes.
+    screen.key(gump_key::kEscape);
+    CHECK(screen.page() == Page::Main && screen.focus() == screen.row_of(Entry::Effects) && !screen.closed());
+    // "retour" on a page does the same.
+    choose(screen, Entry::Game);
+    choose(screen, Entry::Back);
+    CHECK(screen.page() == Page::Main && screen.focus() == screen.row_of(Entry::Game));
+    screen.key(gump_key::kEscape);
+    CHECK(screen.closed());
+    // The mouse: a row pressed opens it.
+    EnhancementsScreen mouse(fonts, config, pad_focus);
+    const auto r = mouse.row_rect(mouse.row_of(Entry::Display));
+    mouse.mouse_down(r.x0 + 5, r.y0 + 5);
+    CHECK(mouse.page() == Page::Display);
+    const auto follow = mouse.row_rect(mouse.row_of(Entry::Follow));
+    mouse.mouse_down(follow.x0 + 5, follow.y0 + 5);
+    CHECK(config.follow_player);
 }
 
 }  // namespace
@@ -140,6 +190,7 @@ void test_vibration_settings() {
 int main() {
     test_keypad_digit_spacing();
     test_vibration_settings();
+    test_enhancements_pages();
     if (failures == 0) std::printf("all ui checks passed\n");
     return failures == 0 ? 0 : 1;
 }

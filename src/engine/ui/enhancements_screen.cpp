@@ -10,11 +10,11 @@ namespace crusader {
 
 namespace {
 
-// 17 rows: the panel spans almost the whole 480 lines.
-constexpr int kPanelX0 = 100, kPanelY0 = 26, kPanelX1 = 539, kPanelY1 = 473;
-constexpr int kTitleY = 54, kIconSize = 14, kIconGap = 8;
-constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 70, kRowStep = 23, kRowHeight = 21;
-constexpr int kTextDrop = 15, kRowPad = 18;  // glyphs hang from their baseline
+// At most 9 rows a page.
+constexpr int kPanelX0 = 100, kPanelY0 = 34, kPanelX1 = 539, kPanelY1 = 465;
+constexpr int kTitleY = 66, kIconSize = 14, kIconGap = 8;
+constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 90, kRowStep = 26, kRowHeight = 24;
+constexpr int kTextDrop = 17, kRowPad = 18;  // glyphs hang from their baseline
 constexpr std::uint8_t kFrameColour = 0x57, kGreen = 0x0C, kDimGreen = 0x75;
 
 // Text in one colour: drawn on a scratch surface, copied in `tint`.
@@ -63,9 +63,70 @@ void draw_plus_icon(Surface8& screen, int x, int y, int size, std::uint8_t colou
     fill_rect(screen, mid - 1, midy - arm, mid, midy + arm, colour);
 }
 
+namespace {
+
+using Entry = EnhancementsScreen::Entry;
+using Page = EnhancementsScreen::Page;
+
+constexpr Entry kMainEntries[] = {Entry::Controls, Entry::Display, Entry::Effects, Entry::Game, Entry::Back};
+constexpr Entry kControlsEntries[] = {Entry::Pad,        Entry::Directional, Entry::Aim,
+                                      Entry::Draw,       Entry::PreciseAim,  Entry::Run,
+                                      Entry::Vibration,  Entry::VibrationIntensity, Entry::Back};
+constexpr Entry kDisplayEntries[] = {Entry::Native, Entry::Zoom, Entry::Smooth, Entry::Follow, Entry::Back};
+constexpr Entry kEffectsEntries[] = {Entry::Impact, Entry::Blood, Entry::Back};
+constexpr Entry kGameEntries[] = {Entry::Autosave, Entry::FixBugs, Entry::Back};
+
+// The name of a row that opens something (a page, the controller screen,
+// "retour"), shown in its middle.
+// @orig none: port-only enhancements window
+std::string button_label(Entry entry) {
+    switch (entry) {
+    case Entry::Controls: return tr("CONTROLES", "CONTROLS");
+    case Entry::Display: return tr("AFFICHAGE", "DISPLAY");
+    case Entry::Effects: return tr("EFFETS", "EFFECTS");
+    case Entry::Game: return tr("JEU", "GAME");
+    case Entry::Pad: return tr("MANETTE", "CONTROLLER");
+    case Entry::Back: return tr("RETOUR", "BACK");
+    default: return {};
+    }
+}
+
+// The page a row of the first page opens.
+// @orig none: port-only enhancements window
+Page page_of(Entry entry) {
+    switch (entry) {
+    case Entry::Controls: return Page::Controls;
+    case Entry::Display: return Page::Display;
+    case Entry::Effects: return Page::Effects;
+    case Entry::Game: return Page::Game;
+    default: return Page::Main;
+    }
+}
+
+}  // namespace
+
 EnhancementsScreen::EnhancementsScreen(const FontSet& fonts, GameConfig& config, int& pad_focus,
                                        std::function<void()> vibration_preview)
     : fonts_(&fonts), config_(&config), pad_focus_(&pad_focus), vibration_preview_(std::move(vibration_preview)) {}
+
+// @orig none: port-only enhancements window
+std::span<const EnhancementsScreen::Entry> EnhancementsScreen::entries() const {
+    switch (page_) {
+    case Page::Controls: return kControlsEntries;
+    case Page::Display: return kDisplayEntries;
+    case Page::Effects: return kEffectsEntries;
+    case Page::Game: return kGameEntries;
+    default: return kMainEntries;
+    }
+}
+
+// @orig none: port-only enhancements window
+int EnhancementsScreen::row_of(Entry entry) const {
+    const auto list = entries();
+    for (std::size_t i = 0; i < list.size(); ++i)
+        if (list[i] == entry) return static_cast<int>(i);
+    return -1;
+}
 
 EnhancementsScreen::Rect EnhancementsScreen::row_rect(int row) const {
     const int y = kRowY0 + kRowStep * row;
@@ -79,128 +140,165 @@ void EnhancementsScreen::draw(Surface8& screen) const {
         return;
     }
     screen.clear(0);
-    draw_rounded_box(screen, kPanelX0, kPanelY0, kPanelX1, kPanelY1, -1, kFrameColour);
-    draw_rounded_box(screen, kPanelX0 + 3, kPanelY0 + 3, kPanelX1 - 3, kPanelY1 - 3, -1, kFrameColour);
+    // The frame ends below the last row (kPanelY1 at the most).
+    const int panel_y1 = std::min(kPanelY1, row_rect(static_cast<int>(entries().size()) - 1).y1 + 22);
+    draw_rounded_box(screen, kPanelX0, kPanelY0, kPanelX1, panel_y1, -1, kFrameColour);
+    draw_rounded_box(screen, kPanelX0 + 3, kPanelY0 + 3, kPanelX1 - 3, panel_y1 - 3, -1, kFrameColour);
 
-    const std::string title = tr("AMELIORATIONS", "ENHANCEMENTS");
+    const std::string title = page_ == Page::Main ? tr("AMELIORATIONS", "ENHANCEMENTS")
+                              : page_ == Page::Controls ? button_label(Entry::Controls)
+                              : page_ == Page::Display  ? button_label(Entry::Display)
+                              : page_ == Page::Effects  ? button_label(Entry::Effects)
+                                                        : button_label(Entry::Game);
     const int title_width = TextWriter(*fonts_, kFont).measure(title).width;
     const int x0 = (screen.width - (kIconSize + kIconGap + title_width)) / 2;
     draw_plus_icon(screen, x0, kTitleY - 12, kIconSize, kGreen);
     print_tinted(screen, *fonts_, x0 + kIconSize + kIconGap, kTitleY, title, kGreen);
 
-    for (int row = 0; row < kRows; ++row) {
+    const auto list = entries();
+    for (int row = 0; row < static_cast<int>(list.size()); ++row) {
+        const Entry entry = list[static_cast<std::size_t>(row)];
         const Rect r = row_rect(row);
         const bool focused = row == focus_;
         const int tint = focused ? kGreen : kDimGreen;
         draw_rounded_box(screen, r.x0, r.y0, r.x1, r.y1, -1, static_cast<std::uint8_t>(tint));
         const TextWriter writer(*fonts_, kFont);
-        if (row == kFollowRow || row == kDirectionalRow || row == kAimRow || row == kDrawRow ||
-            row == kPreciseAimRow || row == kNativeRow ||
-            row == kZoomRow || row == kSmoothRow || row == kImpactRow || row == kBloodRow || row == kAutosaveRow || row == kRunRow || row == kFixBugsRow ||
-            row == kVibrationRow || row == kVibrationIntensityRow) {
-            // The name on the left, its state on the right.
-            std::string name;
-            bool on = false;
-            std::string value;
-            if (row == kFollowRow) {
-                name = tr("SUIVI CAMERA", "CAMERA FOLLOW");
-                on = config_->follow_player;
-            } else if (row == kDirectionalRow) {
-                name = tr("MODE DIRECTIONNEL", "DIRECTIONAL MOVE");
-                on = config_->directional_move;
-            } else if (row == kZoomRow) {
-                name = tr("ZOOM", "ZOOM");
-                const int pct = config_->view_zoom_pct;
-                if (!pct) value = tr("AUTO", "AUTO");
-                else value = "x" + std::to_string(pct / 100) + (pct % 100 == 50 ? ".5" : "");
-            } else if (row == kSmoothRow) {
-                name = tr("LISSAGE", "SMOOTHING");
-                on = config_->smooth_scaling;
-            } else if (row == kImpactRow) {
-                name = tr("IMPACTS", "IMPACT MARKS");
-                on = config_->impact_marks;
-            } else if (row == kBloodRow) {
-                name = tr("SANG", "BLOOD");
-                on = config_->blood_marks;
-            } else if (row == kAutosaveRow) {
-                name = tr("SAUVEGARDE AUTO", "AUTOSAVE");
-                on = config_->autosave;
-            } else if (row == kRunRow) {
-                name = tr("COURSE PERMANENTE", "TOGGLE RUN");
-                on = config_->toggle_run;
-            } else if (row == kFixBugsRow) {
-                name = tr("CORRECTIFS ORIGINAL", "ORIGINAL BUG FIXES");
-                on = config_->fix_original_bugs;
-            } else if (row == kVibrationRow) {
-                name = tr("VIBRATIONS", "VIBRATION");
-                on = config_->vibration;
-            } else if (row == kVibrationIntensityRow) {
-                name = tr("INTENSITE", "INTENSITY");
-                value = std::to_string(config_->vibration_intensity) + "%";
-            } else if (row == kNativeRow) {
-                name = tr("RESOLUTION NATIVE", "NATIVE RESOLUTION");
-                on = config_->native_resolution;
-            } else if (row == kAimRow) {
-                name = tr("VISEE DIRECTIONNELLE", "DIRECTIONAL AIM");
-                on = config_->directional_aim;
-            } else if (row == kPreciseAimRow) {
-                name = tr("VISEE PRECISE", "PRECISE AIM");
-                on = config_->precise_aim;
-            } else {
-                name = tr("DEGAINE EN VISANT", "DRAW ON AIM");
-                on = config_->draw_on_aim;
-            }
-            if (row != kZoomRow && row != kVibrationIntensityRow)
-                value = on ? tr("MARCHE", "ON") : tr("ARRET", "OFF");
-            print_tinted(screen, *fonts_, r.x0 + kRowPad, r.y0 + kTextDrop, name, tint);
-            print_tinted(screen, *fonts_, r.x1 + 1 - kRowPad - writer.measure(value).width, r.y0 + kTextDrop, value,
-                         tint);
+        const std::string label = button_label(entry);
+        if (!label.empty()) {
+            const int width = writer.measure(label).width;
+            print_tinted(screen, *fonts_, r.x0 + (r.x1 - r.x0 + 1 - width) / 2, r.y0 + kTextDrop, label, tint);
             continue;
         }
-        const std::string label = row == kPadRow ? tr("MANETTE", "CONTROLLER") : tr("RETOUR", "BACK");
-        const int width = writer.measure(label).width;
-        print_tinted(screen, *fonts_, r.x0 + (r.x1 - r.x0 + 1 - width) / 2, r.y0 + kTextDrop, label, tint);
+        // An option: its name on the left, its state on the right.
+        std::string name;
+        bool on = false;
+        std::string value;
+        switch (entry) {
+        case Entry::Directional:
+            name = tr("MODE DIRECTIONNEL", "DIRECTIONAL MOVE");
+            on = config_->directional_move;
+            break;
+        case Entry::Aim:
+            name = tr("VISEE DIRECTIONNELLE", "DIRECTIONAL AIM");
+            on = config_->directional_aim;
+            break;
+        case Entry::Draw:
+            name = tr("DEGAINE EN VISANT", "DRAW ON AIM");
+            on = config_->draw_on_aim;
+            break;
+        case Entry::PreciseAim:
+            name = tr("VISEE PRECISE", "PRECISE AIM");
+            on = config_->precise_aim;
+            break;
+        case Entry::Run:
+            name = tr("COURSE PERMANENTE", "TOGGLE RUN");
+            on = config_->toggle_run;
+            break;
+        case Entry::Vibration:
+            name = tr("VIBRATIONS", "VIBRATION");
+            on = config_->vibration;
+            break;
+        case Entry::VibrationIntensity:
+            name = tr("INTENSITE", "INTENSITY");
+            value = std::to_string(config_->vibration_intensity) + "%";
+            break;
+        case Entry::Native:
+            name = tr("RESOLUTION NATIVE", "NATIVE RESOLUTION");
+            on = config_->native_resolution;
+            break;
+        case Entry::Zoom: {
+            name = tr("ZOOM", "ZOOM");
+            const int pct = config_->view_zoom_pct;
+            if (!pct) value = tr("AUTO", "AUTO");
+            else value = "x" + std::to_string(pct / 100) + (pct % 100 == 50 ? ".5" : "");
+            break;
+        }
+        case Entry::Smooth:
+            name = tr("LISSAGE", "SMOOTHING");
+            on = config_->smooth_scaling;
+            break;
+        case Entry::Follow:
+            name = tr("SUIVI CAMERA", "CAMERA FOLLOW");
+            on = config_->follow_player;
+            break;
+        case Entry::Impact:
+            name = tr("IMPACTS", "IMPACT MARKS");
+            on = config_->impact_marks;
+            break;
+        case Entry::Blood:
+            name = tr("SANG", "BLOOD");
+            on = config_->blood_marks;
+            break;
+        case Entry::Autosave:
+            name = tr("SAUVEGARDE AUTO", "AUTOSAVE");
+            on = config_->autosave;
+            break;
+        case Entry::FixBugs:
+            name = tr("CORRECTIFS ORIGINAL", "ORIGINAL BUG FIXES");
+            on = config_->fix_original_bugs;
+            break;
+        default: break;
+        }
+        if (value.empty()) value = on ? tr("MARCHE", "ON") : tr("ARRET", "OFF");
+        print_tinted(screen, *fonts_, r.x0 + kRowPad, r.y0 + kTextDrop, name, tint);
+        print_tinted(screen, *fonts_, r.x1 + 1 - kRowPad - writer.measure(value).width, r.y0 + kTextDrop, value, tint);
     }
 }
 
 // @orig none: port-only enhancements window
+void EnhancementsScreen::open(Page page) {
+    page_ = page;
+    focus_ = 0;
+}
+
+// From a page, the first one with that page's row focused; from the first
+// one, closed.
+// @orig none: port-only enhancements window
+void EnhancementsScreen::back() {
+    if (page_ == Page::Main) {
+        closed_ = true;
+        return;
+    }
+    const Entry from = page_ == Page::Controls ? Entry::Controls
+                       : page_ == Page::Display ? Entry::Display
+                       : page_ == Page::Effects ? Entry::Effects
+                                                : Entry::Game;
+    page_ = Page::Main;
+    focus_ = std::max(row_of(from), 0);
+}
+
+// @orig none: port-only enhancements window
 void EnhancementsScreen::activate(int row) {
+    const auto list = entries();
+    if (row < 0 || row >= static_cast<int>(list.size())) return;
     focus_ = row;
-    if (row == kPadRow) {
-        pad_ = std::make_unique<GamepadScreen>(*fonts_, *config_, *pad_focus_);
-    } else if (row == kFollowRow) {
-        config_->follow_player = !config_->follow_player;
-    } else if (row == kDirectionalRow) {
-        config_->directional_move = !config_->directional_move;
-    } else if (row == kZoomRow) {
-        config_->view_zoom_pct = GameConfig::next_view_zoom(config_->view_zoom_pct, config_->view_zoom_limit_pct);
-    } else if (row == kSmoothRow) {
-        config_->smooth_scaling = !config_->smooth_scaling;
-    } else if (row == kImpactRow) {
-        config_->impact_marks = !config_->impact_marks;
-    } else if (row == kBloodRow) {
-        config_->blood_marks = !config_->blood_marks;
-    } else if (row == kAutosaveRow) {
-        config_->autosave = !config_->autosave;
-    } else if (row == kRunRow) {
-        config_->toggle_run = !config_->toggle_run;
-    } else if (row == kFixBugsRow) {
-        config_->fix_original_bugs = !config_->fix_original_bugs;
-    } else if (row == kNativeRow) {
-        config_->native_resolution = !config_->native_resolution;
-    } else if (row == kAimRow) {
-        config_->directional_aim = !config_->directional_aim;
-    } else if (row == kDrawRow) {
-        config_->draw_on_aim = !config_->draw_on_aim;
-    } else if (row == kPreciseAimRow) {
-        config_->precise_aim = !config_->precise_aim;
-    } else if (row == kVibrationRow) {
-        config_->vibration = !config_->vibration;
-    } else if (row == kVibrationIntensityRow) {
+    switch (list[static_cast<std::size_t>(row)]) {
+    case Entry::Controls:
+    case Entry::Display:
+    case Entry::Effects:
+    case Entry::Game: open(page_of(list[static_cast<std::size_t>(row)])); break;
+    case Entry::Pad: pad_ = std::make_unique<GamepadScreen>(*fonts_, *config_, *pad_focus_); break;
+    case Entry::Directional: config_->directional_move = !config_->directional_move; break;
+    case Entry::Aim: config_->directional_aim = !config_->directional_aim; break;
+    case Entry::Draw: config_->draw_on_aim = !config_->draw_on_aim; break;
+    case Entry::PreciseAim: config_->precise_aim = !config_->precise_aim; break;
+    case Entry::Run: config_->toggle_run = !config_->toggle_run; break;
+    case Entry::Vibration: config_->vibration = !config_->vibration; break;
+    case Entry::VibrationIntensity:
         config_->vibration_intensity = (config_->vibration_intensity + 10) % 110;
         if (vibration_preview_) vibration_preview_();
-    } else {
-        closed_ = true;
+        break;
+    case Entry::Native: config_->native_resolution = !config_->native_resolution; break;
+    case Entry::Zoom:
+        config_->view_zoom_pct = GameConfig::next_view_zoom(config_->view_zoom_pct, config_->view_zoom_limit_pct);
+        break;
+    case Entry::Smooth: config_->smooth_scaling = !config_->smooth_scaling; break;
+    case Entry::Follow: config_->follow_player = !config_->follow_player; break;
+    case Entry::Impact: config_->impact_marks = !config_->impact_marks; break;
+    case Entry::Blood: config_->blood_marks = !config_->blood_marks; break;
+    case Entry::Autosave: config_->autosave = !config_->autosave; break;
+    case Entry::FixBugs: config_->fix_original_bugs = !config_->fix_original_bugs; break;
+    case Entry::Back: back(); break;
     }
 }
 
@@ -212,31 +310,28 @@ void EnhancementsScreen::key(std::uint16_t code) {
         return;
     }
     if (closed_) return;
+    const bool on_intensity = row_of(Entry::VibrationIntensity) == focus_;
     switch (code) {
-    case gump_key::kEscape: closed_ = true; break;
+    case gump_key::kEscape: back(); break;
     case gump_key::kEnter: activate(focus_); break;
     case gump_key::kLeft:
     case '4':
-        if (focus_ == kVibrationIntensityRow) {
-            if (config_->vibration_intensity > 0) {
-                config_->vibration_intensity -= 10;
-                if (vibration_preview_) vibration_preview_();
-            }
+        if (on_intensity && config_->vibration_intensity > 0) {
+            config_->vibration_intensity -= 10;
+            if (vibration_preview_) vibration_preview_();
         }
         break;
     case gump_key::kRight:
     case '6':
-        if (focus_ == kVibrationIntensityRow) {
-            if (config_->vibration_intensity < 100) {
-                config_->vibration_intensity += 10;
-                if (vibration_preview_) vibration_preview_();
-            }
+        if (on_intensity && config_->vibration_intensity < 100) {
+            config_->vibration_intensity += 10;
+            if (vibration_preview_) vibration_preview_();
         }
         break;
     case gump_key::kUp:
     case '8': focus_ = std::max(focus_ - 1, 0); break;
     case gump_key::kDown:
-    case '2': focus_ = std::min(focus_ + 1, kRows - 1); break;
+    case '2': focus_ = std::min(focus_ + 1, static_cast<int>(entries().size()) - 1); break;
     default: break;
     }
 }
@@ -249,7 +344,7 @@ void EnhancementsScreen::mouse_down(int x, int y) {
         return;
     }
     if (closed_) return;
-    for (int row = 0; row < kRows; ++row) {
+    for (int row = 0; row < static_cast<int>(entries().size()); ++row) {
         if (row_rect(row).contains(x, y)) {
             activate(row);
             return;

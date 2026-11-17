@@ -53,34 +53,53 @@ The original has nothing like it. This screen gathers every option the port adds
 - If the fonts are not loaded, the button is not shown.
 
 **Look**
-- The screen is cleared. A double red frame (colour `0x57`, corners cut over 3 pixels like the original buttons) fills (100,26)–(539,473).
-- The title is green (`0x0C`), with the "+" icon.
-- 17 rows, 23 px apart. The focused row is bright green (`0x0C`); the others are dark green (`0x75`).
+- The screen is cleared. A double red frame (colour `0x57`, corners cut over 3 pixels like the original buttons) starts at (100,34), 439 px wide; it ends 22 px below the last row (at y 465 at most).
+- The title is green (`0x0C`), with the "+" icon: ENHANCEMENTS (French: AMELIORATIONS) on the first page, the page's name on the others.
+- Rows 26 px apart, 9 at most on a page, BACK / RETOUR last. The focused row is bright green (`0x0C`); the others are dark green (`0x75`).
 - An on/off option shows its name on the left and its value on the right: ON / OFF (French: MARCHE / ARRET).
 
-| # | Row (EN / FR) | Effect | CFG key |
-|---|---|---|---|
-| 0 | CONTROLLER / MANETTE | Opens the controller screen | — |
-| 1 | CAMERA FOLLOW / SUIVI CAMERA | Toggles camera follow | `followplayer` |
-| 2 | DIRECTIONAL MOVE / MODE DIRECTIONNEL | Toggles directional movement | `directionalmove` |
-| 3 | DIRECTIONAL AIM / VISEE DIRECTIONNELLE | Toggles directional aiming | `directionalaim` |
-| 4 | DRAW ON AIM / DEGAINE EN VISANT | Draws the weapon when the aim stick is pushed | `drawonaim` |
-| 5 | PRECISE AIM / VISEE PRECISE | Shots only lock on a target they can reach | `preciseaim` |
-| 6 | NATIVE RESOLUTION / RESOLUTION NATIVE | Toggles native resolution | `nativeresolution` |
-| 7 | ZOOM | Cycles AUTO → x1 → x1.5 → x2 → … → xN → AUTO | `viewzoom` |
-| 8 | SMOOTHING / LISSAGE | Bilinear filtering of the picture | `smoothscaling` |
-| 9 | IMPACT MARKS / IMPACTS | Shots leave marks on the scenery | `impactmarks` |
-| 10 | BLOOD / SANG | The wounded bleed on the scenery | `bloodmarks` |
-| 11 | AUTOSAVE / SAUVEGARDE AUTO | Toggles the autosave | `autosave` |
-| 12 | TOGGLE RUN / COURSE PERMANENTE | Toggles toggle-run mode | `togglerun` |
-| 13 | ORIGINAL BUG FIXES / CORRECTIFS ORIGINAL | Corrects bugs of the original game that can block a mission | `fixoriginalbugs` |
-| 14 | VIBRATION / VIBRATIONS | Controller rumble | `vibration` |
-| 15 | INTENSITY / INTENSITE | Rumble strength, 0 to 100 % by 10 (left / right) | `vibrationintensity` |
-| 16 | BACK / RETOUR | Closes the screen | — |
+**Pages.** The first page has one row per page: CONTROLS / CONTROLES, DISPLAY / AFFICHAGE, EFFECTS / EFFETS, GAME / JEU, then BACK / RETOUR, which closes the window.
+
+*CONTROLS / CONTROLES*
+
+| Row (EN / FR) | Effect | CFG key |
+|---|---|---|
+| CONTROLLER / MANETTE | Opens the controller screen | — |
+| DIRECTIONAL MOVE / MODE DIRECTIONNEL | Toggles directional movement | `directionalmove` |
+| DIRECTIONAL AIM / VISEE DIRECTIONNELLE | Toggles directional aiming | `directionalaim` |
+| DRAW ON AIM / DEGAINE EN VISANT | Draws the weapon when the aim stick is pushed | `drawonaim` |
+| PRECISE AIM / VISEE PRECISE | Shots only lock on a target they can reach | `preciseaim` |
+| TOGGLE RUN / COURSE PERMANENTE | Toggles toggle-run mode | `togglerun` |
+| VIBRATION / VIBRATIONS | Controller rumble | `vibration` |
+| INTENSITY / INTENSITE | Rumble strength, 0 to 100 % by 10 (left / right) | `vibrationintensity` |
+
+*DISPLAY / AFFICHAGE*
+
+| Row (EN / FR) | Effect | CFG key |
+|---|---|---|
+| NATIVE RESOLUTION / RESOLUTION NATIVE | Toggles native resolution | `nativeresolution` |
+| ZOOM | Cycles AUTO → x1 → x1.5 → x2 → … → xN → AUTO | `viewzoom` |
+| SMOOTHING / LISSAGE | Bilinear filtering of the picture | `smoothscaling` |
+| CAMERA FOLLOW / SUIVI CAMERA | Toggles camera follow | `followplayer` |
+
+*EFFECTS / EFFETS*
+
+| Row (EN / FR) | Effect | CFG key |
+|---|---|---|
+| IMPACT MARKS / IMPACTS | Shots leave marks on the scenery | `impactmarks` |
+| BLOOD / SANG | The wounded bleed on the scenery | `bloodmarks` |
+
+*GAME / JEU*
+
+| Row (EN / FR) | Effect | CFG key |
+|---|---|---|
+| AUTOSAVE / SAUVEGARDE AUTO | Toggles the autosave | `autosave` |
+| ORIGINAL BUG FIXES / CORRECTIFS ORIGINAL | Corrects bugs of the original game that can block a mission | `fixoriginalbugs` |
 
 **Controls**
 - Up or `8`, down or `2`: moves between rows. The focus stops at the first and last row; it does not wrap.
-- Enter activates the row. Escape closes the screen.
+- Enter activates the row: opens a page, toggles an option. A page opens on its first row.
+- Escape, or BACK / RETOUR, goes back from a page to the first page, with that page's row focused; on the first page it closes the window.
 - Mouse: clicking a row focuses and activates it.
 - While the controller screen is open, it receives every event until it closes.
 - Changes apply to the in-memory configuration at once. They are written to `CRUSADER.CFG` when the Options screen closes, like the original options.
@@ -180,7 +199,7 @@ Handhelds have no keyboard to type a save's name, and the original refuses to sa
 Files: `src/engine/ui/load_screen.*` (`set_auto_name`, `dated_name`), `src/game/game.cpp` (`auto_save_name_function`), `src/game/main.cpp`.
 
 ### 2.9 Controller screen
-- Opened from row 0 of the Enhancements screen.
+- Opened from the first row (CONTROLLER / MANETTE) of the Enhancements screen's CONTROLS / CONTROLES page.
 - Two columns, rows 18 px apart:
   - on the left, the 22 actions, then "aim speed", "dead zone", "defaults" and "back";
   - on the right, the bound input ("A", "LB", … or "NONE"), or `< n / 5 >` for the two stick settings.

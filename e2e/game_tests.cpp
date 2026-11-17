@@ -832,9 +832,12 @@ void test_options(const std::filesystem::path& data) {
     CHECK(o->focus() == O::kQuitLine && o->pressed(O::kQuit));
     press(game, 0x4B, true);
     press(game, 0x1C, false, 0x0D);
-    // The enhancements window holds the controller screen, on its first row.
+    // The enhancements window holds the controller screen, first row of its
+    // first page ("controles").
     CHECK(o->enhancements() && !o->gamepad());
     game.render(screen);
+    press(game, 0x1C, false, 0x0D);
+    CHECK(o->enhancements()->page() == EnhancementsScreen::Page::Controls);
     press(game, 0x1C, false, 0x0D);
     const GamepadScreen* pad = o->gamepad();
     using G = GamepadScreen;
@@ -912,6 +915,9 @@ void test_options(const std::filesystem::path& data) {
         press(game, 0x01, false, 0x1B);  // Escape closes the controller screen only
         CHECK(game.menu()->options() && !game.menu()->options()->gamepad() && game.menu()->options()->enhancements());
     }
+    press(game, 0x01, false, 0x1B);  // then back to the first page
+    CHECK(game.menu()->options() && game.menu()->options()->enhancements() &&
+          game.menu()->options()->enhancements()->page() == EnhancementsScreen::Page::Main);
     press(game, 0x01, false, 0x1B);  // then the enhancements window
     CHECK(game.menu()->options() && !game.menu()->options()->enhancements());
     press(game, 0x01, false, 0x1B);
