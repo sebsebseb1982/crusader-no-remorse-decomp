@@ -167,7 +167,9 @@ void splash_damage(Kernel& kernel, World& world, const AnimDat& anims, const Wor
             dealt = damage / steps;
         }
         const int dir = direction_16(at.x, at.y, item->x, item->y);
+        const WoundWatch wound = watch_wound(world, id);
         apply_damage(kernel, world, anims, id, 0, dir, dealt, fire_type, &at);
+        report_wound(world, wound, fire_type, at);
     }
 }
 

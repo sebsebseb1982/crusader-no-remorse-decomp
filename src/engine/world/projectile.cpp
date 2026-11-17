@@ -78,6 +78,8 @@ bool is_female(World& world, ObjId npc) {
     return !record.empty() && (record[0x5A] & 0x04);
 }
 
+}  // namespace
+
 // CRUSADER_1130_01f7: shapes that take full damage from bullets (not robots).
 // @orig 1130:01F7
 bool takes_full_bullet_damage(std::uint16_t shape) {
@@ -88,6 +90,24 @@ bool takes_full_bullet_damage(std::uint16_t shape) {
         return true;
     }
 }
+
+// @orig none: port-only blood marks
+WoundWatch watch_wound(const World& world, ObjId target) {
+    const Item* item = is_npc_id(target) && world.hooks().npc_wounded ? world.get(target) : nullptr;
+    if (!item) return {};
+    return {target, world.npc_hp(target), takes_full_bullet_damage(item->shape)};
+}
+
+// @orig none: port-only blood marks
+void report_wound(const World& world, const WoundWatch& before, int fire_type, const World::Point& from) {
+    if (before.npc == 0 || !world.hooks().npc_wounded || !world.get(before.npc)) return;
+    const int hp = world.npc_hp(before.npc);
+    if (hp >= before.hp) return;
+    world.hooks().npc_wounded(
+        Wound{before.npc, fire_type, from.x, from.y, from.z, before.hp - hp, hp == 0, before.bleeds});
+}
+
+namespace {
 
 // Sprite frame of the projectile by fire type (Item::I_fireWeapon).
 // @orig 1130:11DA
@@ -613,7 +633,9 @@ void ProjectileProcess::impact(ObjId hit) {
         const int dir = !is_npc_id(hit) ? crt_rnd(world_, 8)
                         : item          ? direction_8(pos_.x, pos_.y, item->x, item->y)
                                         : 0x10;
+        const WoundWatch wound = watch_wound(world_, hit);
         apply_damage(kernel(), world_, anims_, hit, shooter_, dir, damage_, fire_type_, &pos_);
+        report_wound(world_, wound, fire_type_, start_);
     }
     // SPRITE_1140_1e09: splash damage of the fire type around the impact,
     // sparing the item hit and the shooter (unless it is the controlled NPC).

@@ -1317,8 +1317,89 @@ void test_impact_marks() {
     CHECK(one.size() == 0);
 }
 
+// Port addition: the blood marks (damage_marks.hpp).
+void test_blood_marks() {
+    // Grey ramp, one colour the dark red tint of grey 200 lands on exactly.
+    Palette pal;
+    for (int c = 0; c < 256; ++c) {
+        const auto v = static_cast<std::uint8_t>(c);
+        pal.colors[c] = {v, v, v};
+    }
+    pal.colors[50] = {152, 68, 66};  // 200 mixed 68 % with (130, 6, 4)
+    CHECK(tint_table(pal, {130, 6, 4}, 68)[200] == 50);
+    CHECK(tint_table(pal, {130, 6, 4}, 68)[7] == 7);
+
+    // Patterns: blood shades only; a spray on a wall drips below its splash.
+    const auto spray = mark_pattern(MarkKind::BloodSpray, 6, false, 3, 0.0);
+    const auto pool = mark_pattern(MarkKind::BloodPool, 10, true, 3, 0.0);
+    int lowest = 0;
+    for (const MarkPixel& px : spray) {
+        CHECK(px.shade >= 4 && px.shade <= 6);
+        lowest = std::max(lowest, static_cast<int>(px.dy));
+    }
+    CHECK(lowest > 6);
+    for (const MarkPixel& px : pool) CHECK(px.shade >= 4 && px.shade <= 6 && std::abs(px.dy) <= 10);
+
+    // An NPC (shape 6: 32 x 48 x 32 units) at (1000, 1000), centre (984,
+    // 976), on two floor tiles (shape 8, 64 x 64), a wall (shape 10, 16 x 64
+    // x 40) behind it towards -x, whose +x face the camera sees.
+    std::vector<ShapeInfo> tf = test_typeflags();
+    tf[8].footpad_x = 4;
+    tf[8].footpad_y = 4;
+    tf[10].footpad_x = 1;
+    tf[10].footpad_y = 4;
+    tf[10].footpad_z = 5;
+    World w(tf);
+    const auto place = [&](std::uint16_t shape, std::int32_t x, std::int32_t y, std::int32_t z) {
+        const ObjId id = w.create(shape, 0);
+        w.pop_to_coords(x, y, z);
+        return id;
+    };
+    const ObjId near_tile = place(8, 1000, 1000, 0);
+    const ObjId far_tile = place(8, 936, 1000, 0);
+    const ObjId wall = place(10, 940, 1010, 0);
+    Item npc;
+    npc.id = 7;
+    npc.shape = 6;
+    npc.x = 1000;
+    npc.y = 1000;
+    w.add_with_id(npc);
+    const auto count = [](const DamageMarks& m, MarkKind kind, ObjId host = 0) {
+        int n = 0;
+        for (const auto& mark : m.marks()) n += mark.kind == kind && (host == 0 || mark.host == host);
+        return n;
+    };
+
+    // A robot, an energy weapon: no blood.
+    DamageMarks marks;
+    marks.bleed(w, Wound{7, 1, 1100, 976, 20, 30, true, false});
+    marks.bleed(w, Wound{7, 6, 1100, 976, 20, 30, true, true});
+    CHECK(marks.size() == 0);
+
+    // A bullet that kills, shot from +x: a spray on the wall behind, drops
+    // on the floor between.
+    marks.bleed(w, Wound{7, 1, 1100, 976, 20, 30, true, true});
+    CHECK(count(marks, MarkKind::BloodSpray, wall) == 1);
+    CHECK(count(marks, MarkKind::BloodDrop) >= 3);
+    for (const auto& m : marks.marks()) {
+        CHECK(m.kind != MarkKind::BloodDrop || (m.flat && (m.host == near_tile || m.host == far_tile)));
+        CHECK(m.kind != MarkKind::BloodSpray || !m.flat);
+    }
+    // Shot from -x, the blood flies towards +x: the wall is not behind it.
+    DamageMarks other;
+    other.bleed(w, Wound{7, 1, 800, 976, 20, 30, true, true});
+    CHECK(count(other, MarkKind::BloodSpray, wall) == 0);
+
+    // Killed by a blast: a pool under the body and a fan of blood.
+    DamageMarks gore;
+    gore.bleed(w, Wound{7, 3, 1060, 976, 0, 80, true, true});
+    CHECK(count(gore, MarkKind::BloodPool, near_tile) == 1);
+    CHECK(count(gore, MarkKind::BloodDrop) + count(gore, MarkKind::BloodSpray) >= 4);
+}
+
 int main() {
     test_impact_marks();
+    test_blood_marks();
     test_typeflag_decode();
     test_world_ids();
     test_create_npc_reuses_a_slot();

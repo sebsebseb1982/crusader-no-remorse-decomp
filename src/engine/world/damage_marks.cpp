@@ -11,10 +11,15 @@ namespace crusader {
 
 namespace {
 
-constexpr int kShadePercent[DamageMarks::kShades] = {72, 52, 34, 16};  // light .. black
+constexpr int kDarkShades = 4;
+constexpr int kShadePercent[kDarkShades] = {72, 52, 34, 16};  // light .. black
+// Blood: the colour mixed with a red, light to dark.
+constexpr Rgb kBloodTarget[3] = {{170, 24, 16}, {130, 6, 4}, {70, 0, 0}};
+constexpr int kBloodPercent[3] = {45, 68, 85};
 constexpr int kFaceSlack = 4;      // usecode units a shot may stop short of a face
 constexpr int kSearchPad = 256;    // largest footpad reach of an anchor, usecode units
 constexpr std::size_t kMaxScorchHosts = 24;
+constexpr double kPi = 3.14159265358979;
 
 // splitmix32: the marks' own numbers, never the game's generators.
 // @orig none: port-only impact marks
@@ -101,6 +106,49 @@ bool same_host(const DamageMarks::Mark& m, const Item& item) {
 int screen_x(std::int32_t x, std::int32_t y) { return (x - y) >> 1; }
 int screen_y(std::int32_t x, std::int32_t y, std::int32_t z) { return ((x + y) >> 2) - z; }
 
+// The screen direction of a level world direction (ux, uy): on a wall as
+// seen, on a floor in the ground's own proportions (y not halved).
+double screen_angle(double ux, double uy, bool flat) {
+    return std::atan2((ux + uy) / (flat ? 2.0 : 4.0), (ux - uy) / 2.0);
+}
+
+// The floor right under `at`: the highest scenery whose box holds (x, y)
+// and whose top is at most 16 below z (or kFaceSlack above it).
+// @orig none: port-only impact marks
+const Item* floor_under(const World& world, const World::Point& at, std::int32_t& top) {
+    const Item* floor = nullptr;
+    for (ObjId id : world.rect_search(at.x - kSearchPad, at.y - kSearchPad, at.x + kSearchPad, at.y + kSearchPad)) {
+        const Item* item = world.get(id);
+        if (!item || !can_host(world, *item)) continue;
+        const Box b = box_of(*item, world.shape_info(item->shape));
+        if (at.x < b.x_left || at.x > b.x || at.y < b.y_far || at.y > b.y) continue;
+        if (b.z_top > at.z + kFaceSlack || b.z_top < at.z - 16) continue;
+        if (!floor || b.z_top > top) {
+            floor = item;
+            top = b.z_top;
+        }
+    }
+    return floor;
+}
+
+// The colour nearest to (r, g, b) in the palette, colours 1..14 and 0xFF left out.
+// @orig none: port-only impact marks
+std::uint8_t nearest_colour(const Palette& palette, int r, int g, int b) {
+    int best = 0;
+    long best_d = -1;
+    for (int k = 0; k < 255; ++k) {
+        if (k >= 1 && k <= 14) continue;
+        const Rgb& o = palette.colors[k];
+        const long dr = o.r - r, dg = o.g - g, db = o.b - b;
+        const long d = 2 * dr * dr + 4 * dg * dg + 3 * db * db;
+        if (best_d < 0 || d < best_d) {
+            best_d = d;
+            best = k;
+        }
+    }
+    return static_cast<std::uint8_t>(best);
+}
+
 }  // namespace
 
 // @orig none: port-only impact marks
@@ -120,30 +168,116 @@ std::array<std::uint8_t, 256> shade_table(const Palette& palette, int percent) {
             continue;
         }
         const Rgb& src = palette.colors[c];
-        const int r = src.r * percent / 100, g = src.g * percent / 100, b = src.b * percent / 100;
-        int best = 0;
-        long best_d = -1;
-        for (int k = 0; k < 255; ++k) {
-            if (k >= 1 && k <= 14) continue;
-            const Rgb& o = palette.colors[k];
-            const long dr = o.r - r, dg = o.g - g, db = o.b - b;
-            const long d = 2 * dr * dr + 4 * dg * dg + 3 * db * db;
-            if (best_d < 0 || d < best_d) {
-                best_d = d;
-                best = k;
-            }
+        table[c] = nearest_colour(palette, src.r * percent / 100, src.g * percent / 100, src.b * percent / 100);
+    }
+    return table;
+}
+
+// @orig none: port-only blood marks
+std::array<std::uint8_t, 256> tint_table(const Palette& palette, Rgb target, int percent) {
+    std::array<std::uint8_t, 256> table{};
+    const auto mixed = [&](int from, int to) { return (from * (100 - percent) + to * percent) / 100; };
+    for (int c = 0; c < 256; ++c) {
+        if (c >= 1 && c <= 14) {
+            table[c] = static_cast<std::uint8_t>(c);
+            continue;
         }
-        table[c] = static_cast<std::uint8_t>(best);
+        const Rgb& src = palette.colors[c];
+        table[c] = nearest_colour(palette, mixed(src.r, target.r), mixed(src.g, target.g), mixed(src.b, target.b));
     }
     return table;
 }
 
 // @orig none: port-only impact marks
-std::vector<MarkPixel> mark_pattern(MarkKind kind, int radius, bool flat, std::uint32_t seed) {
+std::vector<MarkPixel> mark_pattern(MarkKind kind, int radius, bool flat, std::uint32_t seed, double angle) {
     std::vector<MarkPixel> out;
     const auto put = [&](int x, int y, int shade) {
+        if (x < -127 || x > 127 || y < -127 || y > 127) return;
         out.push_back({static_cast<std::int8_t>(x), static_cast<std::int8_t>(y), static_cast<std::uint8_t>(shade)});
     };
+    if (kind == MarkKind::BloodSpray || kind == MarkKind::BloodDrop || kind == MarkKind::BloodPool) {
+        // Worked out on the wall, or on the ground at its own proportions
+        // (y halved on screen when `flat`); u along `angle`, v across.
+        const int r = std::clamp(radius, 1, 20);
+        const double ca = std::cos(angle), sa = std::sin(angle);
+        const auto unit = [](std::uint32_t h) { return (h & 0xFFFF) / 65535.0; };
+        const auto place = [&](double gx, double gy, int shade) {
+            put(static_cast<int>(std::lround(gx)), static_cast<int>(std::lround(flat ? gy / 2 : gy)), shade);
+        };
+        // A ragged blob around ground point (cx, cy), `along` x `across`,
+        // darker inside (`dark` darkens it all).
+        const auto blob = [&](double cx, double cy, double along, double across, double ragged, double dark,
+                              int salt) {
+            const int reach = static_cast<int>(std::ceil(std::max(along, across))) + 1;
+            const int scx = static_cast<int>(std::lround(cx)), scy = static_cast<int>(std::lround(flat ? cy / 2 : cy));
+            const int ys = flat ? reach / 2 + 1 : reach;
+            for (int sy = scy - ys; sy <= scy + ys; ++sy) {
+                for (int sx = scx - reach; sx <= scx + reach; ++sx) {
+                    const double gx = sx - cx, gy = (flat ? sy * 2.0 : sy) - cy;
+                    const double u = gx * ca + gy * sa, v = -gx * sa + gy * ca;
+                    const double nd = std::sqrt((u / along) * (u / along) + (v / across) * (v / across));
+                    const double turn = (std::atan2(v, u) + kPi) / (2 * kPi) * 12;
+                    const int spoke = static_cast<int>(turn) % 12;
+                    const double frac = turn - std::floor(turn);
+                    const double a = unit(mix(seed, spoke, salt)), b = unit(mix(seed, (spoke + 1) % 12, salt));
+                    const double edge = 1.0 - ragged + ragged * (a + (b - a) * frac);
+                    if (nd > edge) continue;
+                    const double noise = unit(mix(seed, sx * 131 + salt, sy));
+                    const double value = (1.0 - nd / edge) + dark + (noise - 0.5) * 0.3;
+                    put(sx, sy, value > 0.5 ? 6 : value > 0.2 ? 5 : 4);
+                }
+            }
+        };
+        if (kind == MarkKind::BloodDrop) {
+            // A drop stretched the way it flew, a few smaller ones beyond.
+            blob(0, 0, r * 1.5, r * 0.9 + 0.3, 0.2, 0.15, 1);
+            const int beyond = 1 + static_cast<int>(seed % 3);
+            for (int k = 0; k < beyond; ++k) {
+                const double dist = r * 1.8 + 1.5 + k * 1.7;
+                const double side = (unit(mix(seed, k, 2)) - 0.5) * 2.0;
+                place(ca * dist - sa * side, sa * dist + ca * side, 5);
+            }
+            return out;
+        }
+        if (kind == MarkKind::BloodPool) {
+            // A pool, dark, with drops around its edge.
+            blob(0, 0, r, r * 0.8, 0.35, 0.35, 3);
+            for (int k = 0; k < r; ++k) {
+                const double turn = unit(mix(seed, k, 4)) * 2 * kPi;
+                const double dist = r * (1.05 + 0.55 * unit(mix(seed, k, 5)));
+                place(std::cos(turn) * dist, std::sin(turn) * dist, (k & 1) ? 5 : 6);
+            }
+            return out;
+        }
+        // A spray: a splash, droplets thrown on in a cone (the further, the
+        // smaller, some with a tail), and on a wall drips running down.
+        blob(0, 0, r * 1.1, r * 0.85, 0.45, 0.1, 6);
+        const int droplets = 3 * r + 2;
+        for (int k = 0; k < droplets; ++k) {
+            const double turn = angle + (unit(mix(seed, k, 7)) - 0.5) * 1.4;
+            const double dist = r * (0.9 + 2.2 * unit(mix(seed, k, 8)));
+            const double gx = std::cos(turn) * dist, gy = std::sin(turn) * dist;
+            if ((mix(seed, k, 9) & 7) == 0 && dist < r * 2) {
+                blob(gx, gy, 1.3, 1.0, 0.2, 0.2, 10 + k);
+                continue;
+            }
+            place(gx, gy, dist > 2 * r ? 5 : 6);
+            if (dist > 1.6 * r) place(gx - std::cos(turn), gy - std::sin(turn), 4);
+        }
+        if (!flat) {
+            const int drips = 1 + r / 3;
+            for (int k = 0; k < drips; ++k) {
+                const std::uint32_t h = mix(seed, k, 11);
+                const int x = static_cast<int>(std::lround((unit(h) - 0.5) * r * 1.2));
+                const int top = r / 2;
+                const int length = 2 + static_cast<int>((h >> 16) % static_cast<std::uint32_t>(r + 4));
+                for (int y = 0; y < length; ++y) put(x, top + y, y < length - 2 ? 6 : 5);
+                put(x, top + length, 5);
+                put(x + 1, top + length - 1, 4);
+            }
+        }
+        return out;
+    }
     if (kind == MarkKind::Bullet) {
         // A black hole of two pixels (one high on a floor), a dark rim
         // around it with a gap or two, and a few chips further out.
@@ -169,7 +303,6 @@ std::vector<MarkPixel> mark_pattern(MarkKind kind, int radius, bool flat, std::u
     }
     // A dark centre fading out with some noise on every pixel; a scorch has
     // a ragged edge (16 spokes of random length).
-    constexpr double kPi = 3.14159265358979;
     radius = std::clamp(radius, 1, 100);
     const int rx = radius, ry = flat ? std::max(1, radius / 2) : radius;
     const bool scorch = kind == MarkKind::Scorch;
@@ -249,24 +382,123 @@ void DamageMarks::record(const World& world, ObjId hit, World::Point at, int fir
         return;
     }
     // On nothing: the floor right under the end of the shot, if any.
-    const Item* floor = nullptr;
     std::int32_t floor_top = 0;
-    for (ObjId id : world.rect_search(at.x - kSearchPad, at.y - kSearchPad, at.x + kSearchPad, at.y + kSearchPad)) {
+    if (const Item* floor = floor_under(world, at, floor_top)) add(*floor, {at.x, at.y, floor_top}, kind, radius, true);
+}
+
+// @orig none: port-only blood marks
+int DamageMarks::roll(int n) {
+    next_seed_ = mix(next_seed_);
+    return n > 0 ? static_cast<int>(next_seed_ % static_cast<std::uint32_t>(n)) : 0;
+}
+
+// @orig none: port-only blood marks
+bool DamageMarks::drop(const World& world, World::Point at, MarkKind kind, int radius, double ux, double uy) {
+    std::int32_t top = 0;
+    const Item* floor = floor_under(world, at, top);
+    if (!floor) return false;
+    add(*floor, {at.x, at.y, top}, kind, radius, true, screen_angle(ux, uy, true));
+    return true;
+}
+
+// @orig none: port-only blood marks
+bool DamageMarks::spray_wall(const World& world, World::Point from, double ux, double uy, int reach, int radius) {
+    // Scenery standing at that height (16 units high at least: no floor).
+    std::vector<std::pair<const Item*, Box>> walls;
+    const int pad = reach + kSearchPad;
+    for (ObjId id : world.rect_search(from.x - pad, from.y - pad, from.x + pad, from.y + pad)) {
         const Item* item = world.get(id);
         if (!item || !can_host(world, *item)) continue;
         const Box b = box_of(*item, world.shape_info(item->shape));
-        if (at.x < b.x_left || at.x > b.x || at.y < b.y_far || at.y > b.y) continue;
-        if (b.z_top > at.z + kFaceSlack || b.z_top < at.z - 16) continue;
-        if (!floor || b.z_top > floor_top) {
-            floor = item;
-            floor_top = b.z_top;
-        }
+        if (b.z_top - b.z >= 16 && from.z >= b.z && from.z <= b.z_top) walls.emplace_back(item, b);
     }
-    if (floor) add(*floor, {at.x, at.y, floor_top}, kind, radius, true);
+    World::Point before = from;
+    for (int step = 6; step <= reach; step += 6) {
+        const World::Point p{from.x + static_cast<std::int32_t>(std::lround(ux * step)),
+                             from.y + static_cast<std::int32_t>(std::lround(uy * step)), from.z};
+        for (const auto& [item, b] : walls) {
+            if (p.x < b.x_left || p.x > b.x || p.y < b.y_far || p.y > b.y) continue;
+            if (!faces_viewer(b, before)) return false;  // its back: hidden
+            add(*item, nearest_in(b, before), MarkKind::BloodSpray, radius, false, screen_angle(ux, uy, false));
+            return true;
+        }
+        before = p;
+    }
+    return false;
+}
+
+// @orig none: port-only blood marks
+void DamageMarks::bleed(const World& world, const Wound& wound) {
+    if (world.current_map() != map_) {
+        clear();
+        map_ = world.current_map();
+    }
+    if (!wound.bleeds || wound.dealt <= 0) return;
+    const MarkKind shot = mark_kind(wound.fire_type);
+    if (shot == MarkKind::Burn) return;  // energy weapons burn, freeze or melt
+    const Item* npc = world.get(wound.npc);
+    if (!npc) return;
+    const Box b = box_of(*npc, world.shape_info(npc->shape));
+    const World::Point centre{(b.x_left + b.x) / 2, (b.y_far + b.y) / 2, npc->z};
+    const std::int32_t chest = npc->z + std::min((b.z_top - b.z) * 5 / 8, 40);
+    // Away from the shooter or the blast; anywhere when it stood right there.
+    double ux = centre.x - wound.from_x, uy = centre.y - wound.from_y;
+    const double length = std::sqrt(ux * ux + uy * uy);
+    if (length < 1) {
+        const double turn = roll(628) / 100.0;
+        ux = std::cos(turn);
+        uy = std::sin(turn);
+    } else {
+        ux /= length;
+        uy /= length;
+    }
+    const auto turned = [&](double degrees, double& tx, double& ty) {
+        const double t = degrees * kPi / 180;
+        tx = ux * std::cos(t) - uy * std::sin(t);
+        ty = ux * std::sin(t) + uy * std::cos(t);
+    };
+    const bool blast = shot == MarkKind::Scorch;
+    if (blast && wound.killed) {
+        // Torn apart: a pool under the body, pieces and drops thrown in a
+        // fan away from the blast, sprays on the walls around.
+        drop(world, centre, MarkKind::BloodPool, 11 + roll(7), ux, uy);
+        const int pieces = 16 + roll(9);
+        for (int k = 0; k < pieces; ++k) {
+            double tx = 0, ty = 0;
+            turned(roll(161) - 80, tx, ty);
+            const int dist = 12 + roll(140);
+            const World::Point at{centre.x + static_cast<std::int32_t>(std::lround(tx * dist)),
+                                  centre.y + static_cast<std::int32_t>(std::lround(ty * dist)), centre.z};
+            if (k % 2) drop(world, at, MarkKind::BloodSpray, 4 + roll(5), tx, ty);
+            else drop(world, at, MarkKind::BloodDrop, 2 + roll(4), tx, ty);
+        }
+        for (int degrees = -75; degrees <= 75; degrees += 25) {
+            double tx = 0, ty = 0;
+            turned(degrees + roll(11) - 5, tx, ty);
+            spray_wall(world, {centre.x, centre.y, chest}, tx, ty, 150, 7 + roll(6));
+        }
+        return;
+    }
+    // A bullet (or a blast that did not kill): a spray on the wall behind,
+    // always when it killed, more than half the time otherwise, and drops on
+    // the floor around, more for a harder hit.
+    const int strength = std::clamp(wound.dealt, 1, 60);
+    if (wound.killed || roll(100) < 55) {
+        const int radius = std::min(3 + strength / 8 + (wound.killed ? 2 : 0), 10);
+        spray_wall(world, {centre.x, centre.y, chest}, ux, uy, std::min(40 + strength * 2, 140), radius);
+    }
+    const int drops = std::min(1 + strength / 12 + (wound.killed ? 2 : 0), 6);
+    for (int k = 0; k < drops; ++k) {
+        const int along = 6 + roll(20 + strength * 2);
+        const int aside = blast ? roll(41) - 20 : roll(17) - 8;
+        const World::Point at{centre.x + static_cast<std::int32_t>(std::lround(ux * along - uy * aside)),
+                              centre.y + static_cast<std::int32_t>(std::lround(uy * along + ux * aside)), centre.z};
+        drop(world, at, MarkKind::BloodDrop, (wound.killed ? 2 : 1) + roll(3), ux, uy);
+    }
 }
 
 // @orig none: port-only impact marks
-void DamageMarks::add(const Item& host, World::Point surface, MarkKind kind, int radius, bool flat) {
+void DamageMarks::add(const Item& host, World::Point surface, MarkKind kind, int radius, bool flat, double angle) {
     Mark m;
     m.host = host.id;
     m.shape = host.shape;
@@ -282,7 +514,7 @@ void DamageMarks::add(const Item& host, World::Point surface, MarkKind kind, int
     m.flat = flat;
     m.seed = mix(next_seed_);
     next_seed_ = m.seed;
-    m.pixels = std::make_shared<const std::vector<MarkPixel>>(mark_pattern(kind, radius, m.flat, m.seed));
+    m.pixels = std::make_shared<const std::vector<MarkPixel>>(mark_pattern(kind, radius, m.flat, m.seed, angle));
     marks_.push_back(m);
     while (marks_.size() > kMaxMarks) marks_.pop_front();
 }
@@ -308,7 +540,8 @@ void DamageMarks::prepare(const World& world, const Palette& game_palette) {
         same = a.r == b.r && a.g == b.g && a.b == b.b;
     }
     if (!same) {
-        for (int s = 0; s < kShades; ++s) shade_[s] = shade_table(game_palette, kShadePercent[s]);
+        for (int s = 0; s < kDarkShades; ++s) shade_[s] = shade_table(game_palette, kShadePercent[s]);
+        for (int s = 0; s < 3; ++s) shade_[kDarkShades + s] = tint_table(game_palette, kBloodTarget[s], kBloodPercent[s]);
         shade_palette_ = game_palette;
         shade_ready_ = true;
     }

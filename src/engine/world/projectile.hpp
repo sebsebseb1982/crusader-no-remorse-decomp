@@ -100,6 +100,20 @@ Pid fire_weapon(Kernel& kernel, World& world, const AnimDat& anims, ObjId shoote
 void apply_damage(Kernel& kernel, World& world, const AnimDat& anims, ObjId target, ObjId attacker, int dir,
                   int damage, int fire_type, const World::Point* at = nullptr);
 
+// Shapes that take full damage from bullets: the living, not the robots.
+bool takes_full_bullet_damage(std::uint16_t shape);
+
+// Port addition (blood marks): an NPC's hit points before a hit
+// (watch_wound), then the wound it took reported to WorldHooks::npc_wounded
+// (report_wound). Nothing is watched without the hook.
+struct WoundWatch {
+    ObjId npc = 0;
+    int hp = 0;
+    bool bleeds = false;
+};
+WoundWatch watch_wound(const World& world, ObjId target);
+void report_wound(const World& world, const WoundWatch& before, int fire_type, const World::Point& from);
+
 class ProjectileProcess : public Process {
 public:
     static constexpr std::uint16_t kType = 0x250;

@@ -69,7 +69,7 @@ The original has nothing like it. This screen gathers every option the port adds
 | 6 | NATIVE RESOLUTION / RESOLUTION NATIVE | Toggles native resolution | `nativeresolution` |
 | 7 | ZOOM | Cycles AUTO → x1 → x1.5 → x2 → … → xN → AUTO | `viewzoom` |
 | 8 | SMOOTHING / LISSAGE | Bilinear filtering of the picture | `smoothscaling` |
-| 9 | IMPACT MARKS / IMPACTS | Shots leave marks on the scenery | `impactmarks` |
+| 9 | IMPACT MARKS / IMPACTS | Cycles OFF → ON (shots mark the scenery) → BLOOD (and the wounded bleed on it) | `impactmarks`, `bloodmarks` |
 | 10 | AUTOSAVE / SAUVEGARDE AUTO | Toggles the autosave | `autosave` |
 | 11 | TOGGLE RUN / COURSE PERMANENTE | Toggles toggle-run mode | `togglerun` |
 | 12 | ORIGINAL BUG FIXES / CORRECTIFS ORIGINAL | Corrects bugs of the original game that can block a mission | `fixoriginalbugs` |
@@ -331,8 +331,8 @@ Zoom sets the **maximum size of a game pixel** in native resolution.
 
 ## 7b. Impact marks
 
-**Option:** IMPACT MARKS / IMPACTS (`impactmarks`, off by default)
-**Files:** `src/engine/world/damage_marks.*`, `src/engine/world/projectile.cpp`, `src/game/game.cpp`
+**Option:** IMPACT MARKS / IMPACTS (`impactmarks`, `bloodmarks`, off by default). The row cycles OFF (French ARRET) → ON (MARCHE): impact marks → BLOOD (SANG): impact marks and blood → OFF.
+**Files:** `src/engine/world/damage_marks.*`, `src/engine/world/projectile.cpp`, `src/engine/world/item_damage.cpp`, `src/game/game.cpp`
 
 The original leaves no trace of a shot. With this option the scenery keeps one where a shot ends.
 
@@ -349,6 +349,12 @@ The original leaves no trace of a shot. With this option the scenery keeps one w
 - Marks are not saved: a loaded game starts clean.
 - Marks only read the world and use their own numbers, never the game's random generators, so the game plays the same with or without them.
 - Palette colours 1..14 (cycled or translucent) are never changed or used.
+
+**Blood** (BLOOD setting)
+- Who bleeds: an NPC that loses hit points to a shot or a blast, if bullets hurt it fully (the living, not the robots). Energy weapons do not draw blood: they burn, freeze or melt. Blood is drawn in the game palette's reds, mixed with the colour underneath.
+- **A bullet** (or a blast that does not kill): a spray on the first wall behind the victim, along the shot, within 40 + 2 × the hit points lost (up to 140 units), at chest height, with drips running down. It always happens when the hit kills, 55 % of the time otherwise. Drops land on the floor behind: 1, plus 1 per 12 points lost, plus 2 for a kill (6 at most). The drops are stretched the way they flew.
+- **Killed by a blast**: a pool under the body; 16 to 24 pieces and drops thrown up to 150 units away, in a fan of ±80° away from the blast; sprays on the walls met by seven rays across that fan.
+- A wall face the camera does not see takes no spray. Blood marks follow the impact marks' rules: on scenery only, gone when it changes, not saved.
 
 ---
 
@@ -539,6 +545,7 @@ The original reads much of its data from the CD and needs it in the drive. The p
 | `drawonaim` | true | `false` |
 | `togglerun` | false | `true` |
 | `impactmarks` | false | `true` |
+| `bloodmarks` | false | `true` |
 | `nativeresolution` | true | `false` |
 | `autosave` | true | `false` |
 | `viewzoom` | 0 (auto), 1..4 with decimals (`1.5`) | ≠ 0 |

@@ -118,7 +118,9 @@ void EnhancementsScreen::draw(Surface8& screen) const {
                 on = config_->smooth_scaling;
             } else if (row == kImpactRow) {
                 name = tr("IMPACTS", "IMPACT MARKS");
-                on = config_->impact_marks;
+                value = !config_->impact_marks ? tr("ARRET", "OFF")
+                        : config_->blood_marks ? tr("SANG", "BLOOD")
+                                               : tr("MARCHE", "ON");
             } else if (row == kAutosaveRow) {
                 name = tr("SAUVEGARDE AUTO", "AUTOSAVE");
                 on = config_->autosave;
@@ -147,7 +149,7 @@ void EnhancementsScreen::draw(Surface8& screen) const {
                 name = tr("DEGAINE EN VISANT", "DRAW ON AIM");
                 on = config_->draw_on_aim;
             }
-            if (row != kZoomRow && row != kVibrationIntensityRow)
+            if (row != kZoomRow && row != kVibrationIntensityRow && row != kImpactRow)
                 value = on ? tr("MARCHE", "ON") : tr("ARRET", "OFF");
             print_tinted(screen, *fonts_, r.x0 + kRowPad, r.y0 + kTextDrop, name, tint);
             print_tinted(screen, *fonts_, r.x1 + 1 - kRowPad - writer.measure(value).width, r.y0 + kTextDrop, value,
@@ -174,7 +176,16 @@ void EnhancementsScreen::activate(int row) {
     } else if (row == kSmoothRow) {
         config_->smooth_scaling = !config_->smooth_scaling;
     } else if (row == kImpactRow) {
-        config_->impact_marks = !config_->impact_marks;
+        // Off, then the marks, then the marks and the blood, then off.
+        if (!config_->impact_marks) {
+            config_->impact_marks = true;
+            config_->blood_marks = false;
+        } else if (!config_->blood_marks) {
+            config_->blood_marks = true;
+        } else {
+            config_->impact_marks = false;
+            config_->blood_marks = false;
+        }
     } else if (row == kAutosaveRow) {
         config_->autosave = !config_->autosave;
     } else if (row == kRunRow) {

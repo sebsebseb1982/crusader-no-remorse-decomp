@@ -300,6 +300,18 @@ struct FastArea {
 
 class Audio;
 
+// Port addition (blood marks, damage_marks.hpp): an NPC that lost hit points
+// to a shot or a blast (WorldHooks::npc_wounded).
+struct Wound {
+    ObjId npc = 0;
+    int fire_type = 0;
+    // Where the shot came from, or the blast's centre (usecode units).
+    std::int32_t from_x = 0, from_y = 0, from_z = 0;
+    int dealt = 0;        // hit points lost
+    bool killed = false;  // down to 0
+    bool bleeds = false;  // a shape bullets fully hurt: not a robot
+};
+
 // Engine-to-usecode calls made by the world. Unset hooks do nothing.
 struct WorldHooks {
     // Starts usecode event `event` of the item's class if the class has it
@@ -353,6 +365,9 @@ struct WorldHooks {
     // Port addition (impact marks, damage_marks.hpp): a shot of `fire_type`
     // ended at (x, y, z) on `hit`, 0 when on nothing. Must not change the world.
     std::function<void(ObjId hit, std::int32_t x, std::int32_t y, std::int32_t z, int fire_type)> shot_landed;
+    // Port addition (blood marks): an NPC lost hit points to a shot or a
+    // blast (report_wound). Must not change the world.
+    std::function<void(const Wound& wound)> npc_wounded;
 };
 
 class World {

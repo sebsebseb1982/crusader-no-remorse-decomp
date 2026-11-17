@@ -13,6 +13,14 @@
 // marks. Marks are not saved; changing map, loading a game or switching the
 // option off forgets them. The oldest go first past kMaxMarks.
 //
+// Blood (GameConfig::blood_marks, with the impact marks): a human hit by a
+// bullet or a blast bleeds on the scenery.
+// A spray on the wall behind (in the shot's direction, with drips running
+// down), drops on the floor around; killed by a blast, a pool under the body,
+// pieces and drops thrown in a fan away from it and sprays on the walls
+// around. Robots, energy weapons (they burn, freeze or melt) and the dead do
+// not bleed. Blood marks follow the same rules as the others.
+//
 // Marks only read the world: no random number of the game is drawn, so the
 // game plays the same with or without them.
 
@@ -30,7 +38,7 @@
 
 namespace crusader {
 
-enum class MarkKind : std::uint8_t { Bullet, Burn, Scorch };
+enum class MarkKind : std::uint8_t { Bullet, Burn, Scorch, BloodSpray, BloodDrop, BloodPool };
 
 // The mark a shot of `fire_type` leaves: a scorch when it splashes, a hole
 // for the bullets (fire types 1, 2, 0xB, 0xD), a burn otherwise.
@@ -41,8 +49,11 @@ MarkKind mark_kind(int fire_type);
 // chosen; colours 1..14 map to themselves.
 std::array<std::uint8_t, 256> shade_table(const Palette& palette, int percent);
 
+// The same, the colour mixed with `target` at `percent` (blood).
+std::array<std::uint8_t, 256> tint_table(const Palette& palette, Rgb target, int percent);
+
 // A pixel of a mark: its offset from the mark's centre and its shade (0
-// light, 1 medium, 2 dark, 3 almost black).
+// light, 1 medium, 2 dark, 3 almost black; blood 4 light, 5 red, 6 dark).
 struct MarkPixel {
     std::int8_t dx, dy;
     std::uint8_t shade;
@@ -50,13 +61,14 @@ struct MarkPixel {
 
 // The pixels of a mark of `kind` and `radius` (a hole is about 2 x 2 pixels
 // with its rim, `radius` aside), squashed to half its height when `flat`;
-// `seed` shapes its edge.
-std::vector<MarkPixel> mark_pattern(MarkKind kind, int radius, bool flat, std::uint32_t seed);
+// `seed` shapes its edge. Blood flies in `angle` (radians, screen x right and
+// y down; on a flat mark, in the ground's own proportions).
+std::vector<MarkPixel> mark_pattern(MarkKind kind, int radius, bool flat, std::uint32_t seed, double angle = 0);
 
 class DamageMarks {
 public:
-    static constexpr std::size_t kMaxMarks = 1024;
-    static constexpr int kShades = 4;
+    static constexpr std::size_t kMaxMarks = 2048;
+    static constexpr int kShades = 7;
 
     struct Mark {
         ObjId host = 0;
@@ -76,6 +88,9 @@ public:
     // nothing, a floor below may take the mark).
     void record(const World& world, ObjId hit, World::Point at, int fire_type);
 
+    // An NPC lost hit points (WorldHooks::npc_wounded): its blood.
+    void bleed(const World& world, const Wound& wound);
+
     // Once per frame, before draw: forgets the marks of another map and of
     // hosts that changed, indexes the others by host and follows the game
     // palette.
@@ -90,7 +105,13 @@ public:
 
 private:
     // `flat`: on a top face (a floor), squashed as the ground is.
-    void add(const Item& host, World::Point surface, MarkKind kind, int radius, bool flat);
+    void add(const Item& host, World::Point surface, MarkKind kind, int radius, bool flat, double angle = 0);
+    // From `from` along (ux, uy), level, up to `reach` units: a spray of
+    // `radius` on the first wall met, if the camera sees its face.
+    bool spray_wall(const World& world, World::Point from, double ux, double uy, int reach, int radius);
+    // On the floor under (x, y), at most 16 below `z`; false when none.
+    bool drop(const World& world, World::Point at, MarkKind kind, int radius, double ux, double uy);
+    int roll(int n);  // 0..n-1, the marks' own numbers
     bool opaque(const DrawItem& d, int sx, int sy) const;
 
     std::deque<Mark> marks_;

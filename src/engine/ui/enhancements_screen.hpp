@@ -15,7 +15,8 @@
 // (GameConfig::native_resolution): the view fills the screen, and its "zoom"
 // row (GameConfig::view_zoom): auto, then pixels of 1 to 4 screen pixels, the
 // "lissage" toggle (GameConfig::smooth_scaling): bilinear filtering, the
-// "impacts" toggle (GameConfig::impact_marks): shots mark the scenery, and
+// "impacts" row (GameConfig::impact_marks, blood_marks): off, shots mark
+// the scenery, or they do and the wounded bleed on it ("sang"), and
 // the "sauvegarde auto" toggle (GameConfig::autosave): the game saves itself
 // at the key moments of a mission, "course toggle" (GameConfig::toggle_run),
 // "correctifs original" (GameConfig::fix_original_bugs): bugs of the original
