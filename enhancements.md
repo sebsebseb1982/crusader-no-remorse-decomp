@@ -104,7 +104,7 @@ The original has nothing like it. This screen gathers every option the port adds
 
 | Row (EN / FR) | Effect | CFG key |
 |---|---|---|
-| LOOT FROM REMAINS / BUTIN DES RESTES | An enemy burnt, blown apart or vaporised drops its loot beside its remains (section 10b) | `remainsloot` |
+| LOOT FROM REMAINS / BUTIN DES CENDRES | An enemy burnt, blown apart or vaporised drops its loot beside its remains (section 10b) | `remainsloot` |
 
 **Controls**
 - Up or `8`, down or `2`: moves between rows. The focus stops at the first and last row; it does not wrap.
@@ -502,7 +502,7 @@ The original keypad (door and chest codes) only works with the mouse or the numb
 
 ## 10b. Loot from remains (cheat)
 
-**Option:** LOOT FROM REMAINS / BUTIN DES RESTES, on the CHEATS / TRICHE page (`remainsloot`, off by default). Asked for in [No Regret's issue #2](https://github.com/sebsebseb1982/crusader-no-regret-decomp/issues/2), for both games.
+**Option:** LOOT FROM REMAINS / BUTIN DES CENDRES, on the CHEATS / TRICHE page (`remainsloot`, off by default). Asked for in [No Regret's issue #2](https://github.com/sebsebseb1982/crusader-no-regret-decomp/issues/2), for both games.
 **Files:** `src/engine/world/death_loot.*`, `src/engine/world/projectile.cpp`, `src/engine/usecode/item_intrinsics.cpp`
 
 **Original**: an enemy burnt, melted or electrocuted by an energy weapon, or set on fire by a blast, leaves no body to search. The death usecode (NPCDEATH) destroys what the enemy carried and makes its remains (ashes, a skeleton…) without the loot a body gets. Killing enemies with plasma therefore costs ammunition and gives nothing back.
