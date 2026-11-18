@@ -44,6 +44,25 @@ constexpr std::array<Placement, OptionsScreen::kWidgets> kPlacementsUs = {{
     {W::kQuit, 43, 517, 318},
 }};
 
+// The German executable places the "off" buttons as the US one, the video
+// line at y 243 with "small" at x 126, and the quit button at x 551, for its
+// German shapes (13D0:1141, 142B, 1495, 16B0).
+constexpr std::array<Placement, OptionsScreen::kWidgets> kPlacementsDe = {{
+    {W::kAnimationOn, 31, 35, 163},  {W::kAnimationOff, 32, 95, 163},
+    {W::kFrameSkipOn, 33, 35, 203},  {W::kFrameSkipOff, 34, 95, 203},
+    {W::kBlastsOn, 37, 35, 283},     {W::kBlastsOff, 38, 95, 283},
+    {W::kFilterOn, 39, 35, 323},     {W::kFilterOff, 40, 95, 323},
+    {W::kVideoBig, 35, 35, 243},     {W::kVideoSmall, 36, 126, 243},
+    {W::kSoundDown, 49, 435, 146},   {W::kSoundUp, 50, 597, 146},
+    {W::kMusicDown, 49, 435, 197},   {W::kMusicUp, 50, 597, 197},
+    {W::kMouseDown, 49, 435, 249},   {W::kMouseUp, 50, 597, 249},
+    {W::kQuit, 43, 551, 318},
+}};
+
+const std::array<Placement, OptionsScreen::kWidgets>& placements() {
+    return us_version() ? kPlacementsUs : german_version() ? kPlacementsDe : kPlacements;
+}
+
 struct Point {
     int x, y;
 };
@@ -66,6 +85,11 @@ constexpr std::array<OptionsScreen::Rect, OptionsScreen::kQuitLine> kLineRects =
 constexpr std::array<OptionsScreen::Rect, OptionsScreen::kQuitLine> kLineRectsUs = {{
     {22, 145, 198, 176}, {22, 185, 202, 216}, {22, 225, 225, 256}, {22, 265, 232, 296},
     {22, 305, 284, 336}, {432, 144, 614, 191}, {432, 194, 614, 242}, {432, 247, 614, 294},
+}};
+// German: the left lines end where the German labels do (13D0:1EA9..1F95).
+constexpr std::array<OptionsScreen::Rect, OptionsScreen::kQuitLine> kLineRectsDe = {{
+    {22, 145, 217, 176}, {22, 185, 315, 216}, {22, 225, 197, 259}, {22, 265, 362, 296},
+    {22, 305, 281, 336}, {432, 144, 614, 191}, {432, 194, 614, 242}, {432, 247, 614, 294},
 }};
 // Widgets acted on by left / '4' and right / '6', by line (tables at 13D0:234C and 233C).
 constexpr std::array<W, OptionsScreen::kQuitLine> kLeftOf = {
@@ -100,7 +124,7 @@ OptionsScreen::OptionsScreen(ShapeCache& gumps, GameConfig& config, Audio* audio
     : gumps_(&gumps), config_(&config), audio_(audio), focus_(&focus), fonts_(fonts),
       vibration_preview_(std::move(vibration_preview)) {
     for (int i = 0; i < kWidgets; ++i) {
-        const Placement& p = (us_version() ? kPlacementsUs : kPlacements)[i];
+        const Placement& p = placements()[i];
         const Shape* s = gumps_->get(p.shape);
         const int w = s && !s->frames().empty() ? s->frames()[0].width : 1;
         const int h = s && !s->frames().empty() ? s->frames()[0].height : 1;
@@ -166,10 +190,11 @@ void OptionsScreen::draw(Surface8& screen) const {
         draw_shape(screen, static_cast<std::uint16_t>(kFirstBackground + q), 0, kBackgroundCorners[q].x,
                    kBackgroundCorners[q].y);
     }
-    draw_shape(screen, 41, 0, 468, 146);
-    draw_shape(screen, 42, 0, us_version() ? 465 : 459, 196);  // 13D0:17C5: "music volume"
+    // 13D0:17C5: "sound volume" and "music volume" (German: 13D0:19C6, 19F6).
+    draw_shape(screen, 41, 0, german_version() ? 458 : 468, 146);
+    draw_shape(screen, 42, 0, us_version() ? 465 : german_version() ? 457 : 459, 196);
     if (*focus_ >= 0 && *focus_ < kQuitLine) {
-        const Rect& r = (us_version() ? kLineRectsUs : kLineRects)[*focus_];
+        const Rect& r = (us_version() ? kLineRectsUs : german_version() ? kLineRectsDe : kLineRects)[*focus_];
         outline(screen, r.x0, r.y0, r.x1, r.y1, kFocusColour);
     }
     // Mouse speed: 0x2164 per notch in 16.16, the last notch pulled back.

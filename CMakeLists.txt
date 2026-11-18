@@ -302,6 +302,14 @@ if(EXISTS "${CRUSADER_US_DATA_DIR}/STATIC")
     add_test(NAME us_data_tests COMMAND us_data_tests ${CRUSADER_US_DATA_DIR})
 endif()
 
+# The German data (v1.07), when found: the French executable translated.
+set(CRUSADER_DE_DATA_DIR "${CMAKE_SOURCE_DIR}/data_de" CACHE PATH "German game data used by de_data_tests")
+add_executable(de_data_tests e2e/de_data_tests.cpp)
+target_link_libraries(de_data_tests PRIVATE crusader_game)
+if(EXISTS "${CRUSADER_DE_DATA_DIR}/STATIC")
+    add_test(NAME de_data_tests COMMAND de_data_tests ${CRUSADER_DE_DATA_DIR})
+endif()
+
 # Optional private workspace (decompilation material and analysis tools, not in
 # this repository): it adds its own checks against the original executable.
 if(EXISTS ${CMAKE_SOURCE_DIR}/private/CMakeLists.txt)

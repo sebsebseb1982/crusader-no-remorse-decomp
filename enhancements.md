@@ -31,7 +31,7 @@ The changes fall into four groups:
 10. [Keypad navigation with arrows or gamepad](#10-keypad-navigation-with-arrows-or-gamepad)
 11. [Window, fullscreen, mouse and picture](#11-window-fullscreen-mouse-and-picture)
 12. [Version lines on the main menu](#12-version-lines-on-the-main-menu)
-13. [Two game versions: French 1.08 and US 1.23](#13-two-game-versions-french-108-and-us-123)
+13. [Game versions: French 1.08, US 1.23 and German 1.07](#13-game-versions-french-108-us-123-and-german-107)
 14. [Installing from a CD image, no CD needed](#14-installing-from-a-cd-image-no-cd-needed)
 15. [Start-up, command line and tools](#15-start-up-command-line-and-tools)
 16. [`CRUSADER.CFG` handling](#16-crusadercfg-handling)
@@ -194,7 +194,7 @@ Holding **Select + Start** together quits the game. It is the only way out on ha
 
 ### 2.8b Save names without a keyboard (PortMaster)
 Handhelds have no keyboard to type a save's name, and the original refuses to save under an empty one. With **`--auto-save-names`**, which only the PortMaster launcher (`Crusader.sh`) passes:
-- choosing a slot on the Save screen (F9 or the menu's "save game") proposes the **local date and time** as its name, in place of the slot's: `12/11/2026 14:32` (French: day first), `11/12/2026 14:32` (US: month first);
+- choosing a slot on the Save screen (F9 or the menu's "save game") proposes the **local date and time** as its name, in place of the slot's: `12/11/2026 14:32` (French: day first), `11/12/2026 14:32` (US: month first), `12.11.2026 14:32` (German);
 - **A** saves under it, **B** leaves the slot as it was; a keyboard plugged in can still edit the name;
 - a console whose clock is not set (before 2020) gets `SAUVEGARDE` / `SAVED GAME` instead.
 
@@ -433,7 +433,7 @@ A write error is logged to stderr and does not stop the game.
 
 The port prints some texts itself: its own screens (Enhancements, controller), and the texts the original keeps in its executable (item names, Weasel's shop, a few messages, the version lines). The code writes them in English (`tr("BACK")`). The `languages` folder next to the executable (else in the current folder) holds one folder per language: `port.txt` translates those texts, and any other file replaces the data folder's file with the same path (pictures, fonts, scripts, subtitles...). The repository ships `en/port.txt` (generated, the reference) and `fr/port.txt` (the French `CRUSADER.EXE` 1.08's texts, and the port's own).
 
-- **AUTO**: the texts of the data's language, `fr` or `en` (as the original, which has the texts of its language only), and no replacement data files.
+- **AUTO**: the texts of the data's language, `fr`, `en` or `de` (as the original, which has the texts of its language only), and no replacement data files.
 - **The folders**, by id: the row shows each `port.txt`'s `@name` (ENGLISH, FRANCAIS...). A text `port.txt` does not translate stays in English.
 - The texts change at once; `port.txt` is read again after each pick, so a translator sees the changes. The data files are read at start-up: when the language picked has other data files than the ones read, the GAME page says "RESTART TO LOAD ITS GAME FILES". `CRUSADER.CFG` keeps the id in lower case (`language=pt-br`); an unknown id gives AUTO. Without the folder, the texts are in English.
 - A data file is looked up in the language folder, then in the mod folder (level editor), then in the data folder. The data's version is still detected from the data folder: a language's files must be translations of that version's. A translated script (`EUSECODE.FLX`) may not load games saved with another language's.
@@ -512,7 +512,7 @@ Two small lines are centred at the bottom of the main menu, in the dimmed colour
 
 ---
 
-## 13. Two game versions: French 1.08 and US 1.23
+## 13. Game versions: French 1.08, US 1.23 and German 1.07
 
 **Files:** `src/core/language.*`, `src/core/data_info.*`, `src/engine/usecode/intrinsic_numbering.cpp`, UI screens
 
@@ -529,6 +529,14 @@ An original executable handles one language. The port accepts the **French 1.08*
 - Music files (`M01.AMF`…) are looked up **case-insensitively**, for Linux file systems.
 - Saves from one version do not load with the other (different usecode).
 
+**German 1.07** (`data_info.hpp`)
+- Its `CRUSADER.EXE` is the French 1.08 one translated: same code and tables, same intrinsic table (`UNKCOFF.DAT`, `UNKDS.DAT`, `OVERLOAD.DAT` byte for byte), so the port runs it with the French numbering. It is told by its banner (`V1.07`) and its start-up message.
+- Its texts are in `languages/de/port.txt` (item names, Weasel's shop, messages, `<MEHR>`), the port's own screens translated too (AE, OE, UE for the umlauts the menu fonts lack).
+- Its executable moves some buttons for the German pictures; the port does the same: main menu ("options", "credits", "quit"), options screen (the "off" buttons, the video line, "quit", the labels of the volumes, the focus frames), help screen, F4/F5 questions (the Alt+X one stays French), difficulty screen (one centred picture, as in the US version).
+- Save names: the German executable maps a US keyboard to a German one (Y and Z swapped, the umlaut keys give Ä, Ö, Ü) and takes neither `<`, `:`, `;` nor quotes; the port takes the umlauts from the player's keyboard layout. The dates proposed by `--auto-save-names` are `18.11.2026 14:32`.
+- Nothing is cut from the game itself: the usecode is the French one with German texts (and two signs' frames), and the shapes, the damage table and the animations are the French ones. Only pictures, voices, movies and subtitles differ.
+- Not reproduced: the joystick's repeat delay of the German executable (20 ticks instead of 30); the port has its own controller support.
+
 ---
 
 ## 14. Installing from a CD image, no CD needed
@@ -538,14 +546,14 @@ An original executable handles one language. The port accepts the **French 1.08*
 The original reads much of its data from the CD and needs it in the drive. The port reads everything from `data/` and never needs a CD.
 
 **Rules**
-- A `.iso` file can be passed on the command line, or dropped into `data/`. The first `*.iso` found is used.
+- A `.iso` file (or `.gog`, or a `.bin` image with its `.cue` sheet) can be passed on the command line, or dropped into `data/`. The first image found is used; a `.cue` sheet opens the file of its `FILE` line.
 - If `data/` does not exist, it is created with a `PUT_GAME_DATA_HERE.txt` note.
 - If `data/STATIC/` already exists, the ISO is ignored: the data is considered installed.
 - Otherwise the ISO (ISO 9660, 2048-byte sectors or raw 2352-byte images) is extracted into `data/`, about 550 MB, with progress printed to stderr.
   - The `CATALOG/` folder (a demo browser unrelated to the game) is skipped.
   - The `;1` version suffix of file names is dropped.
 - The ISO can be deleted afterwards.
-- If no data is found, a message says to copy an installation (French 1.08 or US 1.23) or the ISO.
+- If no data is found, a message says to copy an installation (French 1.08, US 1.23, English 1.01 or German 1.07) or the CD image.
 - The US-only CD features are not needed and their CFG keys are ignored: CD transfer icon (`cdicon`), game path (`crupath`), music file per track (`tune1`–`tune16`).
 
 ---

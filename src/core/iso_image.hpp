@@ -1,6 +1,7 @@
 #pragma once
-// Reader of ISO 9660 CD images (.iso), to take the game data from a copy of
-// the CD instead of an install folder. The files of the CD are laid out as the
+// Reader of ISO 9660 CD images (.iso, or .bin with its .cue sheet: raw
+// 2352-byte sectors), to take the game data from a copy of the CD instead of
+// an install folder. The files of the CD are laid out as the
 // install folder (STATIC/, USECODE/, SOUND/, FLICS/, CRUSADER.EXE...), plus
 // CATALOG/, an unrelated demo browser the port does not need.
 
@@ -21,7 +22,8 @@ public:
         std::uint32_t size;
     };
 
-    // Throws std::runtime_error when the file is not an ISO 9660 image.
+    // Throws std::runtime_error when the file is not an ISO 9660 image. A .cue
+    // sheet opens the image its FILE line names.
     static IsoImage open(const std::filesystem::path& path);
 
     const std::vector<Entry>& files() const { return files_; }
@@ -45,8 +47,8 @@ private:
 // Returns the number of files written; prints its progress on stderr.
 std::size_t install_from_iso(const std::filesystem::path& iso, const std::filesystem::path& data);
 
-// A CD image by its name: *.iso, or *.gog (GAME.GOG of the GOG release, an ISO
-// image under another extension), in any case.
+// A CD image by its name: *.iso, *.gog (GAME.GOG of the GOG release, an ISO
+// image under another extension), *.bin or *.cue, in any case.
 bool is_disc_image(const std::filesystem::path& path);
 
 // The first CD image (is_disc_image) found in `dir`, empty when there is none.

@@ -36,7 +36,10 @@
 // 25, and the name with '_' still fits in the slot less 4 pixels; letters
 // become capitals. The French original also turns QWERTY into AZERTY
 // (FUN_1008_0000; not in the US one) because its BIOS gave QWERTY codes; the
-// port's codes already follow the player's layout, so it does not.
+// port's codes already follow the player's layout, so it does not. The German
+// one turns QWERTY into QWERTZ, its umlaut keys giving A O U umlauts, and
+// takes neither < : ; nor quotes (they were the umlaut keys); the port takes
+// the umlauts from the player's layout.
 // Not reproduced: the mouse cursor hidden while a name is edited.
 //
 // Port addition, for consoles without a keyboard (the PortMaster build, see

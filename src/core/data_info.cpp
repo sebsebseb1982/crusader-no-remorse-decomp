@@ -53,6 +53,7 @@ DataInfo detect_data_info(const std::filesystem::path& data) {
     constexpr Language kLanguages[] = {
         {"Appuyer sur une touche pour continuer.", "FR"},
         {"Press any key to continue.", "US"},
+        {"Beliebige Taste dr\x81" "cken, um fortzufahren.", "DE"},  // 0x81: u umlaut (code page 850)
         {"SPIDER BOMB", "US"},
     };
     for (const Language& l : kLanguages) {

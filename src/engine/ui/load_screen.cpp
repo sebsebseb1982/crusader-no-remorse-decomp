@@ -131,6 +131,8 @@ std::string LoadScreen::dated_name(const std::tm& local) {
     char text[32];
     std::snprintf(text, sizeof text, "%02d/%02d/%04d %02d:%02d", a, b, local.tm_year + 1900, local.tm_hour,
                   local.tm_min);
+    // German dates: 18.11.2026.
+    if (german_version()) text[2] = text[5] = '.';
     return text;
 }
 
@@ -154,11 +156,23 @@ void LoadScreen::edit_key(std::uint16_t code) {
         return;
     }
     const bool alnum = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
-    // The US executable no longer takes < : and ; (13D8:09F3).
-    const std::string_view punctuation = us_version() ? " .?!,/\"'" : "< :;.?!,/\"'";
-    if (!(alnum || punctuation.find(static_cast<char>(c)) != std::string_view::npos)) return;
+    // The US executable no longer takes < : and ; (13D8:09F3). The German one
+    // (1008:09B7) turns the keys of a US keyboard into a German one's
+    // (FUN_1008_0000): " ' : ; [ { give the capital umlauts A O U, and < is
+    // not taken. The port's codes follow the player's layout: the umlaut keys
+    // give their code page 850 letters (sdl_input.cpp), small or capital.
+    const std::string_view punctuation = us_version()       ? " .?!,/\"'"
+                                         : german_version() ? " .?!,/"
+                                                            : "< :;.?!,/\"'";
+    unsigned char umlaut = 0;
+    if (german_version()) {
+        if (c == 0x84 || c == 0x8E) umlaut = 0x8E;       // a, A umlaut
+        else if (c == 0x94 || c == 0x99) umlaut = 0x99;  // o, O umlaut
+        else if (c == 0x81 || c == 0x9A) umlaut = 0x9A;  // u, U umlaut
+    }
+    if (!(alnum || umlaut || punctuation.find(static_cast<char>(c)) != std::string_view::npos)) return;
     if (name_.size() >= kMaxNameLength || code >= 0x100) return;
-    name_ += static_cast<char>(c >= 'a' && c <= 'z' ? c - 0x20 : c);
+    name_ += static_cast<char>(umlaut ? umlaut : c >= 'a' && c <= 'z' ? c - 0x20 : c);
     const Rect& r = slots_[*selected_];
     if (TextWriter(*fonts_, kFont).measure(name_ + '_').width > (r.x1 - r.x0 + 1) - 4) name_.pop_back();
 }

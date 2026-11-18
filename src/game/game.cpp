@@ -247,7 +247,7 @@ Game::Game(const std::filesystem::path& data, const std::filesystem::path& saves
     // played with the French numbers, other data calls the wrong routines.
     if (!info.known()) {
         throw std::runtime_error("unrecognised game data in '" + data.string() +
-                                 "': supported versions are French 1.08, US 1.23 and English 1.01");
+                                 "': supported versions are French 1.08, US 1.23, English 1.01 and German 1.07");
     }
     data_version_ = info.version;
     data_language_ = info.language;

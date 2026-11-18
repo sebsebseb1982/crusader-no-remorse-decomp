@@ -219,9 +219,25 @@ void check_iso() {
     // The GOG release's image is GAME.GOG: an ISO under another extension.
     fs::create_directories(dir / "gog");
     fs::copy_file(dir / "t.iso", dir / "gog/GAME.GOG");
-    check(is_disc_image("GAME.GOG") && is_disc_image("x.Iso") && !is_disc_image("x.bin"), "disc images by extension");
+    check(is_disc_image("GAME.GOG") && is_disc_image("x.Iso") && is_disc_image("x.bin") && is_disc_image("x.CUE") &&
+              !is_disc_image("x.img"),
+          "disc images by extension");
     prepare_game_data(dir / "gog");
     check(fs::exists(dir / "gog/D/B.BIN"), "prepare_game_data extracts the GAME.GOG of data/");
+    // A .bin of raw 2352-byte sectors (sync and header, 2048 bytes of data,
+    // error codes), opened through its .cue sheet.
+    {
+        std::vector<char> raw(24 * 2352, 0);
+        for (std::size_t s = 0; s < 24; ++s) std::memcpy(&raw[s * 2352 + 16], &img[s * 2048], 2048);
+        fs::create_directories(dir / "cue");
+        std::ofstream(dir / "cue/Game (Disc).bin", std::ios::binary).write(raw.data(), raw.size());
+        std::ofstream(dir / "cue/Game (Disc).cue") << "FILE \"Game (Disc).bin\" BINARY\n  TRACK 01 MODE1/2352\n";
+        const IsoImage iso = IsoImage::open(dir / "cue/Game (Disc).cue");
+        iso.extract(dir / "cue/out", {});
+        std::string a;
+        std::ifstream(dir / "cue/out/A.TXT") >> a;
+        check(iso.files().size() == 2 && a == "hello", "a .cue sheet opens its raw .bin image");
+    }
     prepare_game_data(dir / "fresh");
     check(fs::exists(dir / "fresh/PUT_GAME_DATA_HERE.txt"), "prepare_game_data creates data/ with its note");
     std::error_code ignored;
@@ -246,6 +262,9 @@ void check_data_info() {
     check(info.version == "1.23" && info.us() && !info.v101(), "US 1.23 told by its banner and message");
     info = exe("CRUSADER:  No Remorse V1.08 Appuyer sur une touche pour continuer.");
     check(info.version == "1.08" && info.language == "FR", "French 1.08 told by its banner and message");
+    info = exe("CRUSADER:  No Remorse V1.07 [Beliebige Taste dr\x81" "cken, um fortzufahren.]");
+    check(info.version == "1.07" && info.german() && info.text_language() == Language::German,
+          "German 1.07 told by its banner and message");
     info = exe("CRUSADER:  No Remorse V2.00");
     check(info.version == "2.00" && !info.known(), "an executable without a known text is unknown");
 

@@ -65,9 +65,36 @@ void IsoImage::walk(std::uint32_t lba, std::uint32_t size, const std::string& pr
     }
 }
 
+namespace {
+
+// The track of a .cue sheet: the file of its first FILE line, next to the
+// sheet; any other image is itself.
+// @orig none: reading the game CD image, port addition
+fs::path image_file(const fs::path& path) {
+    if (upper(path.extension().string()) != ".CUE") return path;
+    std::ifstream cue(path);
+    std::string line;
+    while (std::getline(cue, line)) {
+        const auto start = line.find_first_not_of(" \t");
+        if (start == std::string::npos || upper(line.substr(start, 5)) != "FILE ") continue;
+        std::string name = line.substr(start + 5);
+        if (const auto open = name.find('"'); open != std::string::npos) {
+            const auto close = name.find('"', open + 1);
+            name = name.substr(open + 1, close == std::string::npos ? std::string::npos : close - open - 1);
+        } else {
+            name = name.substr(0, name.find(' '));
+        }
+        return path.parent_path() / name;
+    }
+    throw std::runtime_error(path.string() + " names no image file");
+}
+
+}  // namespace
+
 // @orig none: reading the game CD image (ISO 9660), port addition
-IsoImage IsoImage::open(const fs::path& path) {
+IsoImage IsoImage::open(const fs::path& sheet_or_image) {
     IsoImage iso;
+    const fs::path path = image_file(sheet_or_image);
     iso.in_.open(path, std::ios::binary);
     if (!iso.in_) throw std::runtime_error("cannot open " + path.string());
     // "CD001" of the primary volume descriptor, sector 16: plain 2048-byte
@@ -138,7 +165,7 @@ std::size_t install_from_iso(const fs::path& iso_path, const fs::path& data) {
 // @orig none: the GOG release's GAME.GOG is an ISO image, port addition
 bool is_disc_image(const fs::path& path) {
     const std::string ext = upper(path.extension().string());
-    return ext == ".ISO" || ext == ".GOG";
+    return ext == ".ISO" || ext == ".GOG" || ext == ".BIN" || ext == ".CUE";
 }
 
 // @orig none: reading the game CD image (ISO 9660), port addition
@@ -157,8 +184,8 @@ void prepare_game_data(const fs::path& data, const fs::path& iso) {
         fs::create_directories(data, error);
         if (std::ofstream note(data / "PUT_GAME_DATA_HERE.txt"); note) {
             note << "Put the game data here: either the files of the install folder of Crusader: No Remorse\n"
-                    "(French 1.08, US 1.23 or English 1.01: STATIC, USECODE, SOUND, FLICS, CRUSADER.EXE...), or the .iso image of\n"
-                    "the CD (GAME.GOG in the GOG release), which the game extracts on its first launch.\n";
+                    "(French 1.08, US 1.23, English 1.01 or German 1.07: STATIC, USECODE, SOUND, FLICS, CRUSADER.EXE...), or the\n"
+                    "image of the CD (.iso, .bin/.cue, or GAME.GOG in the GOG release), which the game extracts on its first launch.\n";
         }
     }
     if (fs::exists(data / "STATIC", error)) return;

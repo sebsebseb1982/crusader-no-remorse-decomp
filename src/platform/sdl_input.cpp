@@ -90,14 +90,20 @@ std::uint8_t keypad_ascii(SDL_Keycode key, std::uint16_t flags) {
     return 0;
 }
 
-// Character for the key in the user's layout. Text entry in the game only
-// needs printable ASCII; accents and dead keys are out of scope here.
+// Character for the key in the user's layout. Text entry in the game needs
+// printable ASCII, plus the umlauts of a German keyboard (the German data's
+// save names, load_screen.hpp), given as small code page 850 letters (SDL
+// names those keys by their Unicode letter); other accents and dead keys are
+// out of scope here.
 std::uint8_t ascii_for(SDL_Keycode key, std::uint16_t flags) {
     if (std::uint8_t c = keypad_ascii(key, flags)) return c;
     if (key == SDLK_RETURN || key == SDLK_KP_ENTER) return '\r';
     if (key == SDLK_BACKSPACE) return 8;
     if (key == SDLK_TAB) return '\t';
     if (key == SDLK_ESCAPE) return 27;
+    if (key == 0xE4) return 0x84;  // a umlaut
+    if (key == 0xF6) return 0x94;  // o umlaut
+    if (key == 0xFC) return 0x81;  // u umlaut
     if (key < 32 || key > 126) return 0;
     char c = static_cast<char>(key);
     const bool shift = flags & (kLeftShift | kRightShift);

@@ -22,6 +22,7 @@ The `languages` folder sits next to the executable. It holds one folder per lang
 languages/
   en/port.txt              the port's texts in English (the reference)
   fr/port.txt              the French texts
+  de/port.txt              the German texts
   pt-br/
     port.txt               the port's texts in Brazilian Portuguese
     STATIC/GUMPS.FLX       translated pictures
@@ -32,17 +33,17 @@ languages/
 
 - `port.txt` holds the texts the port prints itself (format below).
 - Any other file replaces the data folder's file with the same path. Files that are not there come from the data folder, so a translation only ships the files it changes. Use the same names, in the same case, as in the data folder.
-- `en/port.txt` is generated from the sources and must not be edited. `fr/port.txt` holds the texts of the French `CRUSADER.EXE` 1.08, which the French data needs, and the French texts of the port's screens. The repository only ships `port.txt` files: the game data files belong to their publisher and are not distributed with the port.
+- `en/port.txt` is generated from the sources and must not be edited. `fr/port.txt` holds the texts of the French `CRUSADER.EXE` 1.08, which the French data needs, and the French texts of the port's screens; `de/port.txt` those of the German `CRUSADER.EXE` 1.07 and the German texts of the port's screens. The repository only ships `port.txt` files: the game data files belong to their publisher and are not distributed with the port.
 
 In the game, **Options**, **+** (Enhancements), **Game**, **Language** cycles through **AUTO** and every language folder, showing each one's name. The choice is saved in `CRUSADER.CFG` (`language=pt-br`).
 
-- **AUTO** (the default) uses the texts of the data's language (`fr` with the French data, `en` with the English data) and no replacement data files.
+- **AUTO** (the default) uses the texts of the data's language (`fr` with the French data, `en` with the English data, `de` with the German data) and no replacement data files.
 - The texts of `port.txt` change at once.
 - The data files of a language folder are read when the game starts. After picking a language that has data files, or leaving one, the window shows "RESTART TO LOAD ITS GAME FILES", and the game files change at the next start.
 
 ### Things to know about data files
 
-- **Same version.** The files of a language folder must be translations of the files of the data in use: the same game and version (No Regret 1.06, No Remorse French 1.08, US 1.23...). The port works out the version from the data folder, and the scripts of another version call the wrong routines.
+- **Same version.** The files of a language folder must be translations of the files of the data in use: the same game and version (No Regret 1.06, No Remorse French 1.08, US 1.23, German 1.07...). The port works out the version from the data folder, and the scripts of another version call the wrong routines.
 - **Saved games.** A translated `EUSECODE.FLX` whose texts have a different length can move the scripts. A game saved with one language's scripts may not load with another's. Players should keep the same language for a whole game.
 
 ## `port.txt`

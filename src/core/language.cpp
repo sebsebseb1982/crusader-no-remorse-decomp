@@ -111,6 +111,7 @@ void set_text_language(Language language) { g_language = language; }
 const char* tr(const char* english) {
     const std::string_view id = !g_choice.id.empty()                ? std::string_view(g_choice.id)
                                 : g_language == Language::English ? std::string_view("en")
+                                : g_language == Language::German  ? std::string_view("de")
                                                                   : std::string_view("fr");
     if (const Translation* t = translation(id)) {
         if (const char* text = t->find(english)) return text;

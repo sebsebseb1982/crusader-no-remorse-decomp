@@ -16,10 +16,13 @@ struct YesNo {
 
 // World_on_key gives the places: in the French executable the quit question
 // has its own (13E8:159A), the quick load and save ones share theirs
-// (13E8:1ACD, 1BAB); the US one uses the same for the three.
+// (13E8:1ACD, 1BAB); the US one uses the same for the three. The German one
+// keeps the French quit question and moves the two others for its shapes.
+// @orig 13E8:159A 13E8:1ACD 13E8:1BAB
 YesNo yes_no_places(std::uint16_t shape) {
     if (us_version()) return {55, 135};
     if (shape == ShapeDialog::kQuitQuestion) return {57, 125};
+    if (german_version()) return {52, 116};
     return {49, 121};
 }
 

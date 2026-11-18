@@ -13,6 +13,7 @@ This repository contains **no game files**: you need your own copy of the origin
 - The **French version 1.08** (dated 12 October 1995) — ISO SHA-256: `B370436F2BA380500E918262A83293FBB89600253CC3F4579895D45FDB63B802`
 - The **US version 1.23** (dated 13 February 1996) — ISO SHA-256: `C27D77D215253B8C1EF3C5B16CC33AFF63E759A843BBCD177A42F6A64DC063C7`
 - The **English version 1.01** (dated 14 September 1995), sold by GOG — ISO (`GAME.GOG`) SHA-256: `7C2FAA4140F5D7FDDD0F1E3191DED0D10FB3DCF8908BD8559866C253D7B6638B`
+- The **German version 1.07** (dated 11 October 1995) — BIN/CUE image, `.bin` SHA-256: `5AC277B47E9859AACCB4609389D70ACA76927A1988EC983D7AF5F115FE296081`. Its executable is the French 1.08 one translated; the game itself is not cut (same scripts, sprites and damage tables as the French version), only its pictures, voices, movies and texts are German.
 
 ## Recent improvements
 
@@ -34,7 +35,6 @@ This repository contains **no game files**: you need your own copy of the origin
 
 - Release the game on PortMaster.
 - Support additional versions of *Crusader: No Remorse*, if there is interest.
-- Explore the possibility of supporting *Crusader: No Regret*.
 - Level editor: script (usecode) disassembly and assembly, sprite import, NPC type editing.
 - Have an idea? Let me know what you'd like to see!
 
@@ -54,9 +54,9 @@ Checksums are in `SHA256SUMS`.
 
 ### 2. Provide the game data
 
-The archive contains the executable and an empty `data` folder with a `PUT_GAME_DATA_HERE.txt` note. Add the game data from your copy of a supported version (French 1.08, US 1.23 or English 1.01) in one of these ways:
+The archive contains the executable and an empty `data` folder with a `PUT_GAME_DATA_HERE.txt` note. Add the game data from your copy of a supported version (French 1.08, US 1.23, English 1.01 or German 1.07) in one of these ways:
 
-- **CD image:** Place the `.iso` file in `data/`, or pass its path to the game (for example, `./crusader game.iso`). The GOG release's `GAME.GOG` is such an image and works the same way, under its own name. On first launch, the game extracts the data to `data/` (about 550 MB; this takes a few seconds). You can delete the ISO afterward.
+- **CD image:** Place the `.iso` file (or a `.bin` image with its `.cue` sheet) in `data/`, or pass its path to the game (for example, `./crusader game.iso`). The GOG release's `GAME.GOG` is such an image and works the same way, under its own name. On first launch, the game extracts the data to `data/` (about 550 MB; this takes a few seconds). You can delete the ISO afterward.
 - **Installed game or CD files:** Copy the **entire contents** of the installation folder or CD into `data/`:
 
 ```
@@ -75,7 +75,7 @@ data/
 The digital releases are not a separate version: they ship one of the supported versions, but not always as loose files.
 
 - **GOG:** the installer unpacks the whole CD into the game folder, so the installed files work as they are, as does `GAME.GOG` (see above).
-- **Steam and EA App / Origin:** the install is the same as the retail one and does **not** contain all the CD files (`DATA\STATIC\CRED.DAT`, the `FLICS` cutscenes, and others). Copying that folder into `data/` therefore fails with `Cannot open DATA\STATIC\CRED.DAT`. Use the CD image shipped inside the install instead, `Crusader No Remorse\data\Game\GAME.BIN`, which is reported to be identical to the GOG `GAME.GOG` (issues [#3](https://github.com/sebsebseb1982/crusader-no-remorse-decomp/issues/3) and [#11](https://github.com/sebsebseb1982/crusader-no-remorse-decomp/issues/11)). The game recognises CD images by their extension (`.iso` or `.gog`), so copy it into `data/` under another name, such as `GAME.ISO`, and launch the game as described in the CD image option above.
+- **Steam and EA App / Origin:** the install is the same as the retail one and does **not** contain all the CD files (`DATA\STATIC\CRED.DAT`, the `FLICS` cutscenes, and others). Copying that folder into `data/` therefore fails with `Cannot open DATA\STATIC\CRED.DAT`. Use the CD image shipped inside the install instead, `Crusader No Remorse\data\Game\GAME.BIN`, which is reported to be identical to the GOG `GAME.GOG` (issues [#3](https://github.com/sebsebseb1982/crusader-no-remorse-decomp/issues/3) and [#11](https://github.com/sebsebseb1982/crusader-no-remorse-decomp/issues/11)). The game recognises CD images by their extension (`.iso`, `.gog`, `.bin` or `.cue`), so copy it into `data/` as it is and launch the game as described in the CD image option above.
 
 The maintainer does not own the Steam or EA releases, so this has not been tested here. If it works (or fails) for you, please comment on those issues.
 
@@ -91,7 +91,7 @@ The maintainer does not own the Steam or EA releases, so this has not been teste
 
 ### 4. Language
 
-The `languages` folder next to the executable holds one folder per language (`en`, `fr`...). Each one has the texts the port prints itself (`port.txt`: its menus, and the texts the original keeps in its executable), and may hold translated game data files (pictures, fonts, subtitles, terminal texts) that replace the data's. By default (AUTO) the game follows the data's language. Another one can be picked in the game: **Options**, **+** (Enhancements), **Game**, **Language**.
+The `languages` folder next to the executable holds one folder per language (`en`, `fr`, `de`...). Each one has the texts the port prints itself (`port.txt`: its menus, and the texts the original keeps in its executable), and may hold translated game data files (pictures, fonts, subtitles, terminal texts) that replace the data's. By default (AUTO) the game follows the data's language. Another one can be picked in the game: **Options**, **+** (Enhancements), **Game**, **Language**.
 
 To translate the game, see [docs/TRANSLATING.md](docs/TRANSLATING.md).
 
@@ -107,7 +107,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 If SDL2 is installed on your system, the build uses it (`libsdl2-dev` on Linux). Otherwise, SDL2 is downloaded and built automatically.
 
-The tests in `tests/` do not require game data. The end-to-end tests in `e2e/` use the original game data and are registered only when it is found (`-DCRUSADER_DATA_DIR=…`; defaults to `data/`). Tests that load saved games read them from `-DCRUSADER_TEST_SAVES_DIR=…` and are skipped if that directory is absent. `us_data_tests` runs when US game data is found (`-DCRUSADER_US_DATA_DIR=…`; defaults to `data_us/`).
+The tests in `tests/` do not require game data. The end-to-end tests in `e2e/` use the original game data and are registered only when it is found (`-DCRUSADER_DATA_DIR=…`; defaults to `data/`). Tests that load saved games read them from `-DCRUSADER_TEST_SAVES_DIR=…` and are skipped if that directory is absent. `us_data_tests` runs when US game data is found (`-DCRUSADER_US_DATA_DIR=…`; defaults to `data_us/`), `de_data_tests` when German game data is found (`-DCRUSADER_DE_DATA_DIR=…`; defaults to `data_de/`).
 
 In addition to `crusader`, the build produces several tools: `shapeview` (shape viewer), `mapview` (map viewer), `ucsmoke` and `useprobe` (script execution), and `diffcheck` (comparison with the original).
 

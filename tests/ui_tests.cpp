@@ -181,9 +181,12 @@ void test_enhancements_pages() {
     choose(screen, Entry::Game);
     choose(screen, Entry::Back);
     CHECK(screen.page() == Page::Main && screen.focus() == screen.row_of(Entry::Game));
-    // Language (the repository's files, French data): auto, English, French, auto.
+    // Language (the repository's files, French data): auto, German, English,
+    // French, auto.
     choose(screen, Entry::Game);
     CHECK(std::string(tr("BACK")) == "RETOUR");
+    choose(screen, Entry::Language);
+    CHECK(config.language == "de" && selected_language().name == "DEUTSCH" && std::string(tr("BACK")) == "ZURUECK");
     choose(screen, Entry::Language);
     CHECK(config.language == "en" && selected_language().id == "en" && std::string(tr("BACK")) == "BACK");
     choose(screen, Entry::Language);

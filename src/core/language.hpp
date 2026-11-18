@@ -1,8 +1,8 @@
 #pragma once
-// Language of the game data. The French and US releases ship their texts in
-// CRUSADER.EXE (item names, messages, the shop of the weasel) and in the data
-// files; the port prints the texts of the executable itself. Game sets the
-// language when it loads the data (French until then).
+// Language of the game data. The French, US and German releases ship their
+// texts in CRUSADER.EXE (item names, messages, the shop of the weasel) and in
+// the data files; the port prints the texts of the executable itself. Game
+// sets the language when it loads the data (French until then).
 //
 // Port addition: those texts, and the ones of the port's own screens, are
 // written in English in the code (tr("BACK")) and translated by the language
@@ -11,8 +11,8 @@
 // executable's), and may hold data files that replace the data's
 // (data_files.hpp). The player picks the language in the enhancements window
 // ("language" in CRUSADER.CFG): AUTO, the default, takes the texts of the
-// data's (fr or en) and no data files. The data's language still places the
-// buttons (us_version).
+// data's (fr, en or de) and no data files. The data's language still places
+// the buttons (us_version, german_version).
 
 #include <filesystem>
 #include <string>
@@ -21,7 +21,7 @@
 
 namespace crusader {
 
-enum class Language { French, English };
+enum class Language { French, English, German };
 
 Language text_language();
 void set_text_language(Language language);
@@ -32,14 +32,18 @@ void set_text_language(Language language);
 const char* tr(const char* english);
 
 // The level editor's own texts, which are not in the language files: the
-// French or the English one, after the data's language.
+// French one with the French data, else the English one.
 inline const char* tr(const char* french, const char* english) {
-    return text_language() == Language::English ? english : french;
+    return text_language() == Language::French ? french : english;
 }
 
 // The data in use is the US version (the only English one supported): some
 // screens of the US executable place their buttons for its English images.
 inline bool us_version() { return text_language() == Language::English; }
+
+// The data in use is the German version (1.07): its executable places some
+// buttons for its German images (data_info.hpp).
+inline bool german_version() { return text_language() == Language::German; }
 
 // The languages offered: "" (AUTO, the data's), then the folders of the
 // languages folder (ids: their names in lower case), by id.
