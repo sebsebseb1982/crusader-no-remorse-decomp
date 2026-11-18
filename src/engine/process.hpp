@@ -49,6 +49,13 @@ public:
     bool wake_failed() const { return wake_failed_; }
     void set_wake_result(std::uint32_t result) { wake_result_ = result; }
 
+    // Port only: a mark (0: none) that the usecode processes started by
+    // this one inherit, and theirs in turn. The autosave after a keypad's
+    // code waits until no process of the keypad script's line is left: the
+    // doors it opens are then still.
+    std::uint16_t lineage() const { return lineage_; }
+    void set_lineage(std::uint16_t lineage) { lineage_ = lineage; }
+
     bool suspended() const { return suspended_; }
     void suspend() { suspended_ = true; }
     void resume() { suspended_ = false; }
@@ -110,6 +117,7 @@ private:
     std::uint32_t result_ = 0;
     std::uint32_t wake_result_ = 0;
     bool wake_failed_ = false;
+    std::uint16_t lineage_ = 0;
 
     std::vector<WaitToken> wait_expr_;  // RPN, evaluated when a dependency ends
     std::vector<Pid> waiters_;          // processes waiting for this one

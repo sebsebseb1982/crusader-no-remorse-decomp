@@ -2343,6 +2343,75 @@ void test_keypad(const std::filesystem::path& data) {
     }
 }
 
+// Issue #18: the reporter's autosave (English 1.01, map 7), made just after
+// keypad 5235's code. TRIGGER slides door 618 (RDOOR_N, 96 units towards -x)
+// while holding its lock, status 0x1000; the autosave caught the lock before
+// the slide, and with no process to release it once loaded, the keypad's
+// TRIGGER waited for it forever: the door stayed shut. Once loaded the lock
+// is gone and the keypad opens the door. And the autosave after a code now
+// waits until the door is still.
+void test_keypad_door_after_reload(const std::filesystem::path& data) {
+    constexpr ObjId kKeypad = 5235, kDoor = 618;
+    constexpr std::int32_t kShutX = 6959, kOpenX = 6863;
+    const auto save = test_saves(data) / "issue18-digicode-porte-fermee-SAVEGAME.12.sav";
+    {
+        Game game(data, test_saves(data));
+        game.load_save_file(save);
+        World& w = game.world();
+        CHECK(w.get(kDoor)->x == kShutX && !(w.get(kDoor)->flags & 0x1000) && (w.get(kKeypad)->flags & 0x0004));
+        int linked_locked = 0;
+        w.for_each([&](const Item& i) {
+            linked_locked += !i.parent && (i.flags & 0x1000) && (i.quality & 0xFF) == 0x0B;
+        });
+        CHECK(linked_locked == 0);
+        use_item(w, kKeypad);
+        for (int f = 0; f < 120; ++f) game.update(kFrameUs);
+        std::printf("keypad door after reload: door x %d, flags %04X\n", w.get(kDoor)->x, w.get(kDoor)->flags);
+        CHECK(w.get(kDoor)->x == kOpenX && !(w.get(kDoor)->flags & 0x1000));
+        CHECK(game.machine().faults().empty());
+    }
+    // The code typed again (the keypad's "done" bit 4 cleared): the autosave
+    // comes once the door has slid, its lock released.
+    const auto dir = std::filesystem::temp_directory_path() / "crusader_keypad_door_test";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    {
+        Game game(data, test_saves(data));
+        game.set_save_dir(dir);
+        GameConfig config = game.config();
+        config.autosave = true;
+        game.set_config(config);
+        game.load_save_file(save);
+        World& w = game.world();
+        w.get(kKeypad)->flags &= static_cast<std::uint16_t>(~0x0004);
+        use_item(w, kKeypad);
+        for (int f = 0; f < 3; ++f) game.update(kFrameUs);
+        const auto* keypad = dynamic_cast<const KeypadGump*>(game.screen());
+        CHECK(keypad != nullptr);
+        if (!keypad) return;
+        const std::string digits = std::to_string(keypad->code());
+        for (const char c : digits) {
+            const auto scancode = static_cast<std::uint8_t>(c == '0' ? 0x0B : 0x02 + (c - '1'));
+            game.key(scancode, false, true, 0, static_cast<std::uint8_t>(c));
+            game.key(scancode, false, false, 0, static_cast<std::uint8_t>(c));
+            game.update(kFrameUs);
+        }
+        game.key(0x1C, false, true, 0, 0x0D);
+        game.key(0x1C, false, false, 0, 0x0D);
+        game.update(kFrameUs);
+        const auto autosave = dir / ("SAVEGAME." + std::to_string(Game::kAutoSave));
+        int frames = 0;
+        for (; frames < 1200 && !std::filesystem::exists(autosave); ++frames) game.update(kFrameUs);
+        const Item* door = w.get(kDoor);
+        std::printf("keypad door autosave: code %s, saved after %d frames, door x %d, flags %04X\n", digits.c_str(),
+                    frames, door->x, door->flags);
+        // Well before the 10 s limit: the 65 markers of the link were
+        // unlocked on load too, their TRIGGER processes do not linger.
+        CHECK(std::filesystem::exists(autosave) && frames < 300);
+        CHECK(door->x == kOpenX && !(door->flags & 0x1000));
+    }
+}
+
 // The autosave (port addition): SAVEGAME.12 is written when a keypad's code
 // matches, a keycard is picked up, a mission starts or a movie ends, only when
 // GameConfig::autosave is on, and F6 loads it back. The keypad's waits for
@@ -6119,6 +6188,10 @@ int main(int argc, char** argv) {
         std::printf(failures ? "%d failure(s)\n" : "all checks passed\n", failures);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--keypad-door") {
+        test_keypad_door_after_reload(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--courier-keycard") {
         test_courier_keycard(data);
         return failures ? 1 : 0;
@@ -6255,6 +6328,7 @@ int main(int argc, char** argv) {
     test_computer(data);
     test_keypad(data);
     test_autosave(data);
+    test_keypad_door_after_reload(data);
     test_monitor(data);
     test_security_camera(data);
     test_energy_walls(data);

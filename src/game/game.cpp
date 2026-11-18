@@ -169,6 +169,21 @@ constexpr std::size_t kSavedGlobals = 0x42;
 // 1 s (kernel ticks, 60 a second) for the scripts to settle.
 constexpr std::uint32_t kAutosaveIconUs = 2'500'000;
 constexpr std::uint32_t kAutosaveDelayTicks = 60;
+// How long the autosave after a keypad waits at most for the scripts the
+// code started (a door slides in half a second): 10 s.
+constexpr std::uint32_t kAutosaveLineageTicks = 600;
+
+// The shapes that DOOR's event 0x21 moves (class 0x0A06, French usecode:
+// the shapes it compares with getShape), the doors, gates and walls that
+// TRIGGER opens and shuts. TRIGGER's event 0x22 waits until the item's
+// status bit 0x1000 is clear, sets it, runs that event and clears it again:
+// a lock held while the door moves.
+constexpr std::uint16_t kTriggerDoorShapes[] = {
+    0x005, 0x033, 0x046, 0x06C, 0x07B, 0x095, 0x099, 0x09C, 0x0A9, 0x0C2, 0x0CB, 0x0D0, 0x100, 0x107,
+    0x189, 0x193, 0x1AB, 0x1C7, 0x1ED, 0x1EE, 0x215, 0x289, 0x28F, 0x2D5, 0x2D6, 0x2DA, 0x2DB, 0x30A,
+    0x30B, 0x30E, 0x312, 0x368, 0x36B, 0x393, 0x394, 0x3AD, 0x3B9, 0x3BA, 0x3BD, 0x3BE, 0x3C6, 0x3C7,
+    0x3F8, 0x3FF, 0x400, 0x415, 0x428, 0x43F, 0x440, 0x46A, 0x46B, 0x46C, 0x4D8, 0x53B, 0x53C, 0x53D,
+    0x53E};
 constexpr int kFloppyScale = 2, kFloppyMargin = 8;
 
 std::vector<std::uint8_t> load_damage_table(const std::filesystem::path& file) {
@@ -450,7 +465,7 @@ void Game::reset_world() {
     screen_process_ = nullptr;
     sprites_suspended_ = false;
     autosave_pending_ = false;
-    autosave_after_ = 0;
+    autosave_lineage_ = 0;
 }
 
 // @orig none: port-only gamepad vibration
@@ -557,6 +572,24 @@ void Game::load_save_file(const std::filesystem::path& path) {
         const std::string cls = usecode.class_name(i.shape);
         if (cls != "KEYPADNS" && cls != "KEYPADEW") return;
         if (Item* keypad = world_->get(i.id)) keypad->flags &= static_cast<std::uint16_t>(~0x1000);
+    });
+    // Items saved while TRIGGER worked on them (its lock, status 0x1000, see
+    // kTriggerDoorShapes) kept the lock with no process to release it: the
+    // next TRIGGER waited for them forever, the keypad or switch did nothing
+    // and the door stayed shut (issue #18, an autosave made just after a
+    // keypad's code: door 618 and the 65 other items of its link, markers
+    // without usecode). The locks are those of the doors DOOR moves and of
+    // the linked items (quality low byte) without a usecode class: no
+    // script of their own uses the bit; the one such item found with it in
+    // the original saves, 0x4E1, has no link. The work is dropped, as the
+    // other processes: the keypad, already unlocked, opens the door again.
+    world_->for_each([this, &usecode](const Item& i) {
+        if (!(i.flags & 0x1000) || i.parent) return;
+        const bool door = std::find(std::begin(kTriggerDoorShapes), std::end(kTriggerDoorShapes), i.shape) !=
+                          std::end(kTriggerDoorShapes);
+        const bool linked_marker = !usecode.has_class(i.shape) && (i.quality & 0xFF) != 0;
+        if (!door && !linked_marker) return;
+        if (Item* locked = world_->get(i.id)) locked->flags &= static_cast<std::uint16_t>(~0x1000);
     });
     world_->clear_fast_area();
     world_->set_camera(player->x, player->y, player->z);
@@ -877,8 +910,12 @@ void Game::update(std::uint32_t elapsed_us) {
         left -= step;
         if (!more || movie_ || kernel_->slice_interrupted()) break;
     }
-    if (autosave_after_ && !kernel_->get(autosave_after_)) autosave_after_ = 0;
-    if (autosave_pending_ && kernel_->ticks() >= autosave_due_ && !autosave_after_ && !modal() &&
+    if (autosave_lineage_) {
+        bool running = false;
+        kernel_->for_each_process([&](const Process& p) { running |= p.lineage() == autosave_lineage_; });
+        if (!running || kernel_->ticks() >= autosave_give_up_) autosave_lineage_ = 0;
+    }
+    if (autosave_pending_ && kernel_->ticks() >= autosave_due_ && !autosave_lineage_ && !modal() &&
         player_may_act(*world_)) {
         autosave_pending_ = false;
         autosave();
@@ -1486,17 +1523,24 @@ void Game::show_keypad(std::int16_t code, Pid pid) {
         // 13C8:04EE: the keyboard and the mouse clicks flushed.
         keyboard_.reset();
         leave_menu_mode();
-        if (auto* p = dynamic_cast<UCProcess*>(kernel_->get(pid))) {
-            p->set_call_result(static_cast<std::uint16_t>(screen.result()));
-        }
+        auto* p = dynamic_cast<UCProcess*>(kernel_->get(pid));
+        if (p) p->set_call_result(static_cast<std::uint16_t>(screen.result()));
         // Port addition: the code matched, the door or chest is about to
         // open (autosave). Not at once: the KEYPAD script still holds the
         // keypad's busy bit (0x1000) and has yet to open the door (a wait,
-        // then TRIGGER); saved now, the door stayed shut and the keypad
-        // dead. The autosave waits until that script has ended.
+        // then TRIGGER, whose processes slide the door while holding its
+        // lock, 0x1000 too, after the KEYPAD script has ended); saved
+        // before, the door stayed shut and the keypad dead (issue #18). The
+        // autosave waits until every process of that script's line has
+        // ended (Process::lineage), 10 s at most.
         if (code != 0 && static_cast<std::int16_t>(screen.result()) == code) {
             request_autosave();
-            autosave_after_ = pid;
+            if (p) {
+                if (++last_lineage_ == 0) ++last_lineage_;
+                autosave_lineage_ = last_lineage_;
+                autosave_give_up_ = kernel_->ticks() + kAutosaveLineageTicks;
+                p->set_lineage(autosave_lineage_);
+            }
         }
     });
 }

@@ -95,6 +95,7 @@ private:
     ItemSearch item_search_;
     std::function<bool(ObjId)> item_exists_;
     std::uint32_t budget_ = 100'000;
+    UCProcess* running_ = nullptr;  // the process execute() runs, for the lineage of the events it starts
 
     std::vector<Fault> faults_;
     std::map<std::uint16_t, std::uint32_t> unbound_calls_;

@@ -92,6 +92,7 @@ Pid UCMachine::start_event(std::uint16_t cid, std::uint32_t event, ObjId item, s
     }
     auto p = std::make_unique<UCProcess>(*this, cid, static_cast<std::uint16_t>(offset), object_ptr(item), 2, args);
     p->set_owner(item);
+    if (running_) p->set_lineage(running_->lineage());  // port only, see Process::lineage
     return kernel_.add(std::move(p));
 }
 
@@ -153,6 +154,12 @@ void UCMachine::execute(UCProcess& p) {
     // and the like (local_36), never on the wait state, so the pop_temp and
     // suspend that follow an implies run in the same slice.
     if (p.waiting() || p.sleeping()) return;
+    struct Running {
+        UCProcess*& slot;
+        UCProcess* outer;
+        ~Running() { slot = outer; }
+    } running{running_, running_};
+    running_ = &p;
     while (!yield && !p.terminated() && !kernel_.slice_interrupted()) {
         if (++count > budget_) {
             break;  // runaway loop: give other processes a chance
@@ -568,6 +575,7 @@ bool UCMachine::step(UCProcess& p, bool& yield) {
             const std::vector<std::uint8_t> args(st.top(arg_bytes).begin(), st.top(arg_bytes).end());
             auto child = std::make_unique<UCProcess>(*this, cid, static_cast<std::uint16_t>(target), this_ptr,
                                                      this_size, args);
+            child->set_lineage(p.lineage());  // port only, see Process::lineage
             UCProcess& ref = *child;
             p.temp_ = kernel_.add(std::move(child));
             execute(ref);  // a spawned process runs at once until it first yields
