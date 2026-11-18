@@ -560,18 +560,32 @@ void Game::load_save_file(const std::filesystem::path& path) {
         world_->set_frame(*steam, frame);
         steam->flags &= static_cast<std::uint16_t>(~0x1000);
     }
-    // A keypad (KEYPADNS, KEYPADEW) holds status 0x1000 while its KEYPAD
-    // script runs: the keypad, then after the code a wait and the door's
-    // TRIGGER. use() does nothing while it is set and the S selection skips
-    // it; saved during that run, the bit stayed with no process to clear it,
-    // the keypad dead and its door shut for good. The run is dropped, as the
-    // other processes: the code is entered again.
+    // Status 0x1000 set by a running process of the item's class, which
+    // alone clears it; saved while it ran, the bit stays with no process.
+    // - A keypad (KEYPADNS, KEYPADEW) holds it while its KEYPAD script runs:
+    //   the keypad, then after the code a wait and the door's TRIGGER. use()
+    //   does nothing while it is set and the S selection skips it: the
+    //   keypad could never be used again, its door stayed shut. That run is
+    //   dropped: the code is entered again.
+    // - A running timer (TIMER, event 0x20) and a rolling roller (ROLLB_NS,
+    //   ROLLB_EW, event 0x21) loop while it is set; their start events and
+    //   enterFastArea skip them while it is: dead for good, nothing could
+    //   start them again. The loop is started again (the timer from the
+    //   start of its delay), once the TRIGGER locks below are released.
+    // Not here: FFFLOOR / FFFLOOR2 (bit 0x1000 is the floor's lasting
+    // state) and ELEVAT (a ride also holds the items on the platform).
     const UsecodeFile& usecode = machine_->usecode();
+    std::vector<std::pair<ObjId, std::uint16_t>> restarts;
     world_->for_each([&](const Item& i) {
         if (!(i.flags & 0x1000) || i.parent || !usecode.has_class(i.shape)) return;
         const std::string cls = usecode.class_name(i.shape);
-        if (cls != "KEYPADNS" && cls != "KEYPADEW") return;
-        if (Item* keypad = world_->get(i.id)) keypad->flags &= static_cast<std::uint16_t>(~0x1000);
+        if (cls == "KEYPADNS" || cls == "KEYPADEW") {
+            if (Item* keypad = world_->get(i.id)) keypad->flags &= static_cast<std::uint16_t>(~0x1000);
+        } else if (cls == "TIMER") {
+            restarts.emplace_back(i.id, std::uint16_t{0x20});
+        } else if (cls == "ROLLB_NS" || cls == "ROLLB_EW") {
+            restarts.emplace_back(i.id, std::uint16_t{0x21});
+        }
     });
     // Items saved while TRIGGER worked on them (its lock, status 0x1000, see
     // kTriggerDoorShapes) kept the lock with no process to release it: the
@@ -591,6 +605,9 @@ void Game::load_save_file(const std::filesystem::path& path) {
         if (!door && !linked_marker) return;
         if (Item* locked = world_->get(i.id)) locked->flags &= static_cast<std::uint16_t>(~0x1000);
     });
+    if (world_->hooks().start_event) {
+        for (const auto& [id, event] : restarts) world_->hooks().start_event(id, event);
+    }
     world_->clear_fast_area();
     world_->set_camera(player->x, player->y, player->z);
     // An NPC saved while its death played (dead, last action 0x12 or 0x14,

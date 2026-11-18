@@ -2412,6 +2412,58 @@ void test_keypad_door_after_reload(const std::filesystem::path& data) {
     }
 }
 
+// Status 0x1000 saved while a process of the item's class ran (the
+// processes are not loaded): a running timer (TIMER) and a rolling roller
+// (ROLLB_NS, ROLLB_EW) get their loop started again (events 0x20 and 0x21),
+// which keeps the bit; without, nothing could ever start them. A one-shot
+// timer (QHi bit 0 clear) clears it itself once its delay is over. Ported
+// from No Regret (08d2749).
+void test_saved_busy_items(const std::filesystem::path& data) {
+    const auto dir = std::filesystem::temp_directory_path() / "crusader_saved_busy_test";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    for (int slot = 1; slot <= 7; ++slot) {
+        Game game(data, test_saves(data));
+        game.set_save_dir(dir);
+        game.load_save_file(test_saves(data) / ("SAVEGAME." + std::to_string(slot)));
+        game.update(kFrameUs);
+        World& w = game.world();
+        const UsecodeFile& uc = game.machine().usecode();
+        ObjId timer = 0, roller = 0;
+        int delay = 0;
+        w.for_each([&](const Item& i) {
+            if (i.parent || (i.flags & 0x1000) || !uc.has_class(i.shape)) return;
+            const std::string cls = uc.class_name(i.shape);
+            // The delay: map array * 256 + NPC number (TIMER_00C0).
+            const int d = i.map_number * 256 + i.npc_number;
+            if (!timer && cls == "TIMER" && d > 0 && d < 600 && !((i.quality >> 8) & 1)) timer = i.id, delay = d;
+            if (!roller && (cls == "ROLLB_NS" || cls == "ROLLB_EW")) roller = i.id;
+        });
+        if (!timer || !roller) continue;
+        std::printf("saved busy: save %d, timer %u (delay %d), roller %u\n", slot, timer, delay, roller);
+        for (ObjId id : {timer, roller}) w.get(id)->flags |= 0x1000;
+        game.save_game(9);
+        game.load_save(9);
+        World& loaded = game.world();
+        const auto runs = [&](ObjId id) {
+            int n = 0;
+            game.kernel().for_each_process([&](const Process& p) { n += p.owner() == id; });
+            return n;
+        };
+        game.update(kFrameUs);
+        CHECK(runs(roller) >= 1 && (loaded.get(roller)->flags & 0x1000));
+        CHECK(loaded.get(timer)->flags & 0x1000);
+        int frames = 0;
+        for (; frames < 4 * delay + 60 && (loaded.get(timer)->flags & 0x1000); ++frames) game.update(kFrameUs);
+        std::printf("saved busy: timer done after %d frames\n", frames);
+        CHECK(!(loaded.get(timer)->flags & 0x1000));
+        CHECK(game.machine().faults().empty());
+        return;
+    }
+    std::printf("saved busy: no save with a one-shot timer and a roller\n");
+    CHECK(false);
+}
+
 // The autosave (port addition): SAVEGAME.12 is written when a keypad's code
 // matches, a keycard is picked up, a mission starts or a movie ends, only when
 // GameConfig::autosave is on, and F6 loads it back. The keypad's waits for
@@ -6192,6 +6244,10 @@ int main(int argc, char** argv) {
         test_keypad_door_after_reload(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--saved-busy") {
+        test_saved_busy_items(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--courier-keycard") {
         test_courier_keycard(data);
         return failures ? 1 : 0;
@@ -6329,6 +6385,7 @@ int main(int argc, char** argv) {
     test_keypad(data);
     test_autosave(data);
     test_keypad_door_after_reload(data);
+    test_saved_busy_items(data);
     test_monitor(data);
     test_security_camera(data);
     test_energy_walls(data);
