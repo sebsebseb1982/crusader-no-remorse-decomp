@@ -29,6 +29,7 @@ The changes fall into four groups:
 9. [Toggle run](#9-toggle-run)
    - [9b. Original game bug fixes](#9b-original-game-bug-fixes)
 10. [Keypad navigation with arrows or gamepad](#10-keypad-navigation-with-arrows-or-gamepad)
+   - [10b. Loot from remains (cheat)](#10b-loot-from-remains-cheat)
 11. [Window, fullscreen, mouse and picture](#11-window-fullscreen-mouse-and-picture)
 12. [Version lines on the main menu](#12-version-lines-on-the-main-menu)
    - [12b. Christmas hat](#12b-christmas-hat)
@@ -60,7 +61,7 @@ The original has nothing like it. This screen gathers every option the port adds
 - Rows 26 px apart, 9 at most on a page, BACK / RETOUR last. The focused row is bright green (`0x0C`); the others are dark green (`0x75`).
 - An on/off option shows its name on the left and its value on the right: ON / OFF (French: MARCHE / ARRET).
 
-**Pages.** The first page has one row per page: CONTROLS / CONTROLES, DISPLAY / AFFICHAGE, EFFECTS / EFFETS, GAME / JEU, then BACK / RETOUR, which closes the window.
+**Pages.** The first page has one row per page: CONTROLS / CONTROLES, DISPLAY / AFFICHAGE, EFFECTS / EFFETS, GAME / JEU, CHEATS / TRICHE, then BACK / RETOUR, which closes the window.
 
 *CONTROLS / CONTROLES*
 
@@ -98,6 +99,12 @@ The original has nothing like it. This screen gathers every option the port adds
 | AUTOSAVE / SAUVEGARDE AUTO | Toggles the autosave | `autosave` |
 | ORIGINAL BUG FIXES / CORRECTIFS ORIGINAL | Corrects bugs of the original game that can block a mission | `fixoriginalbugs` |
 | LANGUAGE / LANGUE | Cycles the language: AUTO → each folder of `languages` → AUTO; a language's game files need a restart (section 8b) | `language` |
+
+*CHEATS / TRICHE*
+
+| Row (EN / FR) | Effect | CFG key |
+|---|---|---|
+| LOOT FROM REMAINS / BUTIN DES RESTES | An enemy burnt, blown apart or vaporised drops its loot beside its remains (section 10b) | `remainsloot` |
 
 **Controls**
 - Up or `8`, down or `2`: moves between rows. The focus stops at the first and last row; it does not wrap.
@@ -493,6 +500,25 @@ The original keypad (door and chest codes) only works with the mouse or the numb
 
 ---
 
+## 10b. Loot from remains (cheat)
+
+**Option:** LOOT FROM REMAINS / BUTIN DES RESTES, on the CHEATS / TRICHE page (`remainsloot`, off by default). Asked for in [No Regret's issue #2](https://github.com/sebsebseb1982/crusader-no-regret-decomp/issues/2), for both games.
+**Files:** `src/engine/world/death_loot.*`, `src/engine/world/projectile.cpp`, `src/engine/usecode/item_intrinsics.cpp`
+
+**Original**: an enemy burnt, melted or electrocuted by an energy weapon, or set on fire by a blast, leaves no body to search. The death usecode (NPCDEATH) destroys what the enemy carried and makes its remains (ashes, a skeleton…) without the loot a body gets. Killing enemies with plasma therefore costs ammunition and gives nothing back.
+
+**With the option**, the loot a body would have held drops on the floor beside the remains: the weapons the enemy carried (NPCDEATH's function `0x21` moves them into a body), and what NPCDEATH's function `0x22` adds, drawn for the shape the enemy had alive.
+
+**Deaths concerned** (the shapes NPCDEATH leaves without a body): burnt `0x58F`, electrocuted `0x59C`, burning `0x576`, melted `0x596`. The player's own death drops nothing.
+
+**Rules**
+- The loot drops when the original would destroy it, as NPCDEATH starts: at the death animation's event (the end of the fall, or of the run for a burning enemy), or when the remains enter the fast area. A death whose animations call no event (the electrocuted `0x59C`) drops it at once.
+- Each item takes a free spot around the remains, 32 units away in the 8 directions, then 64; when none is free, the remains' own spot. It then falls if nothing holds it.
+- The loot is drawn with the game's random numbers, as for a body: switching the option on changes the following random draws.
+- A game saved during a death animation loses that enemy's loot.
+
+---
+
 ## 11. Window, fullscreen, mouse and picture
 
 - **Alt+Enter**, at any time: switches between window and desktop fullscreen. The key is not passed to the game.
@@ -606,6 +632,7 @@ The original reads much of its data from the CD and needs it in the drive. The p
 | `impactmarks` | false | `true` |
 | `bloodmarks` | false | `true` |
 | `goremode` | false | `true` |
+| `remainsloot` | false | `true` |
 | `nativeresolution` | true | `false` |
 | `autosave` | true | `false` |
 | `language` | empty (AUTO) | a language folder is picked: its id (`fr`, `en`, `pt-br`...) |

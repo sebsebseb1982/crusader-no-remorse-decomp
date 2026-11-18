@@ -1,7 +1,7 @@
 #pragma once
 // The enhancements window (port addition, the original has nothing like it),
 // opened from the options screen's "ameliorations" button (a "+" icon and its
-// name). It gathers what the port adds to the original options, on four
+// name). It gathers what the port adds to the original options, on five
 // pages listed by its first one:
 // - "controles": the controller screen (gamepad_screen.hpp), the
 //   "mode directionnel" toggle (GameConfig::directional_move): the left stick
@@ -25,7 +25,10 @@
 //   (GameConfig::fix_original_bugs): bugs of the original game's scripts are
 //   corrected, and "langue" (GameConfig::language): the
 //   language of the port's texts, auto (the data's), then the others offered
-//   (language.hpp), in turn.
+//   (language.hpp), in turn;
+// - "triche": "butin des restes" (GameConfig::remains_loot): an enemy burnt,
+//   blown apart or vaporised drops its loot beside its remains
+//   (death_loot.hpp).
 //
 // Look: the screen cleared, a small red framed window (colour 0x57) in the
 // middle, the title (the page's name on a page) with the "+" icon in green,
@@ -58,10 +61,10 @@ void draw_plus_icon(Surface8& screen, int x, int y, int size, std::uint8_t colou
 
 class EnhancementsScreen {
 public:
-    enum class Page { Main, Controls, Display, Effects, Game };
+    enum class Page { Main, Controls, Display, Effects, Game, Cheats };
     enum class Entry {
         // The first page: one row per page.
-        Controls, Display, Effects, Game,
+        Controls, Display, Effects, Game, Cheats,
         // Controls.
         Pad, Directional, Aim, Draw, PreciseAim, Run, Vibration, VibrationIntensity,
         // Display.
@@ -70,6 +73,8 @@ public:
         Impact, Blood,
         // Game.
         Autosave, FixBugs, Language,
+        // Cheats.
+        RemainsLoot,
         // Last on every page.
         Back,
     };

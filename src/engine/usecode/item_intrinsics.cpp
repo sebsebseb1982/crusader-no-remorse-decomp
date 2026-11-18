@@ -5,6 +5,7 @@
 #include "engine/world/activity.hpp"
 #include "engine/world/actor_anim.hpp"
 #include "engine/world/collision.hpp"
+#include "engine/world/death_loot.hpp"
 #include "engine/world/gravity.hpp"
 #include "engine/world/inventory.hpp"
 #include "engine/world/render.hpp"
@@ -104,6 +105,9 @@ std::vector<std::uint16_t> register_item_intrinsics(UCMachine& m, World& w) {
     // Usecode events and process cleanup requested by the world.
     w.set_hooks({
         [&m, &w](ObjId id, std::uint16_t event) -> std::uint16_t {
+            // Port addition (death_loot.hpp): the events whose usecode starts
+            // NPCDEATH first drop the loot of a death without a body.
+            if (event == 0x0E || event == 0x0F) drop_death_loot(m.kernel(), w, id);
             const Item* item = w.get(id);
             return item ? m.call_event(w.usecode_class(*item), event, id) : 0;
         },
@@ -118,6 +122,18 @@ std::vector<std::uint16_t> register_item_intrinsics(UCMachine& m, World& w) {
             const Item* item = w.get(id);
             return item && m.usecode().has_class(w.usecode_class(*item)) &&
                    m.usecode().event_offset(w.usecode_class(*item), event) != 0;
+        };
+        hooks.call_class_event = [&m](std::string_view name, std::uint16_t event, ObjId id,
+                                      std::span<const std::uint8_t> args) {
+            const UsecodeFile& usecode = m.usecode();
+            for (std::size_t cid = 0; cid < usecode.class_count(); ++cid) {
+                const auto c = static_cast<std::uint16_t>(cid);
+                if (!usecode.has_class(c) || usecode.class_name(c) != name) continue;
+                if (usecode.event_offset(c, event) == 0) return false;
+                m.call_event(c, event, id, args);
+                return true;
+            }
+            return false;
         };
         w.set_hooks(hooks);
     }

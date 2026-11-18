@@ -71,6 +71,10 @@ public:
     // Port addition, written only when set: "goremode", with the blood, much
     // more of it (DamageMarks::bleed).
     bool gore_mode = false;
+    // Port addition, a cheat written only when set: "remainsloot", an enemy
+    // burnt, melted, electrocuted or blown apart drops beside its remains the
+    // loot its body would have held (death_loot.hpp); the original destroys it.
+    bool remains_loot = false;
     // Port addition, written only when set: "language", the language picked
     // (language.hpp): the name of a folder of the languages folder, in lower
     // case ("fr", "en", "pt-br"...); empty for AUTO (the data's).

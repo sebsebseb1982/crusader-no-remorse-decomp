@@ -134,6 +134,17 @@ void check_config() {
     precise_off.precise_aim = false;
     check(precise_off.text().find("preciseaim") == std::string::npos, "config preciseaim off erased");
 
+    // "remainsloot" (port addition, a cheat): off by default, written only when set.
+    GameConfig loot = GameConfig::parse("irq=7\r\n");
+    check(!loot.remains_loot && loot.text().find("remainsloot") == std::string::npos,
+          "config remainsloot default off, not written");
+    loot.remains_loot = true;
+    check(GameConfig::parse(loot.text()).remains_loot && loot.text().find("remainsloot=true") != std::string::npos,
+          "config remainsloot on round trip");
+    GameConfig loot_off = GameConfig::parse(loot.text());
+    loot_off.remains_loot = false;
+    check(loot_off.text().find("remainsloot") == std::string::npos, "config remainsloot off erased");
+
     // Controller settings (port addition): defaults, not written until changed.
     GameConfig p = GameConfig::parse("irq=7\r\n");
     check(p.pad.is_default() && p.text().find("pad") == std::string::npos, "config pad defaults not written");

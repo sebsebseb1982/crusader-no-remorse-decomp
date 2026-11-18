@@ -68,13 +68,15 @@ namespace {
 using Entry = EnhancementsScreen::Entry;
 using Page = EnhancementsScreen::Page;
 
-constexpr Entry kMainEntries[] = {Entry::Controls, Entry::Display, Entry::Effects, Entry::Game, Entry::Back};
+constexpr Entry kMainEntries[] = {Entry::Controls, Entry::Display, Entry::Effects,
+                                  Entry::Game,     Entry::Cheats,  Entry::Back};
 constexpr Entry kControlsEntries[] = {Entry::Pad,        Entry::Directional, Entry::Aim,
                                       Entry::Draw,       Entry::PreciseAim,  Entry::Run,
                                       Entry::Vibration,  Entry::VibrationIntensity, Entry::Back};
 constexpr Entry kDisplayEntries[] = {Entry::Native, Entry::Zoom, Entry::Smooth, Entry::Follow, Entry::Back};
 constexpr Entry kEffectsEntries[] = {Entry::Impact, Entry::Blood, Entry::Back};
 constexpr Entry kGameEntries[] = {Entry::Autosave, Entry::FixBugs, Entry::Language, Entry::Back};
+constexpr Entry kCheatsEntries[] = {Entry::RemainsLoot, Entry::Back};
 
 // The name of a row that opens something (a page, the controller screen,
 // "retour"), shown in its middle.
@@ -85,6 +87,7 @@ std::string button_label(Entry entry) {
     case Entry::Display: return tr("DISPLAY");
     case Entry::Effects: return tr("EFFECTS");
     case Entry::Game: return tr("GAME");
+    case Entry::Cheats: return tr("CHEATS");
     case Entry::Pad: return tr("CONTROLLER");
     case Entry::Back: return tr("BACK");
     default: return {};
@@ -99,6 +102,7 @@ Page page_of(Entry entry) {
     case Entry::Display: return Page::Display;
     case Entry::Effects: return Page::Effects;
     case Entry::Game: return Page::Game;
+    case Entry::Cheats: return Page::Cheats;
     default: return Page::Main;
     }
 }
@@ -116,6 +120,7 @@ std::span<const EnhancementsScreen::Entry> EnhancementsScreen::entries() const {
     case Page::Display: return kDisplayEntries;
     case Page::Effects: return kEffectsEntries;
     case Page::Game: return kGameEntries;
+    case Page::Cheats: return kCheatsEntries;
     default: return kMainEntries;
     }
 }
@@ -149,7 +154,8 @@ void EnhancementsScreen::draw(Surface8& screen) const {
                               : page_ == Page::Controls ? button_label(Entry::Controls)
                               : page_ == Page::Display  ? button_label(Entry::Display)
                               : page_ == Page::Effects  ? button_label(Entry::Effects)
-                                                        : button_label(Entry::Game);
+                              : page_ == Page::Game     ? button_label(Entry::Game)
+                                                        : button_label(Entry::Cheats);
     const int title_width = TextWriter(*fonts_, kFont).measure(title).width;
     const int x0 = (screen.width - (kIconSize + kIconGap + title_width)) / 2;
     draw_plus_icon(screen, x0, kTitleY - 12, kIconSize, kGreen);
@@ -242,6 +248,10 @@ void EnhancementsScreen::draw(Surface8& screen) const {
             name = tr("LANGUAGE");
             value = selected_language().id.empty() ? tr("AUTO") : selected_language().name;
             break;
+        case Entry::RemainsLoot:
+            name = tr("LOOT FROM REMAINS");
+            on = config_->remains_loot;
+            break;
         default: break;
         }
         if (value.empty()) value = on ? tr("ON") : tr("OFF");
@@ -274,7 +284,8 @@ void EnhancementsScreen::back() {
     const Entry from = page_ == Page::Controls ? Entry::Controls
                        : page_ == Page::Display ? Entry::Display
                        : page_ == Page::Effects ? Entry::Effects
-                                                : Entry::Game;
+                       : page_ == Page::Game    ? Entry::Game
+                                                : Entry::Cheats;
     page_ = Page::Main;
     focus_ = std::max(row_of(from), 0);
 }
@@ -288,7 +299,8 @@ void EnhancementsScreen::activate(int row) {
     case Entry::Controls:
     case Entry::Display:
     case Entry::Effects:
-    case Entry::Game: open(page_of(list[static_cast<std::size_t>(row)])); break;
+    case Entry::Game:
+    case Entry::Cheats: open(page_of(list[static_cast<std::size_t>(row)])); break;
     case Entry::Pad: pad_ = std::make_unique<GamepadScreen>(*fonts_, *config_, *pad_focus_); break;
     case Entry::Directional: config_->directional_move = !config_->directional_move; break;
     case Entry::Aim: config_->directional_aim = !config_->directional_aim; break;
@@ -320,6 +332,7 @@ void EnhancementsScreen::activate(int row) {
         }
         break;
     case Entry::Autosave: config_->autosave = !config_->autosave; break;
+    case Entry::RemainsLoot: config_->remains_loot = !config_->remains_loot; break;
     case Entry::FixBugs: config_->fix_original_bugs = !config_->fix_original_bugs; break;
     case Entry::Language: {
         // The next language offered, back to the data's after the last.

@@ -118,6 +118,7 @@ GameConfig GameConfig::parse(std::string_view text) {
         else if (key == "impactmarks") c.impact_marks = value == "true";
         else if (key == "bloodmarks") c.blood_marks = value == "true";
         else if (key == "goremode") c.gore_mode = value == "true";
+        else if (key == "remainsloot") c.remains_loot = value == "true";
         else if (key == "language") c.language = value;
         else if (key == "fixoriginalbugs") c.fix_original_bugs = value == "true";
         else if (key == "vibration") c.vibration = value != "false";
@@ -182,6 +183,8 @@ std::string GameConfig::text() const {
     else out.erase("bloodmarks");
     if (gore_mode) out.set("goremode", "true");
     else out.erase("goremode");
+    if (remains_loot) out.set("remainsloot", "true");
+    else out.erase("remainsloot");
     if (!language.empty()) out.set("language", language);
     else out.erase("language");
     if (fix_original_bugs) out.set("fixoriginalbugs", "true");

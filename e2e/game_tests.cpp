@@ -42,6 +42,8 @@
 #include <iterator>
 #include <map>
 #include <set>
+#include <span>
+#include <string_view>
 #include <tuple>
 
 using namespace crusader;
@@ -1152,6 +1154,86 @@ void test_combat_zone(const std::filesystem::path& data) {
     w.set_original_combat_zone(false);
     w.move_item(6, px + 450, py - 450, pz);
     CHECK(w.is_partly_in_combat_zone(*w.get(6)));
+}
+
+// Port addition, the cheat "loot from remains" (death_loot.hpp, No Regret's
+// GitHub issue #2): two humans of save 13 (NPCs 16 and 18) brought beside
+// the player and burnt by plasma (fire type 6, shape 0x58F). NPCDEATH makes
+// them no body and destroys what they carry. With the cheat, at the end of each death their weapons and what
+// NPCDEATH's function 0x22 draws for the shape they had alive (into a box
+// that is no body) drop on the floor beside them. What 0x22 draws is random:
+// the test adds a clip to each box.
+void test_remains_loot(const std::filesystem::path& data) {
+    for (const bool cheat : {false, true}) {
+        Game game(data, test_saves(data));
+        game.config().remains_loot = cheat;
+        game.load_save(13);
+        game.update(kFrameUs);
+        World& w = game.world();
+        CHECK(w.remains_loot() == cheat);
+
+        std::vector<std::uint16_t> called_with;  // the NPC's shape during each call
+        std::vector<ObjId> dropped;              // the weapons carried, then what the boxes held
+        std::vector<World::Point> remains;       // where the NPCs lay when their loot dropped
+        WorldHooks hooks = w.hooks();
+        hooks.call_class_event = [&w, call = hooks.call_class_event, &called_with, &dropped, &remains](
+                                     std::string_view name, std::uint16_t event, ObjId npc,
+                                     std::span<const std::uint8_t> args) {
+            CHECK(name == "NPCDEATH" && event == 0x22 && args.size() == 2);
+            const bool ok = call(name, event, npc, args);
+            const Item* dead = w.get(npc);
+            called_with.push_back(dead->shape);
+            remains.push_back({dead->x, dead->y, dead->z});
+            const auto box = static_cast<ObjId>(args[0] | args[1] << 8);
+            if (w.create(0x55F, 0)) w.pop_to_container(box);
+            for (ObjId id : w.get(box)->contents) dropped.push_back(id);
+            return ok;
+        };
+        w.set_hooks(hooks);
+
+        const Item* player = w.get(1);
+        const std::int32_t px = player->x, py = player->y, pz = player->z;
+        w.move_item(16, px + 120, py - 120, pz);
+        w.move_item(18, px - 120, py - 120, pz);
+        game.update(kFrameUs);
+        std::vector<std::uint16_t> alive;
+        std::vector<ObjId> burnt;
+        for (const ObjId id : {16, 18}) {
+            const Item* npc = w.get(id);
+            if (!npc || w.is_dead(id) || !takes_full_bullet_damage(npc->shape)) continue;
+            const std::uint16_t shape = npc->shape;
+            std::vector<ObjId> weapons;
+            for (ObjId c : npc->contents)
+                if (w.family_of(w.get(c)->shape) == 10) weapons.push_back(c);
+            apply_damage(game.kernel(), w, game.animations(), id, 1, 0, 250, 6, nullptr);
+            npc = w.get(id);
+            if (!npc || npc->shape != 0x58F) continue;
+            alive.push_back(shape);
+            burnt.push_back(id);
+            if (cheat) dropped.insert(dropped.end(), weapons.begin(), weapons.end());
+        }
+        CHECK(burnt.size() == 2);
+        CHECK(w.death_loot().size() == (cheat ? burnt.size() : 0));
+        // The loot drops at the end of the death animations, beside the
+        // NPCs where the fall left them.
+        for (int i = 0; i < 600; ++i) game.update(kFrameUs);
+        std::printf("remains loot (cheat %s): %zu burnt, %zu items dropped\n", cheat ? "on" : "off", burnt.size(),
+                    dropped.size());
+        std::ranges::sort(alive);
+        std::ranges::sort(called_with);
+        CHECK(called_with == (cheat ? alive : std::vector<std::uint16_t>{}));
+        CHECK(dropped.size() >= (cheat ? burnt.size() : 0));
+        for (ObjId id : dropped) {
+            const Item* item = w.get(id);
+            bool near = false;
+            for (const World::Point& at : remains)
+                near = near || (item && std::abs(item->x - at.x) <= 96 && std::abs(item->y - at.y) <= 96);
+            CHECK(item && item->parent == 0 && !(item->flags & kItemEthereal) && near);
+        }
+        CHECK(w.death_loot().empty());
+        CHECK(w.pending_count() == 0);
+        CHECK(game.machine().faults().empty());
+    }
 }
 
 void test_firing(const std::filesystem::path& data) {
@@ -6366,6 +6448,7 @@ int main(int argc, char** argv) {
     test_credits(data);
     test_options(data);
     test_firing(data);
+    test_remains_loot(data);
     test_combat_zone(data);
     test_rocket_vibration(data);
     test_auto_firer(data);

@@ -157,9 +157,9 @@ void test_enhancements_pages() {
     int pad_focus = 0;
     EnhancementsScreen screen(fonts, config, pad_focus);
     // The first page: a row per page, "retour" last.
-    CHECK(screen.page() == Page::Main && screen.entries().size() == 5 && screen.entries().back() == Entry::Back);
+    CHECK(screen.page() == Page::Main && screen.entries().size() == 6 && screen.entries().back() == Entry::Back);
     // Every page ends with "retour" and fits the window.
-    for (Entry page : {Entry::Controls, Entry::Display, Entry::Effects, Entry::Game}) {
+    for (Entry page : {Entry::Controls, Entry::Display, Entry::Effects, Entry::Game, Entry::Cheats}) {
         EnhancementsScreen s(fonts, config, pad_focus);
         choose(s, page);
         CHECK(s.page() != Page::Main && s.focus() == 0 && s.entries().back() == Entry::Back);
@@ -185,6 +185,15 @@ void test_enhancements_pages() {
     choose(screen, Entry::Game);
     choose(screen, Entry::Back);
     CHECK(screen.page() == Page::Main && screen.focus() == screen.row_of(Entry::Game));
+    // Cheats: "butin des restes", off by default.
+    CHECK(!config.remains_loot);
+    choose(screen, Entry::Cheats);
+    choose(screen, Entry::RemainsLoot);
+    CHECK(config.remains_loot);
+    choose(screen, Entry::RemainsLoot);
+    CHECK(!config.remains_loot);
+    screen.key(gump_key::kEscape);
+    CHECK(screen.page() == Page::Main && screen.focus() == screen.row_of(Entry::Cheats));
     // Language (the repository's files, French data): auto, German, English,
     // French, auto.
     choose(screen, Entry::Game);
