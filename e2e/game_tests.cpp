@@ -3506,6 +3506,7 @@ void test_aim_stick_draws(const std::filesystem::path& data) {
     for (int step = 0; step < 3; ++step) {
         do_anim(game.kernel(), w, game.animations(), 1, 0x1C, kDirCurrent);
         for (int i = 0; i < 400 && actor_busy(game.kernel(), 1); ++i) {
+            const std::int32_t px = w.get(1)->x, py = w.get(1)->y;
             game.update(kFrameUs);
             ++frames;
             left_mode |= !aim.active;
@@ -3513,10 +3514,15 @@ void test_aim_stick_draws(const std::filesystem::path& data) {
                 ++hidden;
                 continue;
             }
-            // Placed before the frame's slice moves him: one frame behind
-            // at most (a step is 16 units at most).
+            // Placed before the frame's slice moves him: on time, or one
+            // frame behind, by the step he just took (up to 20 units a
+            // side in this side step's frames).
             const auto o = offset();
-            if (std::abs(o.first - before.first) > 16 || std::abs(o.second - before.second) > 16) ++off;
+            const int mx = w.get(1)->x - px, my = w.get(1)->y - py;
+            const bool on_time = std::abs(o.first - before.first) <= 1 && std::abs(o.second - before.second) <= 1;
+            const bool behind =
+                std::abs(o.first + mx - before.first) <= 1 && std::abs(o.second + my - before.second) <= 1;
+            if (!on_time && !behind) ++off;
         }
     }
     std::printf("aim stick side steps: moved (%d, %d), %d frames, crosshair hidden %d, off %d, mode left %d\n",
