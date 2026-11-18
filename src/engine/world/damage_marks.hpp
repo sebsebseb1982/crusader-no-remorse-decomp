@@ -22,6 +22,10 @@
 // energy weapons (they burn, freeze or melt) and the dead do not bleed. Blood
 // marks follow the same rules as the others.
 //
+// Casings (GameConfig::casings, casings.hpp): a casing (a shotgun shell)
+// that landed lies on the floor as a mark of brass (red) pixels with a
+// little shadow, on the same rules. Past kMaxCasings the oldest go first.
+//
 // Marks only read the world: no random number of the game is drawn, so the
 // game plays the same with or without them.
 
@@ -39,7 +43,7 @@
 
 namespace crusader {
 
-enum class MarkKind : std::uint8_t { Bullet, Burn, Scorch, BloodSpray, BloodDrop, BloodPool };
+enum class MarkKind : std::uint8_t { Bullet, Burn, Scorch, BloodSpray, BloodDrop, BloodPool, Casing, Shell };
 
 // The mark a shot of `fire_type` leaves: a scorch when it splashes, a hole
 // for the bullets (fire types 1, 2, 0xB, 0xD), a burn otherwise.
@@ -48,6 +52,8 @@ MarkKind mark_kind(int fire_type);
 inline bool is_blood(MarkKind kind) {
     return kind == MarkKind::BloodSpray || kind == MarkKind::BloodDrop || kind == MarkKind::BloodPool;
 }
+
+inline bool is_casing(MarkKind kind) { return kind == MarkKind::Casing || kind == MarkKind::Shell; }
 
 // For each colour, the palette colour nearest to it darkened to `percent` of
 // its brightness. Colours 1..14 (cycled and translucent) and 0xFF are never
@@ -58,7 +64,9 @@ std::array<std::uint8_t, 256> shade_table(const Palette& palette, int percent);
 std::array<std::uint8_t, 256> tint_table(const Palette& palette, Rgb target, int percent);
 
 // A pixel of a mark: its offset from the mark's centre and its shade (0
-// light, 1 medium, 2 dark, 3 almost black; blood 4 light, 5 red, 6 dark).
+// light, 1 medium, 2 dark, 3 almost black; blood 4 light, 5 red, 6 dark;
+// casings 7 bright brass, 8 brass, 9 dark brass, 10 red, 11 dark red: those
+// replace the colour underneath instead of mixing with it).
 struct MarkPixel {
     std::int8_t dx, dy;
     std::uint8_t shade;
@@ -67,13 +75,16 @@ struct MarkPixel {
 // The pixels of a mark of `kind` and `radius` (a hole is about 2 x 2 pixels
 // with its rim, `radius` aside), squashed to half its height when `flat`;
 // `seed` shapes its edge. Blood flies in `angle` (radians, screen x right and
-// y down; on a flat mark, in the ground's own proportions).
+// y down; on a flat mark, in the ground's own proportions). A casing or a
+// shell lies one of four ways picked by `seed`.
 std::vector<MarkPixel> mark_pattern(MarkKind kind, int radius, bool flat, std::uint32_t seed, double angle = 0);
 
 class DamageMarks {
 public:
     static constexpr std::size_t kMaxMarks = 2048;
-    static constexpr int kShades = 7;
+    static constexpr std::size_t kMaxCasings = 512;
+    static constexpr int kShades = 12;
+    enum Shade : std::uint8_t { kBrassLight = 7, kBrass = 8, kBrassDark = 9, kShellRed = 10, kShellDark = 11 };
 
     struct Mark {
         ObjId host = 0;
@@ -97,14 +108,23 @@ public:
     // of it in `gore` mode (GameConfig::gore_mode).
     void bleed(const World& world, const Wound& wound, bool gore = false);
 
+    // A casing (`shell`: a shotgun shell) landed at `at`: it lies on the
+    // floor under it, at most 16 below. False when there is none.
+    bool lay_casing(const World& world, World::Point at, bool shell, std::uint32_t seed);
+
     // Once per frame, before draw: forgets the marks of another map, of
     // hosts that changed and of a kind switched off (`impacts`: holes,
-    // burns, scorches; `blood`), indexes the others by host and follows the
-    // game palette.
-    void prepare(const World& world, const Palette& game_palette, bool impacts = true, bool blood = true);
+    // burns, scorches; `blood`; `casings`), indexes the others by host and
+    // follows the game palette.
+    void prepare(const World& world, const Palette& game_palette, bool impacts = true, bool blood = true,
+                 bool casings = true);
 
     // The marks of the item just drawn.
     void draw(Surface8& screen, const DrawItem& d) const;
+
+    // Colour `under` seen through shade `shade` (MarkPixel::shade), once
+    // prepared; `under` itself before.
+    std::uint8_t shaded(int shade, std::uint8_t under) const { return shade_ready_ ? shade_[shade][under] : under; }
 
     void clear();
     std::size_t size() const { return marks_.size(); }

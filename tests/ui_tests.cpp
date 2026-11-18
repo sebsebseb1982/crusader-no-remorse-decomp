@@ -178,6 +178,12 @@ void test_enhancements_pages() {
     CHECK(!config.blood_marks && !config.gore_mode);
     choose(screen, Entry::Blood);
     CHECK(config.blood_marks && !config.gore_mode);
+    // Casings: off by default, on their own.
+    CHECK(!config.casings);
+    choose(screen, Entry::Casings);
+    CHECK(config.casings && config.blood_marks && config.impact_marks);
+    choose(screen, Entry::Casings);
+    CHECK(!config.casings);
     // Escape goes back to the first page on the page's row, then closes.
     screen.key(gump_key::kEscape);
     CHECK(screen.page() == Page::Main && screen.focus() == screen.row_of(Entry::Effects) && !screen.closed());

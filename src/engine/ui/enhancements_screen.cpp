@@ -74,7 +74,7 @@ constexpr Entry kControlsEntries[] = {Entry::Pad,        Entry::Directional, Ent
                                       Entry::Draw,       Entry::PreciseAim,  Entry::Run,
                                       Entry::Vibration,  Entry::VibrationIntensity, Entry::Back};
 constexpr Entry kDisplayEntries[] = {Entry::Native, Entry::Zoom, Entry::Smooth, Entry::Follow, Entry::Back};
-constexpr Entry kEffectsEntries[] = {Entry::Impact, Entry::Blood, Entry::Back};
+constexpr Entry kEffectsEntries[] = {Entry::Impact, Entry::Blood, Entry::Casings, Entry::Back};
 constexpr Entry kGameEntries[] = {Entry::Autosave, Entry::FixBugs, Entry::Language, Entry::Back};
 constexpr Entry kCheatsEntries[] = {Entry::RemainsLoot, Entry::Back};
 
@@ -236,6 +236,10 @@ void EnhancementsScreen::draw(Surface8& screen) const {
             if (config_->blood_marks && config_->gore_mode) value = tr("GORE");
             else on = config_->blood_marks;
             break;
+        case Entry::Casings:
+            name = tr("CASINGS");
+            on = config_->casings;
+            break;
         case Entry::Autosave:
             name = tr("AUTOSAVE");
             on = config_->autosave;
@@ -331,6 +335,7 @@ void EnhancementsScreen::activate(int row) {
             config_->gore_mode = false;
         }
         break;
+    case Entry::Casings: config_->casings = !config_->casings; break;
     case Entry::Autosave: config_->autosave = !config_->autosave; break;
     case Entry::RemainsLoot: config_->remains_loot = !config_->remains_loot; break;
     case Entry::FixBugs: config_->fix_original_bugs = !config_->fix_original_bugs; break;

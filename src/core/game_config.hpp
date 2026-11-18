@@ -71,6 +71,9 @@ public:
     // Port addition, written only when set: "goremode", with the blood, much
     // more of it (DamageMarks::bleed).
     bool gore_mode = false;
+    // Port addition, written only when set: "casings", firearms eject
+    // casings that stay on the floor (casings.hpp).
+    bool casings = false;
     // Port addition, a cheat written only when set: "remainsloot", an enemy
     // burnt, melted, electrocuted or blown apart drops beside its remains the
     // loot its body would have held (death_loot.hpp); the original destroys it.

@@ -16,6 +16,9 @@ constexpr int kShadePercent[kDarkShades] = {72, 52, 34, 16};  // light .. black
 // Blood: the colour mixed with a red, light to dark.
 constexpr Rgb kBloodTarget[3] = {{170, 24, 16}, {130, 6, 4}, {70, 0, 0}};
 constexpr int kBloodPercent[3] = {45, 68, 85};
+// Casings: bright brass, brass, dark brass, a shell's red and dark red, in
+// place of the colour underneath.
+constexpr Rgb kCasingColour[5] = {{250, 214, 120}, {200, 150, 60}, {128, 88, 30}, {196, 40, 30}, {116, 18, 14}};
 constexpr int kFaceSlack = 4;      // usecode units a shot may stop short of a face
 constexpr int kSearchPad = 256;    // largest footpad reach of an anchor, usecode units
 constexpr std::size_t kMaxScorchHosts = 24;
@@ -195,6 +198,24 @@ std::vector<MarkPixel> mark_pattern(MarkKind kind, int radius, bool flat, std::u
         if (x < -127 || x > 127 || y < -127 || y > 127) return;
         out.push_back({static_cast<std::int8_t>(x), static_cast<std::int8_t>(y), static_cast<std::uint8_t>(shade)});
     };
+    if (is_casing(kind)) {
+        // Lying flat one of four ways: a casing two pixels long (bright at
+        // its mouth), a shell three (red, its brass head at the end), a
+        // pixel of shadow under the last.
+        static constexpr int kLie[4][2] = {{1, 0}, {1, 1}, {1, -1}, {-1, 1}};
+        const int ox = kLie[seed & 3][0], oy = kLie[seed & 3][1];
+        if (kind == MarkKind::Shell) {
+            put(0, 0, DamageMarks::kShellDark);
+            put(ox, oy, DamageMarks::kShellRed);
+            put(2 * ox, 2 * oy, DamageMarks::kBrass);
+            put(2 * ox, 2 * oy + 1, 1);
+        } else {
+            put(0, 0, DamageMarks::kBrassLight);
+            put(ox, oy, DamageMarks::kBrassDark);
+            put(ox, oy + 1, 1);
+        }
+        return out;
+    }
     if (is_blood(kind)) {
         // Worked out on the wall, or on the ground at its own proportions
         // (y halved on screen when `flat`); u along `angle`, v across.
@@ -525,6 +546,25 @@ void DamageMarks::bleed(const World& world, const Wound& wound, bool gore) {
     }
 }
 
+// @orig none: port-only casings
+bool DamageMarks::lay_casing(const World& world, World::Point at, bool shell, std::uint32_t seed) {
+    if (world.current_map() != map_) {
+        clear();
+        map_ = world.current_map();
+    }
+    std::int32_t top = 0;
+    const Item* floor = floor_under(world, at, top);
+    if (!floor) return false;
+    // The oldest casing goes past kMaxCasings, the other marks stay.
+    const auto casings = std::count_if(marks_.begin(), marks_.end(), [](const Mark& m) { return is_casing(m.kind); });
+    if (static_cast<std::size_t>(casings) >= kMaxCasings) {
+        marks_.erase(std::find_if(marks_.begin(), marks_.end(), [](const Mark& m) { return is_casing(m.kind); }));
+    }
+    next_seed_ = seed;
+    add(*floor, {at.x, at.y, top}, shell ? MarkKind::Shell : MarkKind::Casing, 1, true);
+    return true;
+}
+
 // @orig none: port-only impact marks
 void DamageMarks::add(const Item& host, World::Point surface, MarkKind kind, int radius, bool flat, double angle) {
     Mark m;
@@ -548,13 +588,13 @@ void DamageMarks::add(const Item& host, World::Point surface, MarkKind kind, int
 }
 
 // @orig none: port-only impact marks
-void DamageMarks::prepare(const World& world, const Palette& game_palette, bool impacts, bool blood) {
+void DamageMarks::prepare(const World& world, const Palette& game_palette, bool impacts, bool blood, bool casings) {
     if (world.current_map() != map_) {
         clear();
         map_ = world.current_map();
     }
     std::erase_if(marks_, [&](const Mark& m) {
-        if (!(is_blood(m.kind) ? blood : impacts)) return true;
+        if (!(is_blood(m.kind) ? blood : is_casing(m.kind) ? casings : impacts)) return true;
         const Item* item = world.get(m.host);
         return !item || !same_host(m, *item) || !can_host(world, *item);
     });
@@ -571,6 +611,7 @@ void DamageMarks::prepare(const World& world, const Palette& game_palette, bool 
     if (!same) {
         for (int s = 0; s < kDarkShades; ++s) shade_[s] = shade_table(game_palette, kShadePercent[s]);
         for (int s = 0; s < 3; ++s) shade_[kDarkShades + s] = tint_table(game_palette, kBloodTarget[s], kBloodPercent[s]);
+        for (int s = 0; s < 5; ++s) shade_[kBrassLight + s] = tint_table(game_palette, kCasingColour[s], 100);
         shade_palette_ = game_palette;
         shade_ready_ = true;
     }

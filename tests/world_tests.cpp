@@ -10,6 +10,7 @@
 #include "engine/usecode/world_intrinsics.hpp"
 #include "engine/world/actor_anim.hpp"
 #include "engine/world/attack.hpp"
+#include "engine/world/casings.hpp"
 #include "engine/world/collision.hpp"
 #include "engine/world/damage_marks.hpp"
 #include "engine/world/gravity.hpp"
@@ -1417,9 +1418,109 @@ void test_blood_marks() {
     CHECK(marks.size() == 0);
 }
 
+// Port addition: the casings (casings.hpp).
+void test_casings() {
+    // BA-40 / BA-41 (0xB), RP-22 / RP-32 (1): casings; SG-A1 (2), AC-88 (0xD):
+    // shells; explosives (AR-7 0xA, GL-303 3) and energy weapons: none.
+    CHECK(ejection_of(0xB) == Ejection::Casing && ejection_of(1) == Ejection::Casing);
+    CHECK(ejection_of(2) == Ejection::Shell && ejection_of(0xD) == Ejection::Shell);
+    CHECK(ejection_of(0xA) == Ejection::None && ejection_of(3) == Ejection::None && ejection_of(6) == Ejection::None);
+    // Lying: a casing of two brass pixels, a shell of three (its head
+    // brass), each with a pixel of shadow.
+    for (std::uint32_t seed = 0; seed < 4; ++seed) {
+        const auto casing = mark_pattern(MarkKind::Casing, 1, true, seed);
+        const auto shell = mark_pattern(MarkKind::Shell, 1, true, seed);
+        CHECK(casing.size() == 3 && shell.size() == 4);
+        CHECK(casing[0].shade == DamageMarks::kBrassLight && casing[2].shade == 1);
+        CHECK(shell[1].shade == DamageMarks::kShellRed && shell[2].shade == DamageMarks::kBrass);
+    }
+
+    // A floor of 5 x 5 tiles (shape 8, 64 x 64) over x, y 832..1152; the
+    // shooter (shape 6) at (1000, 1000), another at (3000, 3000) over nothing.
+    std::vector<ShapeInfo> tf = test_typeflags();
+    tf[8].footpad_x = 4;
+    tf[8].footpad_y = 4;
+    World w(tf);
+    const auto place = [&](std::uint16_t shape, std::int32_t x, std::int32_t y, std::int32_t z) {
+        const ObjId id = w.create(shape, 0);
+        w.pop_to_coords(x, y, z);
+        return id;
+    };
+    for (int i = 0; i < 5; ++i)
+        for (int j = 0; j < 5; ++j) place(8, 896 + 64 * i, 896 + 64 * j, 0);
+    const ObjId shooter = place(6, 1000, 1000, 0);
+    const ObjId alone = place(6, 3000, 3000, 0);
+    const auto count = [](const DamageMarks& m, MarkKind kind) {
+        return std::count_if(m.marks().begin(), m.marks().end(), [&](const auto& k) { return k.kind == kind; });
+    };
+
+    // Facing +x (direction 4): out to the right (+y), a little back, up;
+    // then down on the floor, a casing mark.
+    Casings casings;
+    DamageMarks marks;
+    casings.eject(w, shooter, 16, 0, 24, 4, Ejection::Casing, 100);
+    casings.eject(w, shooter, 16, 0, 24, 4, Ejection::None, 100);
+    CHECK(casings.flying().size() == 1);
+    casings.advance(w, 110, marks);
+    CHECK(casings.flying().size() == 1);
+    if (casings.flying().size() == 1) {
+        const Casings::Flying& f = casings.flying().front();
+        CHECK(f.y > 1005 && f.x < 1009.6 && f.z > 24 && f.ground == 0 && f.age == 10);
+    }
+    casings.advance(w, 300, marks);
+    CHECK(casings.flying().empty() && marks.size() == 1 && count(marks, MarkKind::Casing) == 1);
+    if (marks.size() == 1) CHECK(marks.marks().front().flat && w.get(marks.marks().front().host)->shape == 8);
+    // A shell; nothing where there is no floor; nothing when time went back.
+    casings.eject(w, shooter, 16, 0, 24, 4, Ejection::Shell, 300);
+    casings.eject(w, alone, 16, 0, 24, 4, Ejection::Casing, 300);
+    casings.advance(w, 500, marks);
+    CHECK(casings.flying().empty() && count(marks, MarkKind::Shell) == 1 && marks.size() == 2);
+    casings.eject(w, shooter, 16, 0, 24, 4, Ejection::Casing, 600);
+    casings.advance(w, 400, marks);
+    CHECK(casings.flying().empty() && marks.size() == 2);
+
+    // Drawn in flight next to its shooter, in brass; not with another item.
+    Palette pal;
+    for (int c = 0; c < 256; ++c) {
+        const auto v = static_cast<std::uint8_t>(c);
+        pal.colors[c] = {v, v, v};
+    }
+    marks.prepare(w, pal);
+    casings.eject(w, shooter, 16, 0, 24, 4, Ejection::Casing, 700);
+    casings.advance(w, 702, marks);
+    Surface8 screen(64, 64, 200);
+    DrawItem d{};
+    d.item = w.get(alone);
+    d.sx = 32;
+    d.sy = 32;
+    casings.draw(screen, d, marks);
+    const auto changed = [&] {
+        int n = 0;
+        for (int y = 0; y < 64; ++y)
+            for (int x = 0; x < 64; ++x) n += screen.row(y)[x] != 200;
+        return n;
+    };
+    CHECK(changed() == 0);
+    d.item = w.get(shooter);
+    casings.draw(screen, d, marks);
+    CHECK(changed() == 2);
+
+    // At most kMaxCasings on the floor, the oldest go; the other marks stay.
+    marks.record(w, 0, {1000, 1000, 0}, 1);
+    for (std::uint32_t k = 0; k < DamageMarks::kMaxCasings + 20; ++k)
+        marks.lay_casing(w, {960 + static_cast<std::int32_t>(k % 64), 1000, 0}, false, k);
+    CHECK(count(marks, MarkKind::Casing) + count(marks, MarkKind::Shell) ==
+              static_cast<std::ptrdiff_t>(DamageMarks::kMaxCasings) &&
+          count(marks, MarkKind::Bullet) == 1);
+    // Switched off, the casings go, the rest stays.
+    marks.prepare(w, pal, true, true, false);
+    CHECK(count(marks, MarkKind::Casing) + count(marks, MarkKind::Shell) == 0 && count(marks, MarkKind::Bullet) == 1);
+}
+
 int main() {
     test_impact_marks();
     test_blood_marks();
+    test_casings();
     test_typeflag_decode();
     test_world_ids();
     test_create_npc_reuses_a_slot();

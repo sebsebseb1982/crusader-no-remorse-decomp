@@ -293,6 +293,10 @@ void Game::fire_frame(ObjId actor, int a, int b, int z) {
     }
     const int dir = r.empty() ? 0 : r[npc::kDirection];
     fire_weapon(*kernel_, *world_, anims_, actor, a * 16, b * 16, z * 8, dir, type, true);
+    // Port addition: the casing a firearm ejects.
+    if (config_.casings) {
+        casings_.eject(*world_, actor, a * 16, b * 16, z * 8, dir, ejection_of(type), kernel_->ticks());
+    }
     if (actor == world_->state.controlled_npc) {
         const WeaponVibration vibration = weapon_vibration(firing_shape);
         if (vibration.duration_ms != 0)
@@ -449,6 +453,7 @@ void Game::reset_world() {
         got_hit(*kernel_, *world_, anims_, item, other, force);
     };
     damage_marks_.clear();
+    casings_.clear();
     hooks.shot_landed = [this](ObjId hit, std::int32_t x, std::int32_t y, std::int32_t z, int fire_type) {
         if (config_.impact_marks) damage_marks_.record(*world_, hit, {x, y, z}, fire_type);
     };
@@ -1806,28 +1811,41 @@ void Game::render_view(Surface8& screen, RenderStats* stats, bool keep_view) {
     const GameState& s = world_->state;
     const auto list =
         build_display_list(*world_, shapes_, View{s.view_left, s.view_top}, screen.width, screen.height, stats);
-    // Port addition: the impact and blood marks, over each item just drawn.
-    const bool marks = config_.impact_marks || config_.blood_marks;
-    if (marks) damage_marks_.prepare(*world_, world_->state.game_palette, config_.impact_marks, config_.blood_marks);
-    else if (damage_marks_.size() != 0) damage_marks_.clear();
+    // Port addition: the impact and blood marks and the casings on the
+    // floor, over each item just drawn; the casings in flight after their
+    // shooter.
+    if (config_.casings) casings_.advance(*world_, kernel_->ticks(), damage_marks_);
+    else casings_.clear();
+    const bool casings = config_.casings && !casings_.flying().empty();
+    const bool marks = config_.impact_marks || config_.blood_marks || config_.casings;
+    if (marks) {
+        damage_marks_.prepare(*world_, world_->state.game_palette, config_.impact_marks, config_.blood_marks,
+                              config_.casings);
+    } else if (damage_marks_.size() != 0) {
+        damage_marks_.clear();
+    }
     // DLIST.C 11A0:05xx: right after item 1, in combat (or holstering,
     // last action 0xB), its weapon (WPNOVLAY.DAT), unmirrored, at the item's
     // screen place plus the offsets of the current action, direction, frame.
-    draw_display_list(screen, list, &xform_, [this, marks](Surface8& surface, const DrawItem& d) {
+    draw_display_list(screen, list, &xform_, [this, marks, casings](Surface8& surface, const DrawItem& d) {
         if (marks) damage_marks_.draw(surface, d);
-        if (d.item->id != 1 || d.item->shape != 1) return;
-        const auto record = world_->npc_record(1);
-        const std::uint16_t last = static_cast<std::uint16_t>(record[npc::kLastAnim] | record[npc::kLastAnim + 1] << 8);
-        if (!in_combat(*world_, 1) && last != 0xB) return;
-        const Item* weapon = world_->get(world_->active_weapon(1));
-        const AnimAction* header = anims_.action(1, last);
-        if (!weapon || !header) return;
-        const auto piece =
-            weapon_overlay_.piece(weapon->shape, last, *header, world_->npc_direction(1), record[npc::kAnimFrame]);
-        if (!piece || (piece->shape == 0 && piece->frame == 0)) return;
-        const Shape* shape = shapes_.get(piece->shape);
-        if (!shape || piece->frame >= shape->frames().size()) return;
-        shape->frames()[piece->frame].draw(surface, d.sx + piece->dx, d.sy + piece->dy, false);
+        [&] {
+            if (d.item->id != 1 || d.item->shape != 1) return;
+            const auto record = world_->npc_record(1);
+            const std::uint16_t last =
+                static_cast<std::uint16_t>(record[npc::kLastAnim] | record[npc::kLastAnim + 1] << 8);
+            if (!in_combat(*world_, 1) && last != 0xB) return;
+            const Item* weapon = world_->get(world_->active_weapon(1));
+            const AnimAction* header = anims_.action(1, last);
+            if (!weapon || !header) return;
+            const auto piece =
+                weapon_overlay_.piece(weapon->shape, last, *header, world_->npc_direction(1), record[npc::kAnimFrame]);
+            if (!piece || (piece->shape == 0 && piece->frame == 0)) return;
+            const Shape* shape = shapes_.get(piece->shape);
+            if (!shape || piece->frame >= shape->frames().size()) return;
+            shape->frames()[piece->frame].draw(surface, d.sx + piece->dx, d.sy + piece->dy, false);
+        }();
+        if (casings) casings_.draw(surface, d, damage_marks_);
     });
     // SPMGR.C: the screen sprites (aiming mode), over the scene, unless
     // suspended in the menu mode (DS:2D8F).

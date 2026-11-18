@@ -24,6 +24,7 @@ The changes fall into four groups:
 6. [Native resolution](#6-native-resolution)
 7. [Zoom](#7-zoom)
    - [7b. Impact marks](#7b-impact-marks)
+   - [7c. Casings](#7c-casings)
 8. [Autosave](#8-autosave)
    - [8b. Language](#8b-language)
 9. [Toggle run](#9-toggle-run)
@@ -91,6 +92,7 @@ The original has nothing like it. This screen gathers every option the port adds
 |---|---|---|
 | IMPACT MARKS / IMPACTS | Shots leave marks on the scenery | `impactmarks` |
 | BLOOD / SANG | Cycles OFF → ON (the wounded bleed on the scenery) → GORE (much more blood) | `bloodmarks`, `goremode` |
+| CASINGS / DOUILLES | Firearms eject casings that stay on the floor (section 7c) | `casings` |
 
 *GAME / JEU*
 
@@ -387,6 +389,31 @@ The original leaves no trace of a shot. With this option the scenery keeps one w
 - **GORE**: every bullet sprays the wall behind, within 80 + 3 × the points lost (up to 200 units), bigger; 4 drops plus 1 per 6 points lost, plus 4 for a kill (14 at most), thrown further. A bullet kill adds two sprays 25° to the sides, a bigger pool and 6 to 10 pieces thrown behind. A blast kill: 32 to 44 pieces up to 200 units away in a fan of ±100°, sprays along thirteen rays, a pool up to 20 pixels.
 - A wall face the camera does not see takes no spray. Blood marks follow the impact marks' rules: on scenery only, gone when it changes, not saved.
 
+## 7c. Casings
+
+**Option:** CASINGS / DOUILLES (`casings`), off by default, independent of the impact marks and the blood.
+**Files:** `src/engine/world/casings.*`, `src/engine/world/damage_marks.*`, `src/game/game.cpp`
+
+The original ejects nothing. With this option every shot of a firearm throws out a casing that stays on the floor.
+
+**Which weapons**
+- The weapons that fire bullets (fire types 1, 2, 0xB, 0xD, the same as the bullet holes of section 7b). BA-40, BA-41 (type 0xB), RP-22 and RP-32 (type 1) eject a brass casing. SG-A1 (type 2) and AC-88 (type 0xD) fire several pellets and eject a red shell with a brass head.
+- Energy weapons and explosives (PA-21, EM-4, PL-1, PA-31, UV-9, AR-7, GL-303) eject nothing.
+- Whoever fires ejects: the player, an NPC or a robot. The pump of the SG-A1 is not shown: its shell flies out with the shot.
+
+**Flight**
+- One casing per firing frame of the animation (one per shot, one shell per shotgun blast).
+- It starts at the muzzle, pulled back towards the shooter, and flies out to the shooter's right (a quarter turn clockwise from its facing), a little back, and up: 1.2 to 2.2 units a tick sideways, -0.2 to 0.7 back, 2.2 to 3.4 up, with a gravity of 0.32 units a tick per tick. It spins a quarter turn every two ticks.
+- It falls to the height of the shooter's feet at the time of the shot, bounces once (30 % of its speed down, half its speed along the ground), then lands. A flight never lasts more than 120 ticks.
+- It moves one step per game tick (60 a second), so it freezes when the game does (menus, pause).
+- In flight it is drawn right after its shooter (after the player's weapon overlay), so whatever stands in front of the shooter covers it. A casing whose shooter is not drawn is not seen. At most 64 fly at once; past that the oldest goes.
+
+**On the floor**
+- A landed casing becomes a mark on the floor right under it (at most 16 units below; down a ledge there is none, and it is lost). A casing is two pixels (bright brass and dark brass), a shell three (dark red, red, brass), each with one pixel of shadow, lying one of four ways.
+- Unlike the other marks, it replaces the colour underneath with the palette's nearest brass or red, instead of darkening it.
+- It follows the impact marks' rules: drawn inside the floor's opaque pixels, covered by what stands in front, gone on a map change, a load, or when the option is switched off; not saved. At most 512 casings lie on a map; past that the oldest goes, and the other marks stay.
+- Casings only read the world and use their own numbers, never the game's random generators, so the game plays the same with or without them.
+
 ---
 
 ## 8. Autosave
@@ -632,6 +659,7 @@ The original reads much of its data from the CD and needs it in the drive. The p
 | `impactmarks` | false | `true` |
 | `bloodmarks` | false | `true` |
 | `goremode` | false | `true` |
+| `casings` | false | `true` |
 | `remainsloot` | false | `true` |
 | `nativeresolution` | true | `false` |
 | `autosave` | true | `false` |
