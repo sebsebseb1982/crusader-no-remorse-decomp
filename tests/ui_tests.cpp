@@ -2,14 +2,18 @@
 
 #include "core/flex.hpp"
 #include "core/language.hpp"
+#include "core/palette.hpp"
 #include "core/shape.hpp"
 #include "core/surface.hpp"
+#include "engine/ui/christmas_hat.hpp"
 #include "engine/ui/enhancements_screen.hpp"
 #include "engine/ui/keypad_gump.hpp"
 #include "engine/ui/gump_keys.hpp"
 #include "engine/world/render.hpp"
 
+#include <algorithm>
 #include <cstdint>
+#include <ctime>
 #include <cstdio>
 #include <filesystem>
 #include <vector>
@@ -206,6 +210,48 @@ void test_enhancements_pages() {
     CHECK(config.follow_player);
 }
 
+// The Christmas hat of the main menu: 24 to 31 December only, drawn over the
+// Silencer's head (the background's top row is at y = 120 in No Remorse, 75
+// in No Regret) and nowhere else.
+void test_christmas_hat() {
+    std::tm date{};
+    date.tm_mon = 11;
+    date.tm_mday = 23;
+    CHECK(!is_christmas(date));
+    date.tm_mday = 24;
+    CHECK(is_christmas(date));
+    date.tm_mday = 31;
+    CHECK(is_christmas(date));
+    date.tm_mon = 0;
+    date.tm_mday = 1;
+    CHECK(!is_christmas(date));
+    date.tm_mon = 10;
+    date.tm_mday = 25;
+    CHECK(!is_christmas(date));
+
+    for (const bool regret : {false, true}) {
+        Surface8 screen(640, 480, 7);
+        draw_christmas_hat(screen, regret);
+        int drawn = 0, x0 = 640, y0 = 480, x1 = -1, y1 = -1;
+        for (int y = 0; y < screen.height; ++y) {
+            for (int x = 0; x < screen.width; ++x) {
+                const std::uint8_t c = screen.row(y)[x];
+                if (c == 7) continue;
+                CHECK(c != kTransparentIndex);
+                ++drawn;
+                x0 = std::min(x0, x), y0 = std::min(y0, y), x1 = std::max(x1, x), y1 = std::max(y1, y);
+            }
+        }
+        CHECK(drawn > 1500);
+        CHECK(x0 >= 240 && x1 < 360);
+        CHECK(y0 >= (regret ? 75 : 120) && y1 < (regret ? 160 : 200));
+    }
+    // A small screen: clipped, no write outside.
+    Surface8 small(300, 150, 7);
+    draw_christmas_hat(small, false);
+    CHECK(small.pixels.size() == 300u * 150u);
+}
+
 }  // namespace
 
 int main() {
@@ -213,6 +259,7 @@ int main() {
     test_keypad_digit_spacing();
     test_vibration_settings();
     test_enhancements_pages();
+    test_christmas_hat();
     if (failures == 0) std::printf("all ui checks passed\n");
     return failures == 0 ? 0 : 1;
 }

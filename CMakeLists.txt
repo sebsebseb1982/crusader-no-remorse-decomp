@@ -110,6 +110,7 @@ add_library(crusader_engine
   src/engine/ui/weasel_gump.cpp
   src/engine/ui/mouse_cursor.cpp
   src/engine/ui/main_menu.cpp
+  src/engine/ui/christmas_hat.cpp
   src/engine/ui/load_screen.cpp
   src/engine/ui/options_screen.cpp
   src/engine/ui/difficulty_screen.cpp

@@ -40,6 +40,9 @@
 // Port addition (@orig none): two small lines centred at the bottom of the
 // menu, in the dim colour of the options buttons: the version of the port
 // (from the build) and the version of the game data detected.
+//
+// Port addition (@orig none): from 24 to 31 December, a Christmas hat on the
+// Silencer, drawn over the background (christmas_hat.hpp).
 
 #include "core/surface.hpp"
 #include "engine/ui/credits.hpp"
@@ -93,6 +96,8 @@ public:
         // Port addition: the save screen's proposed name (LoadScreen::set_auto_name),
         // empty for the original's.
         std::function<std::string()> auto_save_name;
+        // Port addition: the Christmas hat on the background.
+        bool christmas_hat = false;
     };
     MainMenu(const Resources& res, Shared& shared, bool no_game);
 

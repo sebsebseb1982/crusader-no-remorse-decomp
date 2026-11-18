@@ -197,6 +197,7 @@ bool cheat_command(World& world, std::uint16_t code, bool us_123) {
     case 0x432: {  // Ctrl+M
         Audio* audio = world.audio();
         if (!audio) return true;
+        audio->music.allow_christmas(false);  // port addition: no more hat on the menu
         int track = audio->music.current() + 1;
         if (us_123) {
             if (track == 0x13) track = 1;

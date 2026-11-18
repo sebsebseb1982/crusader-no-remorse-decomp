@@ -31,6 +31,7 @@ The changes fall into four groups:
 10. [Keypad navigation with arrows or gamepad](#10-keypad-navigation-with-arrows-or-gamepad)
 11. [Window, fullscreen, mouse and picture](#11-window-fullscreen-mouse-and-picture)
 12. [Version lines on the main menu](#12-version-lines-on-the-main-menu)
+   - [12b. Christmas hat](#12b-christmas-hat)
 13. [Game versions: French 1.08, US 1.23 and German 1.07](#13-game-versions-french-108-us-123-and-german-107)
 14. [Installing from a CD image, no CD needed](#14-installing-from-a-cd-image-no-cd-needed)
 15. [Start-up, command line and tools](#15-start-up-command-line-and-tools)
@@ -509,6 +510,13 @@ The original keypad (door and chest codes) only works with the mouse or the numb
 Two small lines are centred at the bottom of the main menu, in the dimmed colour of the option buttons:
 1. `PORT V<version>` (French: `PORTAGE V<version>`). A leading `v` in the build version is dropped. The line is hidden if the version is empty.
 2. `GAME DATA V<x.yy> <FR|US>` (French: `DONNEES DU JEU …`). The version is read from `CRUSADER.EXE` (the string "CRUSADER: No Remorse Vx.yy"). If it is not found, the line shows UNKNOWN or UNKNOWN LANGUAGE.
+
+### 12b. Christmas hat
+
+The original No Remorse has no Christmas mode; No Regret plays Christmas music from 24 to 31 December. The port borrows those dates:
+- From **24 to 31 December** (the computer's local date at launch), the Silencer of the main menu wears a red Christmas hat with white fur. It is drawn over the menu's background, in its palette and with its scanlines.
+- **Ctrl+M** (next music track) turns the Christmas mode off until the game is quit: the hat is gone the next time the menu opens.
+- There is no option: outside these dates the menu is the original's.
 
 ---
 

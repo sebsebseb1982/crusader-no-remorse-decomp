@@ -25,6 +25,7 @@
 #include "core/language.hpp"
 #include "core/png_writer.hpp"
 #include "crusader_version.hpp"
+#include "engine/ui/christmas_hat.hpp"
 #include "engine/world/inventory.hpp"
 #include "game/game.hpp"
 #include "platform/real_shift.hpp"
@@ -38,6 +39,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <exception>
 #include <fstream>
 #include <memory>
@@ -182,6 +184,16 @@ int main(int argc, char** argv) {
         Game game(data, {}, mod);
         game.set_port_version(CRUSADER_VERSION);
         game.set_auto_save_names(auto_save_names);
+        {
+            const std::time_t now = std::time(nullptr);
+            std::tm date{};
+#ifdef _WIN32
+            const bool known = localtime_s(&date, &now) == 0;
+#else
+            const bool known = localtime_r(&now, &date) != nullptr;
+#endif
+            game.set_christmas(known && is_christmas(date));
+        }
         if (start_map > 0) game.set_start(start_map, static_cast<std::uint16_t>(start_egg));
         if (laurie) game.enable_cheats();
         // No game asked for: the start-up, as when the original is launched

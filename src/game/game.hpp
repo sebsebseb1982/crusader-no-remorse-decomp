@@ -278,6 +278,10 @@ public:
     // by the PortMaster launcher): the save screens propose the date and time
     // as the name (LoadScreen::set_auto_name), confirmed with the pad's A.
     void set_auto_save_names(bool on) { auto_save_names_ = on; }
+    // Port addition: the date is 24 to 31 December (is_christmas), set by the
+    // program from the clock: the main menu's Silencer wears a Christmas hat
+    // until Ctrl+M turns the Christmas mode off (christmas_hat.hpp).
+    void set_christmas(bool on) { christmas_ = on; }
     // CRUSYS_1050_093D: the "-laurie" argument enables the cheats (DS:08F0),
     // without turning them on (cheats.hpp).
     void enable_cheats() { world_->state.cheats.enabled = true; }
@@ -416,6 +420,7 @@ private:
     // back after it (13E0:0CD8).
     bool weasel_movie_ = false;
     bool auto_save_names_ = false;     // set_auto_save_names
+    bool christmas_ = false;           // set_christmas
     bool weasel_intro_played_ = false;  // DS:5ECF
     // The game process's pass count (type 0x245, +0x40 / +0x44) and its value
     // at the last animation pass of the scenery (DS:2D3B), item_anim.hpp.

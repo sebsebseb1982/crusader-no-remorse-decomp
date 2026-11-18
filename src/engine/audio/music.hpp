@@ -60,6 +60,12 @@ public:
     void pause();
     void resume();
 
+    // Port addition: the Christmas mode, on from 24 to 31 December (the
+    // menu's hat, christmas_hat.hpp), turned off for the session by Ctrl+M,
+    // as No Regret's DS:46CA turns its Christmas music off.
+    void allow_christmas(bool allowed) { christmas_allowed_ = allowed; }
+    bool christmas_allowed() const { return christmas_allowed_; }
+
 private:
     AsylumMixer& mixer_;
     std::filesystem::path dir_;
@@ -68,6 +74,7 @@ private:
     int flags_ = 0;    // DS:3BFB
     std::array<int, 4> stack_{};  // DS:861C
     int depth_ = 0;               // DS:3BFD
+    bool christmas_allowed_ = true;
 };
 
 }  // namespace crusader

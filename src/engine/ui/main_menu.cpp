@@ -1,6 +1,7 @@
 #include "engine/ui/main_menu.hpp"
 
 #include "core/language.hpp"
+#include "engine/ui/christmas_hat.hpp"
 #include "engine/ui/gump_keys.hpp"
 
 #include <cctype>
@@ -93,6 +94,7 @@ void MainMenu::draw(Surface8& screen) const {
             s->frames()[0].draw(screen, kBackgroundCorners[q].x, kBackgroundCorners[q].y);
         }
     }
+    if (res_.christmas_hat) draw_christmas_hat(screen, false);
     for (int i = 0; i < kButtons; ++i) {
         const Shape* s = gumps_->get(static_cast<std::uint16_t>(kFirstButton + i));
         const std::size_t frame = i == *selected_ ? 1 : 0;
