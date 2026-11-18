@@ -67,9 +67,9 @@ WeaponVibration weapon_vibration(std::uint16_t shape) {
         return {32000, 22000, 85};
     case 0x332:  // SG-A1 shotgun
         return {60000, 48000, 130};
-    case 0x333:  // RP-22 rocket launcher
-    case 0x334:  // RP-32 rocket launcher
-        return {60000, 56000, 220};
+    case 0x333:  // RP-22 machine gun (fire type 1)
+    case 0x334:  // RP-32 machine gun (fire type 1)
+        return {44000, 34000, 110};
     case 0x388:  // GL-303 grenade launcher
         return {48000, 38000, 160};
     case 0x38C:  // EM-4

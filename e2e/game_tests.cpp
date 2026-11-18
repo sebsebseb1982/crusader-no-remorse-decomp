@@ -1305,14 +1305,15 @@ void test_firing(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
-void test_rocket_vibration(const std::filesystem::path& data) {
+// The RP-22 and RP-32 are machine guns (fire type 1): a medium rumble a shot.
+void test_machine_gun_vibration(const std::filesystem::path& data) {
     struct Expected {
         std::uint16_t shape;
         std::uint16_t low_frequency;
         std::uint16_t high_frequency;
         std::uint32_t duration_ms;
     };
-    constexpr Expected profiles[] = {{0x333, 60000, 56000, 220}, {0x334, 60000, 56000, 220}};
+    constexpr Expected profiles[] = {{0x333, 44000, 34000, 110}, {0x334, 44000, 34000, 110}};
 
     Game game(data, test_saves(data));
     game.load_save(13);
@@ -6456,7 +6457,7 @@ int main(int argc, char** argv) {
     test_firing(data);
     test_remains_loot(data);
     test_combat_zone(data);
-    test_rocket_vibration(data);
+    test_machine_gun_vibration(data);
     test_auto_firer(data);
     test_anim_end(data);
     test_special_frames(data);

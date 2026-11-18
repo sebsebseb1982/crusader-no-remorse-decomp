@@ -123,7 +123,7 @@ The original has nothing like it. This screen gathers every option the port adds
 **Files:** `src/core/pad_config.hpp`, `src/platform/sdl_gamepad.*`, `src/engine/ui/gamepad_screen.*`
 
 The original only supports the PC game-port joystick, which the port does not reproduce. The port supports any controller that `SDL_GameController` recognises (Xbox and compatibles), with hot-plugging.
-The Enhancements window lets players enable or disable controller rumble and set its intensity in 10% steps with the left/right keys (or by clicking the row). The controller briefly rumbles to preview each selected level. Explosions scale with their size; firing the player's rocket launcher produces a sustained pulse, slightly weaker than a large explosion. The controlled character also rumbles when actually losing hit points, but not when a shield fully absorbs the hit.
+The Enhancements window lets players enable or disable controller rumble and set its intensity in 10% steps with the left/right keys (or by clicking the row). The controller briefly rumbles to preview each selected level. Explosions scale with their size. Each shot of the player's weapon gives its own pulse: light for the energy weapons and the BA-40, medium for the BA-41, AC-88, AR-7, RP-22 and RP-32 (the RP-22 and RP-32 are machine guns, not rocket launchers: they fire bullets), strong for the SG-A1 and the GL-303. The controlled character also rumbles when actually losing hit points, but not when a shield fully absorbs the hit.
 
 ### 2.1 How it works
 Each controller input is **translated into a key, or a key combination, of the original controls**. The engine receives ordinary keyboard or mouse events and has no controller-specific logic.
