@@ -3,7 +3,6 @@ dist/
 data/
 data_us/
 data_de/
-data_de/
 __pycache__/
 private/
 isos/*.iso
