@@ -726,7 +726,7 @@ These differences are deliberate or not yet resolved. They are documented in the
 - A reused item slot does not keep its old coordinates.
 - During a cutscene, the timed processes are frozen, and the sound plays as one buffer.
 - US data: the reset of the player and inventory between missions that the US executable does is not reproduced.
-- Cheats: the typed code, `-laurie`, F10, Ctrl+F10, `~`, T, f, Ctrl+Q, Ctrl+L, Ctrl+M and Weasel's free level work as in the original; its debugging displays (bounding boxes of f, F7, Alt+F7, Ctrl+F7), the "hack mover" (H) and the memory status (Ctrl+V) are not reproduced (`src/engine/world/cheats.hpp`).
+- Cheats: the typed code, `-laurie`, F10, Ctrl+F10, `~`, T, f, Ctrl+Q, Ctrl+L, Ctrl+M, the "hack mover" (H: drag items and characters with the left button) and Weasel's free level work as in the original; its debugging displays (bounding boxes of f, F7, Alt+F7, Ctrl+F7) and the memory status (Ctrl+V) are not reproduced (`src/engine/world/cheats.hpp`). With a native-resolution view, the hack mover's cursor stays in the 640 x 480 window at the centre of the screen, and the mover no longer clears the player's second ammunition slot when it takes an item (a leftover of Ultima 8 in the original, `src/engine/world/world_mouse.hpp`).
 
 ---
 

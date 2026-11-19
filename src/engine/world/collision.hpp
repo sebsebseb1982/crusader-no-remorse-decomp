@@ -102,4 +102,9 @@ SweepResult try_move(const World& world, ObjId mover, const World::Point& start,
 // gravity.hpp) just before this.
 void finish_move(World& world, ObjId mover, const SweepResult& r);
 
+// SHAPHAND_1088_0000: a stack meets one of the same shape (families 2 and 9;
+// 9 needs the same frame too). Their quantities go to `mover`, up to 666,
+// and `other` keeps the rest or goes.
+void merge_stacks(World& world, ObjId mover, ObjId other);
+
 }  // namespace crusader

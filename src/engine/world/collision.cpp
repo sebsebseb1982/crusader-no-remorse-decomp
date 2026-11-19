@@ -344,11 +344,6 @@ SweepResult try_move(const World& world, ObjId mover, const World::Point& start,
     return r;
 }
 
-namespace {
-
-// SHAPHAND_1088_0000: a moving stack meets one of the same shape (families 2
-// and 9; 9 needs the same frame too). Their quantities go to the mover, up
-// to 666, and the other keeps the rest or goes.
 // @orig 1088:0000
 void merge_stacks(World& world, ObjId mover, ObjId other) {
     const Item* a = world.get(mover);
@@ -367,6 +362,8 @@ void merge_stacks(World& world, ObjId mover, ObjId other) {
         set_quality_and_combine(world, other, static_cast<std::uint16_t>(total - kMaxStack));
     }
 }
+
+namespace {
 
 // The two contact events (REFSTORE.C 0379, processes 0x20B and 0x20C).
 // @orig 10F8:0379 10A8:2718

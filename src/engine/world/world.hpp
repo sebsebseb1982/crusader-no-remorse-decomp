@@ -176,6 +176,7 @@ struct GameState {
         bool enabled = false;          // DS:08F0: typed code or "-laurie"
         bool on = false;               // DS:5FF5: F10 works (~ toggles it)
         bool hack_mover_allowed = false;  // DS:8C3A: set by the typed code
+        bool hack_mover = false;       // DS:5FFA (H): items moved with the mouse (world_mouse.hpp)
         int typed = 0;                 // DS:28C7: letters of the code typed so far
         bool cd_transfer_display = false;  // DS:5FFF (Ctrl+Q)
         bool bounding_boxes = false;   // DS:2D7C (f): not drawn by the port

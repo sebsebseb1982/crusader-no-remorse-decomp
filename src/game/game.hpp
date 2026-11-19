@@ -188,6 +188,7 @@ public:
     // then strafes with the left stick while the right stick aims.
     bool weapon_out() const;
     const WorldMouse& world_mouse() const { return *world_mouse_; }
+    ShapeCache& shapes() { return shapes_; }
 
     // In-game menu (Escape, WORLD_13e8_10c3). Closing it with "quit" sets
     // quit_requested(); with a slot chosen in "load", that game is loaded at

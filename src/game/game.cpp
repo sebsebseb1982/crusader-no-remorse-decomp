@@ -339,6 +339,7 @@ void Game::reset_world() {
     world_->state.frameskip = config_.frameskip;
     world_->state.target_designation = target_designation;
     world_->state.cheats = cheats;
+    world_->state.cheats.hack_mover = false;  // the new view (13E8:0F77)
     world_->set_damage_table(damage_);
     world_->state.game_palette = palette_;
     world_->state.screen_palette = palette_;
@@ -405,8 +406,22 @@ void Game::reset_world() {
     key_daemon_ = &kernel_->spawn<KeyDaemon>(keyboard_);
     combat_ = &kernel_->spawn<CombatControl>(*world_, anims_, keyboard_, *mover_);
     // The mouse in play sends its keys to the Controller too (DS:284E +0x28).
-    world_mouse_ = std::make_unique<WorldMouse>(*kernel_, *world_, anims_, keyboard_,
-                                                [this](const GameKeyEvent& e) { combat_->handle_key(e); });
+    // The hack mover reads the view: the mouse is in the 640 x 480 window
+    // centred in it (ui_x_, ui_y_).
+    MouseView mouse_view;
+    mouse_view.item_at = [this](int x, int y) -> ObjId {
+        const GameState& s = world_->state;
+        const auto list = build_display_list(*world_, shapes_, View{s.view_left, s.view_top}, s.screen_right + 1,
+                                             s.screen_bottom + 1);
+        const auto hits = pick(list, x + ui_x_, y + ui_y_);
+        return hits.empty() ? 0 : list[hits.back()].item->id;
+    };
+    mouse_view.origin = [this] {
+        return std::pair<int, int>{world_->state.view_left + ui_x_, world_->state.view_top + ui_y_};
+    };
+    world_mouse_ = std::make_unique<WorldMouse>(
+        *kernel_, *world_, anims_, keyboard_, [this](const GameKeyEvent& e) { combat_->handle_key(e); },
+        std::move(mouse_view));
     mouse_queue_.clear();
     kernel_->spawn<MouseDaemon>(mouse_queue_);
     kernel_->spawn<DumbTimer>(*world_, anims_);
@@ -1233,7 +1248,19 @@ void Game::on_key(const GameKeyEvent& e) {
         else open_menu();
     }
     if (code && !world_->state.selection.active && function_key(code)) return;
-    if (code && !world_->state.selection.active && cheat_command(*world_, code, data_version_ == "1.23")) return;
+    const bool hack_mover = world_->state.cheats.hack_mover;
+    if (code && !world_->state.selection.active && cheat_command(*world_, code, data_version_ == "1.23")) {
+        // H: the cursor shown (frame 0x24) with the hack mover, else hidden.
+        if (world_->state.cheats.hack_mover != hack_mover) {
+            if (hack_mover) {
+                cursor_.hide();
+            } else {
+                cursor_.show();
+                cursor_.reset(MouseCursor::kArrow);
+            }
+        }
+        return;
+    }
     if (code) player_command(*kernel_, *world_, anims_, code);
 }
 
@@ -1301,9 +1328,11 @@ void Game::close_menu() {
     menu_process_ = nullptr;
     kernel_->drop_empty_levels();
     // WORLD_13e8_10c3 then 0ef9: the status bar comes back (shown whatever
-    // its state before), the cursor returns to the arrow, hidden.
+    // its state before), the cursor returns to the arrow, hidden, the hack
+    // mover off.
     cursor_.reset(MouseCursor::kArrow);
     cursor_.hide();
+    world_->state.cheats.hack_mover = false;
     if (result == MainMenu::kQuit) {
         quit_ = true;
         return;
@@ -1620,13 +1649,14 @@ void Game::enter_menu_mode() {
 void Game::leave_menu_mode() {
     // 13E8:0EF9: the screen sprites and the status bar back, the cursor
     // popped and hidden, the keys and clicks forgotten (Input_I_flush), the
-    // "Crusader teleporting" flag cleared.
+    // "Crusader teleporting" flag cleared, the hack mover off.
     sprites_suspended_ = false;
     world_->state.status_bar_visible = true;
     apply_status_bar_mouse_range();
     cursor_.pop();
     cursor_.hide();
     keyboard_.reset();
+    world_->state.cheats.hack_mover = false;
     world_->state.crusader_teleporting = false;
 }
 

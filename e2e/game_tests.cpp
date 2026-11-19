@@ -2184,6 +2184,133 @@ void test_mouse_in_play(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
+// Issue #22: the hack mover (H with the cheats, world_mouse.hpp): the mouse
+// moves a cursor and the left button drags the item under it. Played on a
+// 640 x 480 view, then on a larger one (native resolution), where the mouse's
+// window is centred in the view.
+void test_hack_mover(const std::filesystem::path& data) {
+    for (const auto [width, height] : {std::pair{640, 480}, std::pair{1280, 800}}) {
+        Game game(data, test_saves(data));
+        game.load_save(1);
+        World& w = game.world();
+        settle(game);
+        auto run = [&](int frames) {
+            for (int i = 0; i < frames; ++i) game.update(kFrameUs);
+        };
+        Surface8 screen(width, height);
+        game.render(screen);
+        const auto close_box = [&] {
+            press(game, 0x1C, false, 0x0D);
+            run(1);
+        };
+        GameState::Cheats& c = w.state.cheats;
+
+        // Without the typed code (-laurie only), H does nothing.
+        c.enabled = c.on = true;
+        c.hack_mover_allowed = false;
+        press(game, 0x23, false, 'h');
+        CHECK(!c.hack_mover && !game.message());
+        c.hack_mover_allowed = true;
+        press(game, 0x23, false, 'h');
+        CHECK(c.hack_mover && game.message() && game.message()->text() == "HACK MOVER ON");
+        close_box();
+        CHECK(game.cursor().visible() && game.cursor().frame() == MouseCursor::kArrow && game.mouse_in_play());
+
+        // An item that falls (not fixed, with a weight), not a stack nor an
+        // NPC, drawn on top at a point of the mouse's window.
+        const GameState& s = w.state;
+        const auto list = build_display_list(w, game.shapes(), View{s.view_left, s.view_top}, s.screen_right + 1,
+                                             s.screen_bottom + 1);
+        ObjId id = 0;
+        int mx = 0, my = 0;
+        for (std::size_t i = list.size(); i-- > 0 && id == 0;) {
+            const Item& item = *list[i].item;
+            const ShapeInfo* info = w.shape_info(item.shape);
+            if (item.id < 256 || !info || info->is(ShapeInfo::kFixed) || info->weight == 0 || info->family == 2 ||
+                info->family == 9) {
+                continue;
+            }
+            for (int y = list[i].top; y < list[i].bottom && id == 0; ++y) {
+                for (int x = list[i].left; x < list[i].right && id == 0; ++x) {
+                    const int cx = x - game.ui_x(), cy = y - game.ui_y();
+                    if (cx < 60 || cx > 580 || cy < 60 || cy > 380) continue;
+                    const auto hits = pick(list, x, y);
+                    if (!hits.empty() && hits.back() == i) {
+                        id = item.id;
+                        mx = cx;
+                        my = cy;
+                    }
+                }
+            }
+        }
+        CHECK(id != 0);
+        if (id == 0) return;
+        const Item* item = w.get(id);
+        std::printf("hack mover %dx%d: item %d shape 0x%X at (%d, %d, %d), mouse (%d, %d)\n", width, height, id,
+                    item->shape, item->x, item->y, item->z, mx, my);
+
+        // The cursor follows the mouse, the player does not turn.
+        const int dir = w.npc_direction(1);
+        game.mouse_move(mx, my);
+        run(1);
+        CHECK(game.cursor().x() == mx && game.cursor().y() == my && w.npc_direction(1) == dir);
+
+        // The press takes it (after the double-click delay), without firing.
+        const int shots = game.shots_fired();
+        game.mouse_button(1, true, mx, my);
+        run(MouseQueue::kClickDelay + 1);
+        CHECK(game.world_mouse().dragging() && game.world_mouse().held() == id && !game.world_mouse().firing());
+        // Each move of (dx, dy) on the screen moves it by (dx + 2 dy, 2 dy -
+        // dx) on the map, when the place is free at the same height (within a
+        // unit: over an item, the point goes down its front face, 1188:049E).
+        int moves = 0;
+        for (const auto [dx, dy] : {std::pair{16, 8}, std::pair{-16, 8}, std::pair{16, -8}, std::pair{-16, -8}}) {
+            const std::int32_t x0 = item->x, y0 = item->y, z0 = item->z;
+            mx += dx;
+            my += dy;
+            game.mouse_move(mx, my);
+            run(1);
+            CHECK(game.cursor().x() == mx && game.cursor().y() == my && w.npc_direction(1) == dir);
+            std::printf("hack mover: mouse (%d, %d), item (%d, %d, %d) -> (%d, %d, %d)\n", mx, my, x0, y0, z0, item->x,
+                        item->y, item->z);
+            if (item->x == x0 && item->y == y0 && item->z == z0) continue;
+            ++moves;
+            if (item->z == z0) {
+                CHECK(std::abs(item->x - x0 - (dx + 2 * dy)) <= 1 && std::abs(item->y - y0 - (2 * dy - dx)) <= 1);
+            }
+        }
+        CHECK(moves > 0);
+        CHECK(w.get(id) == item && item->parent == 0 && !(item->flags & kItemEthereal) && w.cells_consistent());
+
+        // The release ends it.
+        game.mouse_button(1, false, mx, my);
+        run(1);
+        CHECK(!game.world_mouse().dragging() && game.world_mouse().held() == 0);
+        run(60);
+        CHECK(game.shots_fired() == shots && w.pending_count() == 0);
+
+        // H again: off, the cursor hidden; the mouse turns the player again.
+        press(game, 0x23, false, 'h');
+        CHECK(!c.hack_mover && game.message() && game.message()->text() == "HACK MOVER OFF");
+        close_box();
+        CHECK(!game.cursor().visible());
+        game.mouse_move(mx, my);
+        run(1);
+        CHECK(game.cursor().x() == WorldMouse::kCentreX && game.cursor().y() == WorldMouse::kCentreY);
+
+        // On again, the menu turns it off (13E8:0EF9).
+        press(game, 0x23, false, 'h');
+        close_box();
+        CHECK(c.hack_mover);
+        press(game, 0x01, false, 0x1B);
+        CHECK(game.menu());
+        press(game, 0x01, false, 0x1B);
+        run(1);
+        CHECK(!game.menu() && !w.state.cheats.hack_mover && !game.cursor().visible());
+        CHECK(game.machine().faults().empty());
+    }
+}
+
 // Using scenery on SAVEGAME.1: a chest opens and hands over the items of its
 // content markers (0x476), a dead body is searched once.
 void test_scenery_use(const std::filesystem::path& data) {
@@ -6405,6 +6532,7 @@ int main(int argc, char** argv) {
     }
     if (argc > 2 && std::string(argv[2]) == "--cheats") {
         test_cheats(data);
+        test_hack_mover(data);
         return failures ? 1 : 0;
     }
     if (argc > 2 && std::string(argv[2]) == "--keypad") {
@@ -6492,6 +6620,7 @@ int main(int argc, char** argv) {
     test_cheats(data);
     test_function_keys(data);
     test_mouse_in_play(data);
+    test_hack_mover(data);
     test_hard_landing(data);
     test_jump_down_ends_standing(data);
     test_offscreen_death_reaches_last_frame(data);

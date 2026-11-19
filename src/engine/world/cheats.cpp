@@ -181,6 +181,12 @@ bool cheat_command(World& world, std::uint16_t code, bool us_123) {
         world.state.avatar_in_stasis = false;  // Ultima8Engine_I_setAvatarInStasis(0)
         c.bounding_boxes = !c.bounding_boxes;
         return true;
+    case 'H': case 'h':
+        // The mouse cursor (shown, frame 0x24, or hidden) is the game's.
+        if (!c.hack_mover_allowed || !c.enabled) return true;
+        c.hack_mover = !c.hack_mover;
+        say(world, c.hack_mover ? "HACK MOVER ON" : "HACK MOVER OFF");
+        return true;
     case 0x410:  // Ctrl+Q
         if (!c.enabled) return true;
         c.cd_transfer_display = !c.cd_transfer_display;
