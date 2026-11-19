@@ -282,7 +282,12 @@ std::vector<std::uint16_t> register_npc_intrinsics(UCMachine& m, World& w, const
         return 0;
     });
     // Item::I_fireDistance(item, target, dir, dx, dy, dz) (1130:1755).
+    // Port addition (native resolution): only the wall guns (WALLGUN) call
+    // it, to find and shoot the player; they only do it from the combat
+    // zone, the screen where the original let them look, and sweep in the
+    // rest of the view.
     bind_item(0x116, [&w, &anims](UCMachine&, ObjId id, Args a) -> std::uint32_t {
+        if (!w.is_partly_in_combat_zone(*w.get(id))) return 0;
         const auto s16 = [&](std::size_t pos) { return static_cast<int>(static_cast<std::int16_t>(arg16(a, pos))); };
         return static_cast<std::uint16_t>(fire_distance(w, anims, id, arg16(a, 4), arg16(a, 6) & 0xFF, s16(8), s16(10),
                                                         static_cast<std::int8_t>(arg16(a, 12))));

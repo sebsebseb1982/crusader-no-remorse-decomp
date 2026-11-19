@@ -1080,6 +1080,39 @@ void test_on_screen() {
     CHECK(w.is_partly_in_combat_zone(*w.get(far_item)) == w.is_partly_on_screen(*w.get(far_item)));
     w.get(edge)->x += 2;
     CHECK(w.is_partly_in_combat_zone(*w.get(edge)));
+
+    // A 1720 x 720 view (21:9), classic scrolling: the controlled NPC walks
+    // right from the camera point. The original screen (540..1179) scrolls
+    // as the original would, the view only near its own edges, and the NPC
+    // stays in the combat zone.
+    w.set_original_combat_zone(true);
+    w.set_view_size(1720, 720);
+    w.set_camera(4000, 4000, 0);
+    auto zone_is = [&](int x0, int y0) {
+        const World::ScreenRect r = w.combat_rect();
+        return r.x0 == x0 && r.y0 == y0 && r.x1 == x0 + 639 && r.y1 == y0 + 479;
+    };
+    CHECK(zone_is(540, 120));
+    const std::int16_t left = w.state.view_left;
+    // 300 pixels right (x - y up by 600): 620 on the original screen, past
+    // 539. It puts the NPC at 120 (and y 280): the zone moves 500 right.
+    w.track_camera_target(4300, 3700, 0);
+    CHECK(w.state.view_left == left && zone_is(1040, 140));
+    // 740 pixels right: 560 on the original screen moves it 440 more, but it
+    // stops at the view's right edge.
+    w.track_camera_target(4740, 3260, 0);
+    CHECK(w.state.view_left == left && zone_is(1080, 140));
+    // 790 pixels right: 1650, past the view's own margin (1619). The view
+    // scrolls and the zone stays whole inside it, around the NPC.
+    w.track_camera_target(4790, 3210, 0);
+    CHECK(w.state.view_left != left);
+    const World::ScreenRect moved = w.combat_rect();
+    const int npc_x = 1650 - (w.state.view_left - left);
+    CHECK(moved.x0 >= 0 && moved.x1 <= 1719 && moved.x1 - moved.x0 == 639);
+    CHECK(moved.x0 + 100 <= npc_x && npc_x <= moved.x1 - 100);
+    // Placing the camera centres the zone on it again.
+    w.set_camera(4000, 4000, 0);
+    CHECK(zone_is(540, 120));
 }
 
 void test_directions() {

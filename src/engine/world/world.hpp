@@ -616,7 +616,9 @@ public:
     // ITEMCACH.C 1D29, when the controlled NPC is put down at (x, y, z): if
     // it gets within 100 pixels of the left / right edge, 140 of the top or
     // 70 of the bottom, the view jumps to put it at x 520 (coming from the
-    // left), 120 (from the right) or the centre, and y 280.
+    // left), 120 (from the right) or the centre, and y 280. In a larger view,
+    // the same rule on the 640 x 480 original screen moves the combat zone
+    // (combat_rect), and on the view's own edges moves the view.
     void track_camera_target(std::int32_t x, std::int32_t y, std::int32_t z);
     // Port addition ("camera suit le joueur" in the enhancements window): the
     // controlled NPC is kept at the centre of the view at every step instead
@@ -656,11 +658,15 @@ public:
     };
     // The whole view drawn: the window in native resolution.
     ScreenRect view_rect() const { return {0, 0, state.screen_right, state.screen_bottom}; }
-    // Where combat happens: the 640 x 480 screen of the original, placed in a
-    // larger view like the original screen around the camera. An NPC only
-    // spots, keeps and shoots the player in it, and the player's shots only
-    // pick their target in it. The whole view when the combat zone is not
-    // kept (set_original_combat_zone) or the view is not larger.
+    // Where combat happens: the 640 x 480 screen the original would show,
+    // inside a larger view. It is centred on the camera like the original
+    // screen when the camera is placed (set_camera), then scrolls by the
+    // original rules (track_camera_target) as the controlled NPC moves, even
+    // when the larger view does not scroll or follows the NPC, and it is
+    // kept whole inside the view. An NPC only spots, keeps and shoots the
+    // player in it, and the player's shots only pick their target in it. The
+    // whole view when the combat zone is not kept (set_original_combat_zone)
+    // or the view is not larger.
     ScreenRect combat_rect() const;
     void set_original_combat_zone(bool on) { original_combat_zone_ = on; }
     bool original_combat_zone() const { return original_combat_zone_; }
@@ -790,6 +796,12 @@ private:
     FastArea fast_area_;
     std::int32_t fast_half_s_ = FastArea::kHalfS, fast_half_d_ = FastArea::kHalfD;  // grown by set_view_size
     bool original_combat_zone_ = true;
+    // The original screen of combat_rect, top-left corner in absolute screen
+    // pixels (the view's corner is state.view_left / view_top).
+    int original_left_ = 0, original_top_ = 0;
+    void reset_original_screen();  // centred on the camera point
+    void clamp_original_screen();  // whole inside the view
+    void place_camera(std::int32_t x, std::int32_t y, std::int32_t z);  // set_camera, original screen kept
     void shift_camera(int dx, int dy);  // the view moves by (dx, dy) pixels
     void set_camera_view(std::int32_t x, std::int32_t y, std::int32_t z, int left, int top);
     bool follow_player_ = false;

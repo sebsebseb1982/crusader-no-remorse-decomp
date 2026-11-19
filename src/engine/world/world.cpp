@@ -841,8 +841,14 @@ void World::clear_broken(Item& item) {
     item.flags &= static_cast<std::uint16_t>(~kItemBroken);
 }
 
-// @orig 1188:0CBA
+// @orig none: port wrapper of place_camera, the combat zone recentred
 void World::set_camera(std::int32_t x, std::int32_t y, std::int32_t z) {
+    place_camera(x, y, z);
+    reset_original_screen();
+}
+
+// @orig 1188:0CBA
+void World::place_camera(std::int32_t x, std::int32_t y, std::int32_t z) {
     // 16-bit arithmetic of ANIMCACH.C: halves and quarters are taken before
     // the sum or difference.
     const std::uint16_t ux = static_cast<std::uint16_t>(x), uy = static_cast<std::uint16_t>(y);
@@ -872,6 +878,7 @@ void World::set_camera_view(std::int32_t x, std::int32_t y, std::int32_t z, int 
     }
     update_fast_area(ux, uy);
     if (audio_) audio_->sources.update_volumes(*this);
+    clamp_original_screen();
 }
 
 // 640 x 480: 0x140 and 300.
@@ -978,25 +985,12 @@ std::uint8_t World::npc_direction(ObjId id) const {
     return id < kNpcSlots ? npcs_[id * kNpcRecordSize + 0x0C] : 0;
 }
 
-// @orig ?: camera follow of CameraProcess (segment 1188), not located
-void World::track_camera_target(std::int32_t x, std::int32_t y, std::int32_t z) {
-    if (follow_player_) {
-        const Item* target = get(state.camera_target);
-        if (target && target->x == x && target->y == y && target->z == z) return;
-        if (!follow_active_) follow_history_.clear();
-        follow_goal_[0] = x;
-        follow_goal_[1] = y;
-        follow_goal_[2] = z;
-        follow_active_ = true;
-        return;
-    }
-    // Screen position of the target (SHAPHAND.C projection), feet at z.
-    const auto ux = static_cast<std::int16_t>(x), uy = static_cast<std::int16_t>(y);
-    const int sx = static_cast<std::int16_t>(((ux - uy) >> 1) - state.view_left);
-    const int sy = static_cast<std::int16_t>((static_cast<std::uint16_t>(ux + uy) >> 2) - state.view_top - (z & 0xFF));
-    const int w = state.screen_right, h = state.screen_bottom;  // x1 - x0, y1 - y0 with x0 = y0 = 0
-    if (sy >= 0x8C && sy <= h - 0x46 && sx <= w - 100 && sx >= 100) return;
+namespace {
 
+// ITEMCACH.C 1D29 on a w x h screen (bounds w - 1, h - 1): how far the screen
+// moves for the target drawn at (sx, sy) on it; false when it stays.
+bool camera_shift(int sx, int sy, int w, int h, int& dx, int& dy) {
+    if (sy >= 0x8C && sy <= h - 0x46 && sx <= w - 100 && sx >= 100) return false;
     // Where to put the target: away from the edge it came near.
     int target_x = (w + 1) / 2;
     if (sy < 0xA0) {
@@ -1009,7 +1003,40 @@ void World::track_camera_target(std::int32_t x, std::int32_t y, std::int32_t z) 
     } else if (w - 0x77 < sx) {
         target_x = 0x78;
     }
-    shift_camera(sx - target_x, sy - ((h + 1) / 2 + 0x28));
+    dx = sx - target_x;
+    dy = sy - ((h + 1) / 2 + 0x28);
+    return true;
+}
+
+}  // namespace
+
+// @orig ?: camera follow of CameraProcess (segment 1188), not located
+void World::track_camera_target(std::int32_t x, std::int32_t y, std::int32_t z) {
+    // Screen position of the target (SHAPHAND.C projection), feet at z.
+    const auto ux = static_cast<std::int16_t>(x), uy = static_cast<std::int16_t>(y);
+    const int sx = static_cast<std::int16_t>(((ux - uy) >> 1) - state.view_left);
+    const int sy = static_cast<std::int16_t>((static_cast<std::uint16_t>(ux + uy) >> 2) - state.view_top - (z & 0xFF));
+    // Port addition: the original screen of the combat zone scrolls as the
+    // original would, whatever the larger view does.
+    int dx = 0, dy = 0;
+    const int in_x = original_left_ - state.view_left, in_y = original_top_ - state.view_top;
+    if (camera_shift(sx - in_x, sy - in_y, 639, 479, dx, dy)) {
+        original_left_ += dx;
+        original_top_ += dy;
+        clamp_original_screen();
+    }
+    if (follow_player_) {
+        const Item* target = get(state.camera_target);
+        if (target && target->x == x && target->y == y && target->z == z) return;
+        if (!follow_active_) follow_history_.clear();
+        follow_goal_[0] = x;
+        follow_goal_[1] = y;
+        follow_goal_[2] = z;
+        follow_active_ = true;
+        return;
+    }
+    // x1 - x0, y1 - y0 with x0 = y0 = 0.
+    if (camera_shift(sx, sy, state.screen_right, state.screen_bottom, dx, dy)) shift_camera(dx, dy);
 }
 
 // @orig none: port-only camera follow
@@ -1022,7 +1049,7 @@ void World::shift_camera(int dx, int dy) {
     const int abs_x = cam_sx + dx + state.view_left, abs_y = cam_sy + dy + state.view_top;
     const int base_x = abs_x + 2 * abs_y, base_y = 2 * abs_y - abs_x;
     if (!follow_player_) {
-        set_camera(base_x, base_y, state.camera_z);
+        place_camera(base_x, base_y, state.camera_z);
         return;
     }
     set_camera_view(base_x, base_y, state.camera_z, state.view_left + dx, state.view_top + dy);
@@ -1076,9 +1103,24 @@ void World::update_follow_camera(std::uint32_t elapsed_us) {
 World::ScreenRect World::combat_rect() const {
     const ScreenRect view = view_rect();
     if (!original_combat_zone_) return view;
-    // The camera point is at (320, 300) of the original screen.
-    const int x0 = view_origin_x() - 320, y0 = view_origin_y() - 300;
+    const int x0 = original_left_ - state.view_left, y0 = original_top_ - state.view_top;
     return {std::max(x0, view.x0), std::max(y0, view.y0), std::min(x0 + 639, view.x1), std::min(y0 + 479, view.y1)};
+}
+
+// @orig none: port-only native resolution
+void World::reset_original_screen() {
+    // The camera point is at (320, 300) of the original screen.
+    original_left_ = state.view_left + view_origin_x() - 320;
+    original_top_ = state.view_top + view_origin_y() - 300;
+    clamp_original_screen();
+}
+
+// @orig none: port-only native resolution
+void World::clamp_original_screen() {
+    // A view narrower or lower than the original keeps the overlap (combat_rect).
+    const int w = state.screen_right + 1, h = state.screen_bottom + 1;
+    if (w >= 640) original_left_ = std::clamp(original_left_, int{state.view_left}, state.view_left + w - 640);
+    if (h >= 480) original_top_ = std::clamp(original_top_, int{state.view_top}, state.view_top + h - 480);
 }
 
 // @orig 10A8:40CE

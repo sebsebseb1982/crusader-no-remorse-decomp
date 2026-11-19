@@ -2934,6 +2934,32 @@ void test_security_camera(const std::filesystem::path& data) {
         else CHECK(range == 0 && frames.size() == 5 && !beep && !(cam->flags & 0x1000) && !w.state.alert_active);
         CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
     }
+    // Native resolution, a 1720 x 720 view: the camera, 450 pixels right of
+    // the camera point, is drawn in the band beside the original screen. It
+    // sweeps as soon as it is seen, but only sees from the combat zone: the
+    // player in front of it is not spotted.
+    {
+        Game game(data, test_saves(data));
+        game.load_save(2);
+        World& w = game.world();
+        const Item* cam = w.get(kCamera);
+        w.move_item(1, cam->x + 256, cam->y + 256, 0);
+        w.set_view_size(1720, 720);
+        w.set_camera(cam->x - 450, cam->y + 450, cam->z & 0xFF);
+        const bool drawn = w.is_partly_on_screen(*cam), fights = w.is_partly_in_combat_zone(*cam);
+        std::set<int> frames;
+        bool beep = false;
+        for (int f = 0; f < 600; ++f) {
+            game.update(kFrameUs);
+            frames.insert(cam->frame);
+            beep = beep || game.audio()->sources.is_playing(0xE6, kCamera);
+        }
+        std::printf("camera: in the band, drawn %d, in zone %d, frames %zu, beep %d, status %04X, alarm %d\n", drawn,
+                    fights, frames.size(), beep, cam->flags & 0x1000, w.state.alert_active);
+        CHECK(drawn && !fights);
+        CHECK(frames.size() == 5 && !beep && !(cam->flags & 0x1000) && !w.state.alert_active);
+        CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
+    }
 }
 // Switch 4595 of SAVEGAME.3 turns off the energy walls of quality 9: TRIGGER
 // sends them event 0x13 (Item::I_avatarStoleSomething, their switch-off
@@ -4714,6 +4740,35 @@ void test_turrets(const std::filesystem::path& data) {
         CHECK(count_shots(game, 300) == 0);
         CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
     }
+    // Native resolution, a 1720 x 720 view: the same gun, 450 pixels right
+    // of the camera point, is drawn in the band beside the original screen.
+    // It sweeps, but only finds and shoots the player from the combat zone.
+    {
+        Game game(data, test_saves(data));
+        game.load_save(13);
+        World& w = game.world();
+        constexpr ObjId kGun = 3369;
+        const Item* gun = w.get(kGun);
+        CHECK(gun != nullptr);
+        if (!gun) return;
+        w.move_item(1, gun->x, gun->y - 200, gun->z);
+        w.set_view_size(1720, 720);
+        w.set_camera(gun->x - 450, gun->y + 450, gun->z & 0xFF);
+        const bool drawn = w.is_partly_on_screen(*gun), fights = w.is_partly_in_combat_zone(*gun);
+        const int shots = count_shots(game, 600);
+        std::set<int> frames;
+        for (int f = 0; f < 300; ++f) {
+            game.update(kFrameUs);
+            frames.insert(gun->frame);
+        }
+        std::printf("turrets: in the band, drawn %d, in zone %d, %d shots, %zu frames\n", drawn, fights, shots,
+                    frames.size());
+        CHECK(drawn && !fights && shots == 0 && frames.size() > 2);
+        // Back in the combat zone, it shoots.
+        w.set_camera(gun->x, gun->y, gun->z & 0xFF);
+        CHECK(count_shots(game, 900) >= 5);
+        CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
+    }
 }
 
 // Mission 1's surveillance monitors (new game), whose camera goes far from
@@ -6440,6 +6495,14 @@ int main(int argc, char** argv) {
     if (!have_test_saves(data)) return 1;
     if (argc > 2 && std::string(argv[2]) == "--player-turret") {
         test_player_turret(data);
+        return failures ? 1 : 0;
+    }
+    if (argc > 2 && std::string(argv[2]) == "--combat-zone") {
+        test_combat_zone(data);
+        test_security_camera(data);
+        test_turrets(data);
+        test_player_turret(data);
+        std::printf(failures ? "%d failure(s)\n" : "all checks passed\n", failures);
         return failures ? 1 : 0;
     }
     if (argc > 2 && std::string(argv[2]) == "--weasel-native-view") {
