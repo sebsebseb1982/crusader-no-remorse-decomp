@@ -2961,6 +2961,33 @@ void test_security_camera(const std::filesystem::path& data) {
         CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
     }
 }
+// The report's save (camera-immobile-vue-native.sav): a 3440 x 1440 window
+// with zoom x2 gives a 1720 x 684 view, camera following the player.
+// CAMERANS 7645 is drawn 660 pixels left of him, outside the original screen:
+// it stayed still while it waited to be in the combat zone. It sweeps now,
+// without spotting him from there.
+void test_camera_in_wide_view(const std::filesystem::path& data) {
+    constexpr ObjId kCamera = 7645;
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "camera-immobile-vue-native.sav");
+    World& w = game.world();
+    w.set_follow_player(true);
+    w.set_view_size(1720, 684);
+    const Item* cam = w.get(kCamera);
+    CHECK(cam && cam->shape == 0x1B8);
+    if (!cam) return;
+    std::set<int> frames;
+    for (int f = 0; f < 600; ++f) {
+        game.update(kFrameUs);
+        frames.insert(cam->frame);
+    }
+    const bool drawn = w.is_partly_on_screen(*cam), fights = w.is_partly_in_combat_zone(*cam);
+    std::printf("camera in a wide view: drawn %d, in zone %d, frames %zu, status %04X, alarm %d\n", drawn, fights,
+                frames.size(), cam->flags & 0x1000, w.state.alert_active);
+    CHECK(drawn && !fights && frames.size() >= 5 && !(cam->flags & 0x1000));
+    CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
+}
+
 // Switch 4595 of SAVEGAME.3 turns off the energy walls of quality 9: TRIGGER
 // sends them event 0x13 (Item::I_avatarStoleSomething, their switch-off
 // sound 0x3D) and turns them into markers 0x476 keeping the shape; used
@@ -6500,6 +6527,7 @@ int main(int argc, char** argv) {
     if (argc > 2 && std::string(argv[2]) == "--combat-zone") {
         test_combat_zone(data);
         test_security_camera(data);
+        test_camera_in_wide_view(data);
         test_turrets(data);
         test_player_turret(data);
         std::printf(failures ? "%d failure(s)\n" : "all checks passed\n", failures);
@@ -6669,6 +6697,7 @@ int main(int argc, char** argv) {
     test_saved_busy_items(data);
     test_monitor(data);
     test_security_camera(data);
+    test_camera_in_wide_view(data);
     test_energy_walls(data);
     test_floor_pad(data);
     test_ledge_step(data);
