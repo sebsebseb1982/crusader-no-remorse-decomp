@@ -1,20 +1,20 @@
 # Level editor
 
-`crusader-editor` creates and edits the maps of *Crusader: No Remorse*: the scenery, the objects, the NPCs, and everything that drives the game's scripts (eggs, triggers, teleports, links between objects). It works on the same files as the original game and draws the map with the port's renderer, so what you see in the editor is what you get in the game.
+`crusader-no-remorse-editor` creates and edits the maps of *Crusader: No Remorse*: the scenery, the objects, the NPCs, and everything that drives the game's scripts (eggs, triggers, teleports, links between objects). It works on the same files as the original game and draws the map with the port's renderer, so what you see in the editor is what you get in the game.
 
 The original data is never modified. The editor saves to a **mod folder**, which the game loads on top of the data with `--mod`.
 
 ## Running it
 
 ```sh
-crusader-editor data                                # game data folder, default mod: mods/mon-niveau
-crusader-editor data --mod mods/base-secrete --map 3
+crusader-no-remorse-editor data                     # game data folder, default mod: mods/mon-niveau
+crusader-no-remorse-editor data --mod mods/base-secrete --map 3
 ```
 
 To play the level, press **F5** in the editor (or *File > Test in game*), which saves and then launches:
 
 ```sh
-crusader data --mod mods/base-secrete --map 3 --egg 0x1E
+crusader-no-remorse data --mod mods/base-secrete --map 3 --egg 0x1E
 ```
 
 `--map` starts a new game on that map, at the arrival egg `--egg` (0x1E by default, the egg where every mission starts). If an arrival egg is selected, F5 starts from it. A mod's saved games go in `<mod>/SAVEGAME`.

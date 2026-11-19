@@ -88,14 +88,15 @@ jobs:
         shell: bash
         run: |
           set -eu
-          pkg="crusader-${VERSION}-${{ matrix.name }}"
-          # Layout expected by PortMaster: Crusader.sh next to the crusader/ game folder.
-          mkdir -p "dist/$pkg/crusader/licenses" "dist/$pkg/crusader/data"
-          cp tools/portmaster/port/Crusader.sh "dist/$pkg/"
-          cp tools/portmaster/port/crusader/licenses/* "dist/$pkg/crusader/licenses/"
-          cp build-portmaster/crusader "dist/$pkg/crusader/"
-          cp -r languages "dist/$pkg/crusader/"
-          cp tools/release/PUT_GAME_DATA_HERE.txt "dist/$pkg/crusader/data/"
+          pkg="crusader-no-remorse-${VERSION}-${{ matrix.name }}"
+          # Layout expected by PortMaster: the launcher next to the game folder.
+          port=crusader-no-remorse
+          mkdir -p "dist/$pkg/$port/licenses" "dist/$pkg/$port/data"
+          cp "tools/portmaster/port/Crusader No Remorse.sh" "dist/$pkg/"
+          cp tools/portmaster/port/$port/licenses/* "dist/$pkg/$port/licenses/"
+          cp build-portmaster/crusader-no-remorse "dist/$pkg/$port/"
+          cp -r languages "dist/$pkg/$port/"
+          cp tools/release/PUT_GAME_DATA_HERE.txt "dist/$pkg/$port/data/"
           cp tools/portmaster/port/{port.json,README.md,gameinfo.xml} "dist/$pkg/"
           [ -f tools/portmaster/port/screenshot.png ] && cp tools/portmaster/port/screenshot.png "dist/$pkg/"
           cd dist
@@ -106,12 +107,12 @@ jobs:
         shell: bash
         run: |
           set -eu
-          pkg="crusader-${VERSION}-${{ matrix.name }}"
+          pkg="crusader-no-remorse-${VERSION}-${{ matrix.name }}"
           mkdir -p "dist/$pkg"
           if [ "$RUNNER_OS" = "Windows" ]; then
-            cp build/Release/crusader.exe build/Release/crusader-editor.exe "dist/$pkg/"
+            cp build/Release/crusader-no-remorse.exe build/Release/crusader-no-remorse-editor.exe "dist/$pkg/"
           else
-            cp build/crusader build/crusader-editor "dist/$pkg/"
+            cp build/crusader-no-remorse build/crusader-no-remorse-editor "dist/$pkg/"
           fi
           cp -r languages "dist/$pkg/"
           mkdir "dist/$pkg/data"

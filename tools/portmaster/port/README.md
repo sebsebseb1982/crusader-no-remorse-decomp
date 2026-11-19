@@ -11,8 +11,8 @@ The zip contains:
 
 | In the zip | Copy it to (on the SD card holding your ports) | Role |
 |---|---|---|
-| `Crusader.sh` | `ROMS/Ports/Crusader.sh` (muOS, Knulli, ROCKNIX, ArkOS: your `roms/ports` folder) | Launcher shown in the Ports menu |
-| `crusader/` (whole folder) | `ports/crusader/` | Binary, licenses and game data |
+| `Crusader No Remorse.sh` | `ROMS/Ports/Crusader No Remorse.sh` (muOS, Knulli, ROCKNIX, ArkOS: your `roms/ports` folder) | Launcher shown in the Ports menu |
+| `crusader-no-remorse/` (whole folder) | `ports/crusader-no-remorse/` | Binary, licenses and game data |
 | `port.json`, `gameinfo.xml`, `README.md`, `screenshot.png` | nowhere | PortMaster metadata, not needed on the console |
 
 Installing through PortMaster does this for you. Manual install (USB / SD card reader), for example
@@ -21,9 +21,9 @@ on a muOS console (RG40XX-H) where the ports live on the SD2 card:
 ```
 SD2/
 ├── ROMS/Ports/
-│   └── Crusader.sh                 <- launcher
-└── ports/crusader/
-    ├── crusader                    <- binary
+│   └── Crusader No Remorse.sh      <- launcher
+└── ports/crusader-no-remorse/
+    ├── crusader-no-remorse         <- binary
     ├── licenses/
     ├── data/                       <- PUT YOUR ORIGINAL GAME FILES HERE
     ├── conf/                       (created on first launch)
@@ -31,17 +31,17 @@ SD2/
 ```
 
 If your ports are on SD1 instead of SD2, use the same layout on SD1. Restart the frontend
-if the Crusader entry does not show up in the Ports list.
+if the Crusader No Remorse entry does not show up in the Ports list.
 
 ## Game data
 
 The port contains **no game files**. Copy your own copy of the game to
-**`ports/crusader/data/`** (right next to the `crusader` binary), either:
+**`ports/crusader-no-remorse/data/`** (right next to the `crusader-no-remorse` binary), either:
 
 - the installed game files, directly in `data/` (not in a sub-folder):
 
   ```
-  ports/crusader/data/
+  ports/crusader-no-remorse/data/
   ├── STATIC/      USECODE/    SOUND/    FLICS/    IDATA/
   ├── CRUSADER.EXE
   └── ASYLUM.DLL
@@ -51,10 +51,14 @@ The port contains **no game files**. Copy your own copy of the game to
   (this takes a moment, then the `.iso` is no longer needed).
 
 Supported: French 1.08 and US 1.23. Saves (`SAVEGAME/`) and `CRUSADER.CFG` are written in
-`data/` too: keep this folder when updating the port (only replace `crusader/crusader`
-and `ROMS/Ports/Crusader.sh`).
+`data/` too: keep this folder when updating the port (only replace `crusader-no-remorse/crusader-no-remorse`
+and `ROMS/Ports/Crusader No Remorse.sh`).
 
 If `data/` is empty at launch, the game shows "Game data missing" and exits; see `log.txt`.
+
+Updating from a version that installed to `ports/crusader/` (with `ROMS/Ports/Crusader.sh`):
+rename that folder to `ports/crusader-no-remorse/` (your data and saves come along), delete
+the old `crusader` binary in it and the old `Crusader.sh` launcher, then install as above.
 
 ## Controls
 

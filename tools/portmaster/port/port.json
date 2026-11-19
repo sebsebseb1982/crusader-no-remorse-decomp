@@ -1,13 +1,13 @@
 {
   "version": 4,
-  "name": "crusader.zip",
-  "items": ["Crusader.sh", "crusader"],
+  "name": "crusader-no-remorse.zip",
+  "items": ["Crusader No Remorse.sh", "crusader-no-remorse"],
   "items_opt": null,
   "attr": {
     "title": "Crusader: No Remorse",
     "porter": "Thomas Martaux",
     "desc": "Reimplementation of the Crusader: No Remorse (Origin, 1995) engine in C++/SDL2. Requires the original game data.",
-    "inst": "Copy the files of your own copy of Crusader: No Remorse (French 1.08 or US 1.23: STATIC, USECODE, SOUND, FLICS, CRUSADER.EXE...), or the CD .iso image, to ports/crusader/data. The iso is extracted on first launch.",
+    "inst": "Copy the files of your own copy of Crusader: No Remorse (French 1.08 or US 1.23: STATIC, USECODE, SOUND, FLICS, CRUSADER.EXE...), or the CD .iso image, to ports/crusader-no-remorse/data. The iso is extracted on first launch.",
     "genres": ["action"],
     "image": {},
     "rtr": false,

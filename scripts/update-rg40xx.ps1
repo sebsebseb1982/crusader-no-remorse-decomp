@@ -3,8 +3,8 @@
   Compile le port aarch64 et le copie sur la RG40XX-H branchée en USB.
 
 .DESCRIPTION
-  Met à jour le binaire (SD2\ports\crusader\crusader), le lanceur (SD2\ROMS\Ports\Crusader.sh)
-  et les sauvegardes : data\SAVEGAME\SAVEGAME.<n> du PC écrasent celles de ports\crusader\data\SAVEGAME
+  Met à jour le binaire (SD2\ports\crusader-no-remorse\crusader-no-remorse), le lanceur (SD2\ROMS\Ports\Crusader No Remorse.sh)
+  et les sauvegardes : data\SAVEGAME\SAVEGAME.<n> du PC écrasent celles de ports\crusader-no-remorse\data\SAVEGAME
   (les emplacements absents du PC restent tels quels sur la console).
   Le reste des données du jeu (CRUSADER.CFG, iso, fichiers du jeu) n'est jamais touché.
   Par défaut la console est lue en MTP (appareil portable "RG40XX-H", sans lettre de lecteur).
@@ -14,13 +14,13 @@
   Racine de la carte (contenant ports\ et ROMS\Ports\), ex. E:\. Désactive le mode MTP.
 
 .PARAMETER Card
-  Carte à utiliser en MTP : SD1 ou SD2 (défaut SD2, celle qui contient ports\crusader).
+  Carte à utiliser en MTP : SD1 ou SD2 (défaut SD2, celle qui contient ports\crusader-no-remorse).
 
 .PARAMETER Device
   Nom de l'appareil MTP (défaut RG40XX-H).
 
 .PARAMETER SkipBuild
-  Ne recompile pas, copie build-portmaster\crusader tel quel.
+  Ne recompile pas, copie build-portmaster\crusader-no-remorse tel quel.
 
 .PARAMETER SkipLauncher
   Ne met pas à jour le lanceur.
@@ -53,7 +53,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $portSrc = Join-Path $repo 'tools\portmaster\port'
 $outDir = Join-Path $repo 'build-portmaster'
-$binary = Join-Path $outDir 'crusader'
+$binary = Join-Path $outDir 'crusader-no-remorse'
 $tmp = Join-Path ([IO.Path]::GetTempPath()) 'update-rg40xx'
 if (-not $Saves) { $Saves = Join-Path $repo 'data\SAVEGAME' }
 
@@ -74,8 +74,8 @@ if (-not (Test-Path $binary)) { throw "Binaire absent : $binary (relance sans -S
 
 # Le lanceur doit rester en fins de ligne LF (bash sur la console).
 New-Item -ItemType Directory -Force $tmp | Out-Null
-$launcher = Join-Path $tmp 'Crusader.sh'
-$text = [IO.File]::ReadAllText((Join-Path $portSrc 'Crusader.sh')) -replace "`r`n", "`n"
+$launcher = Join-Path $tmp 'Crusader No Remorse.sh'
+$text = [IO.File]::ReadAllText((Join-Path $portSrc 'Crusader No Remorse.sh')) -replace "`r`n", "`n"
 [IO.File]::WriteAllText($launcher, $text, (New-Object Text.UTF8Encoding $false))
 
 # --- Copie vers un dossier MTP (shell Windows) ---------------------------------------------
@@ -123,14 +123,14 @@ function Copy-ToMtp($folder, [string]$file, [double]$Settle = 10) {
 
 if ($Root) {
     Write-Host "== Installation dans $Root ==" -ForegroundColor Cyan
-    $dest = Join-Path $Root 'ports\crusader'
+    $dest = Join-Path $Root 'ports\crusader-no-remorse'
     New-Item -ItemType Directory -Force (Join-Path $dest 'licenses') | Out-Null
-    Copy-Item $binary (Join-Path $dest 'crusader') -Force
-    Copy-Item (Join-Path $portSrc 'crusader\licenses\*') (Join-Path $dest 'licenses') -Force
+    Copy-Item $binary (Join-Path $dest 'crusader-no-remorse') -Force
+    Copy-Item (Join-Path $portSrc 'crusader-no-remorse\licenses\*') (Join-Path $dest 'licenses') -Force
     if (-not $SkipLauncher) {
         $rp = Join-Path $Root 'ROMS\Ports'
         New-Item -ItemType Directory -Force $rp | Out-Null
-        Copy-Item $launcher (Join-Path $rp 'Crusader.sh') -Force
+        Copy-Item $launcher (Join-Path $rp 'Crusader No Remorse.sh') -Force
     }
     if ($saveFiles) {
         $sd = Join-Path $dest 'data\SAVEGAME'
@@ -143,12 +143,12 @@ if ($Root) {
     $dev = $shell.Namespace(17).Items() | Where-Object Name -eq $Device | Select-Object -First 1
     if (-not $dev) { throw "'$Device' introuvable dans Ce PC : branche la console en USB (mode stockage/MTP) ou utilise -Root." }
     Write-Host "== Installation sur $Device\$Card ==" -ForegroundColor Cyan
-    Copy-ToMtp (Get-MtpFolder $dev @($Card, 'ports', 'crusader')) $binary
+    Copy-ToMtp (Get-MtpFolder $dev @($Card, 'ports', 'crusader-no-remorse') -Create) $binary
     if (-not $SkipLauncher) {
         Copy-ToMtp (Get-MtpFolder $dev @($Card, 'ROMS', 'Ports')) $launcher
     }
     if ($saveFiles) {
-        $sd = Get-MtpFolder $dev @($Card, 'ports', 'crusader', 'data', 'SAVEGAME') -Create
+        $sd = Get-MtpFolder $dev @($Card, 'ports', 'crusader-no-remorse', 'data', 'SAVEGAME') -Create
         foreach ($f in $saveFiles) { Copy-ToMtp $sd $f.FullName -Settle 3 }
     }
 }

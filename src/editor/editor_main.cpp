@@ -1,13 +1,13 @@
-// crusader-editor: level editor for Crusader: No Remorse maps.
+// crusader-no-remorse-editor: level editor for Crusader: No Remorse maps.
 //
-//   crusader-editor [data | game folder] [--mod DIR] [--map N] [--new-map] [--select-shape S]
-//                   [--screenshot out.bmp [--frames N]]
+//   crusader-no-remorse-editor [data | game folder] [--mod DIR] [--map N] [--new-map] [--select-shape S]
+//                              [--screenshot out.bmp [--frames N]]
 //
 // --screenshot writes the window after N frames (60 by default) and quits.
 //
 // It reads the game data (never written) and saves the edited files to the
 // mod folder (default mods/mon-niveau); the game plays them with
-//   crusader data --mod DIR --map N
+//   crusader-no-remorse data --mod DIR --map N
 // or F5 in the editor. See docs/EDITEUR.md.
 
 #define SDL_MAIN_HANDLED
@@ -52,11 +52,7 @@ std::filesystem::path game_executable() {
         dir = base;
         SDL_free(base);
     }
-#ifdef _WIN32
-    return dir / "crusader.exe";
-#else
-    return dir / "crusader";
-#endif
+    return dir / CRUSADER_GAME_EXE;
 }
 
 }  // namespace
@@ -76,7 +72,7 @@ int main(int argc, char** argv) {
             options.select_shape = std::stoi(argv[++i], nullptr, 0);
         }
         else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
-            std::printf("crusader-editor [data] [--mod DIR] [--map N]\n");
+            std::printf("crusader-no-remorse-editor [data] [--mod DIR] [--map N]\n");
             return 0;
         } else {
             options.data = argv[i];
@@ -149,7 +145,7 @@ int main(int argc, char** argv) {
         }
     } catch (const std::exception& e) {
         std::fprintf(stderr, "error: %s\n", e.what());
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "crusader-editor", e.what(), window);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "crusader-no-remorse-editor", e.what(), window);
         status = 1;
     }
 

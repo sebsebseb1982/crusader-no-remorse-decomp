@@ -203,7 +203,7 @@ In menus, message boxes and screens, some inputs are **fixed**, whatever the bin
 Holding **Select + Start** together quits the game. It is the only way out on handhelds (PortMaster), where `gptokeyb` is not used.
 
 ### 2.8b Save names without a keyboard (PortMaster)
-Handhelds have no keyboard to type a save's name, and the original refuses to save under an empty one. With **`--auto-save-names`**, which only the PortMaster launcher (`Crusader.sh`) passes:
+Handhelds have no keyboard to type a save's name, and the original refuses to save under an empty one. With **`--auto-save-names`**, which only the PortMaster launcher (`Crusader No Remorse.sh`) passes:
 - choosing a slot on the Save screen (F9 or the menu's "save game") proposes the **local date and time** as its name, in place of the slot's: `12/11/2026 14:32` (French: day first), `11/12/2026 14:32` (US: month first), `12.11.2026 14:32` (German);
 - **A** saves under it, **B** leaves the slot as it was; a keyboard plugged in can still edit the name;
 - a console whose clock is not set (before 2020) gets `SAUVEGARDE` / `SAVED GAME` instead.
@@ -749,7 +749,7 @@ These differences are deliberate or not yet resolved. They are documented in the
 - Windows x64 (SDL2 built into the executable), Linux x64, and **Linux aarch64 handhelds through PortMaster** (muOS, Knulli, ROCKNIX, ArkOS…). The cross-build uses Zig (`tools/portmaster/build.py`).
 
 **PortMaster**
-- `Crusader.sh` launcher, which checks the data and logs to `log.txt`.
+- `Crusader No Remorse.sh` launcher, which checks the data and logs to `log.txt`.
 - `port.json` and `gameinfo.xml` metadata.
 - The game reads the controller itself, **without `gptokeyb`**, whose default keys doubled every input.
 - Select + Start quits the game.
@@ -764,7 +764,7 @@ These differences are deliberate or not yet resolved. They are documented in the
 
 **Files:** `src/editor/`, `src/game/game.*` (`game_file`, `set_start`), `docs/EDITEUR.md`
 
-The original ships no editor. `crusader-editor` (Dear ImGui on SDL2, rendered by the port's engine) opens the maps of `FIXED.DAT` and the globs of `GLOB.FLX`, decodes the egg parameters (triggers, teleports, monsters, globs, markers) and the low-quality links, and saves to a mod folder without touching the data. The game reads that folder with `--mod` and starts on a given map with `--map`. Full user guide: `docs/EDITEUR.md`.
+The original ships no editor. `crusader-no-remorse-editor` (Dear ImGui on SDL2, rendered by the port's engine) opens the maps of `FIXED.DAT` and the globs of `GLOB.FLX`, decodes the egg parameters (triggers, teleports, monsters, globs, markers) and the low-quality links, and saves to a mod folder without touching the data. The game reads that folder with `--mod` and starts on a given map with `--map`. Full user guide: `docs/EDITEUR.md`.
 
 **Rules**
 - Unmodified maps and globs are rewritten byte for byte (`editor_data_tests`); container contents keep their raw depth (map 244 contains records that are not objects).

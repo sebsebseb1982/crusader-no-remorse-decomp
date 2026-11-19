@@ -10,7 +10,7 @@
 // (as Enter on the selected item) before the first frame. --movie plays a
 // cutscene (FLICS/NAME.AVI, as MovieGump::I_playMovieCutscene) right away,
 // --movie-overlay as I_playMovieOverlay.
-// --mod loads a folder made by the level editor (crusader-editor): its
+// --mod loads a folder made by the level editor (crusader-no-remorse-editor): its
 // files replace those of the data. --map starts a new game on that map, on
 // its teleport egg E (frame 1, quality low byte E; 0x1E by default, where
 // every mission starts). --auto-save-names (the PortMaster launcher, for
@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
     MovieKind movie_kind = MovieKind::kCutscene;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--version") == 0) {
-            std::printf("crusader %s\n", CRUSADER_VERSION);
+            std::printf("crusader-no-remorse %s\n", CRUSADER_VERSION);
             return 0;
         }
         if (std::strcmp(argv[i], "--save") == 0 && i + 1 < argc) save = std::stoi(argv[++i]), save_given = true;
@@ -393,7 +393,7 @@ int main(int argc, char** argv) {
         return 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "error: %s\n", e.what());
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "crusader", e.what(), nullptr);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "crusader-no-remorse", e.what(), nullptr);
         return 1;
     }
 }

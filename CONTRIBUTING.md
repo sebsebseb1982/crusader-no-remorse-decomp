@@ -12,7 +12,7 @@ Thanks for your interest in the project! Contributions of all kinds are welcome:
 
 Please include:
 
-- the game version (French 1.08 or US 1.23) and the port version (`./crusader --version`);
+- the game version (French 1.08 or US 1.23) and the port version (`./crusader-no-remorse --version`);
 - your operating system (and device, for PortMaster handhelds);
 - a screenshot, and a **savegame** if the bug happens in game;
 - the steps to reproduce it;

@@ -147,6 +147,8 @@ else()
   add_executable(crusader src/game/main.cpp)
 endif()
 target_link_libraries(crusader PRIVATE crusader_game crusader_platform)
+# The released executable names the episode (the No Regret port ships crusader-no-regret).
+set_target_properties(crusader PROPERTIES OUTPUT_NAME crusader-no-remorse)
 # Set by the release pipeline (semantic version, without the leading "v").
 set(CRUSADER_VERSION "0.0.0-dev" CACHE STRING "Version reported by crusader --version")
 configure_file(src/game/version.hpp.in ${CMAKE_BINARY_DIR}/generated/crusader_version.hpp @ONLY)
@@ -215,6 +217,9 @@ if(CRUSADER_BUILD_EDITOR)
     add_executable(crusader-editor src/editor/editor_main.cpp src/editor/editor_app.cpp)
   endif()
   target_link_libraries(crusader-editor PRIVATE crusader_editor_core crusader_engine imgui)
+  set_target_properties(crusader-editor PROPERTIES OUTPUT_NAME crusader-no-remorse-editor)
+  # F5 (test the level) starts the game executable, next to the editor.
+  target_compile_definitions(crusader-editor PRIVATE CRUSADER_GAME_EXE="$<TARGET_FILE_NAME:crusader>")
 endif()
 
 enable_testing()

@@ -441,7 +441,7 @@ void test_load_from_menu(const std::filesystem::path& data) {
 // Milestone 6: a new game from the fixed data (GAMEPAL_1028_0000), the
 // teleport eggs and changing maps.
 // A level made with the level editor: a new map in a mod folder, played
-// as `crusader data --mod DIR --map N`. The map holds the start pad of the
+// as `crusader-no-remorse data --mod DIR --map N`. The map holds the start pad of the
 // first mission (its egg 0x1E and the globs of its cell), under a new number.
 void test_editor_mod(const std::filesystem::path& data) {
     const auto mod = std::filesystem::temp_directory_path() / "crusader_game_tests_mod";

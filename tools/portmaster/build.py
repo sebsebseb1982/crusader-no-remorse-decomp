@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cross-builds the `crusader` executable for aarch64 Linux handhelds (PortMaster).
+"""Cross-builds the `crusader-no-remorse` executable for aarch64 Linux handhelds (PortMaster).
 
 Needs: python, cmake, ninja (pip install ninja), zig (pip install ziglang).
   python tools/portmaster/build.py [--zig PATH_TO_ZIG] [--out DIR]
@@ -90,7 +90,7 @@ def main():
          "-DCRUSADER_GAME_DATA_TESTS=OFF", "-DCRUSADER_BUILD_EDITOR=OFF",
          f"-DCRUSADER_VERSION={args.version}"], env=env)
     run(["cmake", "--build", out, "--target", "crusader"], env=env)
-    print("built:", out / "crusader")
+    print("built:", out / "crusader-no-remorse")
 
 
 if __name__ == "__main__":

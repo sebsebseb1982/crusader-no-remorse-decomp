@@ -19,7 +19,7 @@ This repository contains **no game files**: you need your own copy of the origin
 
 ## Recent improvements
 
-- **Level editor** (`crusader-editor`): edit the original maps or create new ones, with the game's own renderer: scenery, globs (prefab rooms), NPCs, and the eggs and item links that drive the scripts. It saves to a mod folder that the game plays with `--mod` (the original data is never modified). Press **F5** in the editor to test the level. See [docs/EDITEUR.md](docs/EDITEUR.md).
+- **Level editor** (`crusader-no-remorse-editor`): edit the original maps or create new ones, with the game's own renderer: scenery, globs (prefab rooms), NPCs, and the eggs and item links that drive the scripts. It saves to a mod folder that the game plays with `--mod` (the original data is never modified). Press **F5** in the editor to test the level. See [docs/EDITEUR.md](docs/EDITEUR.md).
 
 - Added gamepad support with vibration.
 - Added an **Enhancements** menu to the Options menu, with:
@@ -48,9 +48,9 @@ Further improvements will come when my Claude subscription renews. If you'd like
 
 Download the latest release from the [Releases](https://github.com/sebsebseb1982/crusader-no-remorse-decomp/releases) page:
 
-- Windows: `crusader-X.Y.Z-windows-x64.zip` (SDL2 is built into the executable)
-- Linux: `crusader-X.Y.Z-linux-x64.tar.gz` — requires SDL2: `sudo apt install libsdl2-2.0-0` (or your distribution's equivalent)
-- aarch64 handhelds (PortMaster: muOS, Knulli, ROCKNIX, ArkOS…): `crusader-X.Y.Z-portmaster-aarch64.zip` — see [`tools/portmaster/README.md`](tools/portmaster/README.md)
+- Windows: `crusader-no-remorse-X.Y.Z-windows-x64.zip` (SDL2 is built into the executable)
+- Linux: `crusader-no-remorse-X.Y.Z-linux-x64.tar.gz` — requires SDL2: `sudo apt install libsdl2-2.0-0` (or your distribution's equivalent)
+- aarch64 handhelds (PortMaster: muOS, Knulli, ROCKNIX, ArkOS…): `crusader-no-remorse-X.Y.Z-portmaster-aarch64.zip` — see [`tools/portmaster/README.md`](tools/portmaster/README.md)
 
 Checksums are in `SHA256SUMS`.
 
@@ -58,11 +58,11 @@ Checksums are in `SHA256SUMS`.
 
 The archive contains the executable and an empty `data` folder with a `PUT_GAME_DATA_HERE.txt` note. Add the game data from your copy of a supported version (French 1.08, US 1.23, English 1.01 or German 1.07) in one of these ways:
 
-- **CD image:** Place the `.iso` file (or a `.bin` image with its `.cue` sheet) in `data/`, or pass its path to the game (for example, `./crusader game.iso`). The GOG release's `GAME.GOG` is such an image and works the same way, under its own name. On first launch, the game extracts the data to `data/` (about 550 MB; this takes a few seconds). You can delete the ISO afterward.
+- **CD image:** Place the `.iso` file (or a `.bin` image with its `.cue` sheet) in `data/`, or pass its path to the game (for example, `./crusader-no-remorse game.iso`). The GOG release's `GAME.GOG` is such an image and works the same way, under its own name. On first launch, the game extracts the data to `data/` (about 550 MB; this takes a few seconds). You can delete the ISO afterward.
 - **Installed game or CD files:** Copy the **entire contents** of the installation folder or CD into `data/`:
 
 ```
-crusader(.exe)
+crusader-no-remorse(.exe)
 data/
 ├── CRUSADER.CFG        settings
 ├── STATIC/             shapes, palettes, fonts, maps, tables  (SHAPES.FLX, FIXED.DAT, GLOB.FLX, TYPEFLAG.DAT, ANIM.DAT, GUMPS.FLX, FONTS.FLX, *.PAL, …)
@@ -84,11 +84,11 @@ The maintainer does not own the Steam or EA releases, so this has not been teste
 ### 3. Launch
 
 ```sh
-./crusader data --new-game        # Windows: crusader.exe data --new-game
-./crusader data --save 1          # resumes SAVEGAME.1 from the data folder
-./crusader --version
-./crusader data --mod mods/my-level --map 3   # plays a level made with crusader-editor
-./crusader-editor data --mod mods/my-level    # the level editor
+./crusader-no-remorse data --new-game        # Windows: crusader-no-remorse.exe data --new-game
+./crusader-no-remorse data --save 1          # resumes SAVEGAME.1 from the data folder
+./crusader-no-remorse --version
+./crusader-no-remorse data --mod mods/my-level --map 3   # plays a level made with the editor
+./crusader-no-remorse-editor data --mod mods/my-level    # the level editor
 ```
 
 ### 4. Language
@@ -111,7 +111,7 @@ If SDL2 is installed on your system, the build uses it (`libsdl2-dev` on Linux).
 
 The tests in `tests/` do not require game data. The end-to-end tests in `e2e/` use the original game data and are registered only when it is found (`-DCRUSADER_DATA_DIR=…`; defaults to `data/`). Tests that load saved games read them from `-DCRUSADER_TEST_SAVES_DIR=…` and are skipped if that directory is absent. `us_data_tests` runs when US game data is found (`-DCRUSADER_US_DATA_DIR=…`; defaults to `data_us/`), `de_data_tests` when German game data is found (`-DCRUSADER_DE_DATA_DIR=…`; defaults to `data_de/`).
 
-In addition to `crusader`, the build produces several tools: `shapeview` (shape viewer), `mapview` (map viewer), `ucsmoke` and `useprobe` (script execution), and `diffcheck` (comparison with the original).
+In addition to the game (`crusader-no-remorse`) and the level editor (`crusader-no-remorse-editor`), the build produces several tools: `shapeview` (shape viewer), `mapview` (map viewer), `ucsmoke` and `useprobe` (script execution), and `diffcheck` (comparison with the original).
 
 ## Versioning
 

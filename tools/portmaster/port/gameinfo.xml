@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <gameList>
   <game>
-    <path>./Crusader.sh</path>
+    <path>./Crusader No Remorse.sh</path>
     <name>Crusader: No Remorse</name>
     <desc>Isometric action game by Origin (1995), running on a reimplementation of its engine. Requires the original game data.</desc>
     <releasedate>19950101T000000</releasedate>
