@@ -266,6 +266,12 @@ int main(int argc, char** argv) {
 
         // The options screen saves its settings, as the original does.
         game.set_config_file(data / "CRUSADER.CFG");
+        // SDL_Quit runs last, after the destructors of the window, the audio and
+        // the controller, which still call SDL: closing the controller after
+        // SDL_Quit crashed with sdl2-compat (SDL3) on exit (issue #23).
+        struct SdlQuitLast {
+            ~SdlQuitLast() { SDL_Quit(); }
+        } sdl_quit_last;
         SdlPresenter presenter(kWindowTitle, Game::kScreenWidth, Game::kScreenHeight, 2, fullscreen);
         presenter.set_gamma(gamma);
         install_real_shift();  // Windows: Shift + keypad with Num Lock on (issue #14)
@@ -389,7 +395,6 @@ int main(int argc, char** argv) {
             presenter.present(screen, game.palette());
         }
         print_faults(game);
-        SDL_Quit();
         return 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "error: %s\n", e.what());
