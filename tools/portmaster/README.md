@@ -18,8 +18,8 @@ The release zip follows the PortMaster structure (installed automatically by Por
 | In the zip | Copy it to (on the SD card holding your ports) | Role |
 |---|---|---|
 | `Crusader No Remorse.sh` | `ROMS/Ports/Crusader No Remorse.sh` | launcher, shown in the Ports menu |
-| `crusader-no-remorse/` (whole folder) | `ports/crusader-no-remorse/` | binary, licenses, game data |
-| `port.json`, `gameinfo.xml`, `README.md`, `screenshot.png` | nowhere | PortMaster metadata, not needed on the console |
+| `crusader-no-remorse/` (whole folder) | `ports/crusader-no-remorse/` | binary, licenses, artwork, game data |
+| `port.json`, `gameinfo.xml`, `README.md`, `cover.png`, `screenshot.png` | nowhere | PortMaster metadata, not needed on the console |
 
 Example on the RG40XX-H running muOS (ports are on the **SD2** card; visible over USB/MTP under "This PC\RG40XX-H\SD2"):
 
@@ -54,7 +54,16 @@ You must supply it yourself (no game file is shipped) and put it in **`ports/cru
 
 Supported versions: French 1.08 and US 1.23. The game writes its saves (`SAVEGAME/`) and `CRUSADER.CFG` in `data/`: when updating, keep that folder (only replace `crusader-no-remorse/crusader-no-remorse` and `ROMS/Ports/Crusader No Remorse.sh`). `scripts/update-rg40xx.ps1` does that and also copies the PC's `data/SAVEGAME/SAVEGAME.<n>` over the console's (`-SkipSaves` to keep the console's saves). If `data/` is empty, the launcher shows "Game data missing" and exits (see `log.txt`). Older versions installed to `ports/crusader/` with `Crusader.sh`: rename that folder to `ports/crusader-no-remorse/` and delete the old `crusader` binary and launcher (the PortMaster folder names the episode so that the No Regret port can sit next to it).
 
-The port's sources are in `tools/portmaster/port/` (`port.json`, `README.md`, `gameinfo.xml`, launcher). A `screenshot.png` (4:3, ≥ 640×480, taken in game) must be added to that folder before the PortMaster PR.
+The port's sources are in `tools/portmaster/port/` (`port.json`, `README.md`, `gameinfo.xml`, launcher, `cover.png`, `screenshot.png`).
+
+### Artwork
+
+- `screenshot.png`: 640×480 in-game capture at native scale (what the console shows).
+- `cover.png`: 400×300 on a transparent background (gameplay + cover art), the format of PortMaster covers.
+
+Both are generated from `docs/images/` by `python tools/portmaster/make_art.py . <x> <y> tools/portmaster/port`, where `<x> <y>` is the centre of the crop in `docs/images/screenshot.png` (1720 700: the Silencer).
+
+The muOS front-end does not read them from the port: it shows the images of its catalogue, named after the launcher (`MUOS/info/catalogue/External - Ports/box/Crusader No Remorse.png` for the list, `preview/` for the preview). PortMaster copies `<image>` of `gameinfo.xml` (`./crusader-no-remorse/cover.png`, hence the copy in the port folder) and the `screenshot.png` beside it there. After a manual install, `scripts/update-rg40xx.ps1` copies them there itself.
 
 ## Gamepad
 

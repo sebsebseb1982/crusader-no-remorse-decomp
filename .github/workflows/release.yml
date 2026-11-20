@@ -97,8 +97,10 @@ jobs:
           cp build-portmaster/crusader-no-remorse "dist/$pkg/$port/"
           cp -r languages "dist/$pkg/$port/"
           cp tools/release/PUT_GAME_DATA_HERE.txt "dist/$pkg/$port/data/"
-          cp tools/portmaster/port/{port.json,README.md,gameinfo.xml} "dist/$pkg/"
-          [ -f tools/portmaster/port/screenshot.png ] && cp tools/portmaster/port/screenshot.png "dist/$pkg/"
+          cp tools/portmaster/port/{port.json,README.md,gameinfo.xml,cover.png,screenshot.png} "dist/$pkg/"
+          # gameinfo.xml points at the cover inside the port folder: PortMaster (muOS) copies it,
+          # and the screenshot next to it, into the front-end's artwork catalogue.
+          cp tools/portmaster/port/{cover.png,screenshot.png} "dist/$pkg/$port/"
           cd dist
           (cd "$pkg" && zip -qr "../$pkg.zip" .)
           rm -rf "$pkg"

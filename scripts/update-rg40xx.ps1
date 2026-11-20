@@ -6,6 +6,8 @@
   Met à jour le binaire (SD2\ports\crusader-no-remorse\crusader-no-remorse), le lanceur (SD2\ROMS\Ports\Crusader No Remorse.sh)
   et les sauvegardes : data\SAVEGAME\SAVEGAME.<n> du PC écrasent celles de ports\crusader-no-remorse\data\SAVEGAME
   (les emplacements absents du PC restent tels quels sur la console).
+  Copie aussi l'artwork du menu Ports de muOS (cover.png, screenshot.png, description) dans
+  MUOS\info\catalogue\External - Ports\{box,preview,text}\Crusader No Remorse.*, sur la carte qui contient MUOS.
   Le reste des données du jeu (CRUSADER.CFG, iso, fichiers du jeu) n'est jamais touché.
   Par défaut la console est lue en MTP (appareil portable "RG40XX-H", sans lettre de lecteur).
   Avec -Root, copie dans un dossier normal à la place (carte SD montée, lecteur réseau...).
@@ -24,6 +26,9 @@
 
 .PARAMETER SkipLauncher
   Ne met pas à jour le lanceur.
+
+.PARAMETER SkipArtwork
+  Ne copie pas l'artwork dans le catalogue muOS.
 
 .PARAMETER SkipSaves
   Ne copie pas les sauvegardes.
@@ -45,6 +50,7 @@ param(
     [string]$Device = 'RG40XX-H',
     [switch]$SkipBuild,
     [switch]$SkipLauncher,
+    [switch]$SkipArtwork,
     [switch]$SkipSaves,
     [string]$Saves
 )
@@ -77,6 +83,31 @@ New-Item -ItemType Directory -Force $tmp | Out-Null
 $launcher = Join-Path $tmp 'Crusader No Remorse.sh'
 $text = [IO.File]::ReadAllText((Join-Path $portSrc 'Crusader No Remorse.sh')) -replace "`r`n", "`n"
 [IO.File]::WriteAllText($launcher, $text, (New-Object Text.UTF8Encoding $false))
+
+# Artwork du menu Ports de muOS : le catalogue nomme les fichiers comme le lanceur (sans .sh).
+# Un dossier par destination (CopyHere garde le nom du fichier source).
+$artName = 'Crusader No Remorse'
+$art = @{}
+if (-not $SkipArtwork) {
+    $art = [ordered]@{
+        box     = Join-Path $portSrc 'cover.png'
+        preview = Join-Path $portSrc 'screenshot.png'
+        text    = $null
+    }
+    foreach ($kind in @($art.Keys)) {
+        $d = Join-Path $tmp "art-$kind"
+        New-Item -ItemType Directory -Force $d | Out-Null
+        if ($kind -eq 'text') {
+            $desc = ([xml][IO.File]::ReadAllText((Join-Path $portSrc 'gameinfo.xml'))).gameList.game.desc.Trim()
+            $f = Join-Path $d "$artName.txt"
+            [IO.File]::WriteAllText($f, "$desc`n", (New-Object Text.UTF8Encoding $false))
+        } else {
+            $f = Join-Path $d "$artName.png"
+            Copy-Item $art[$kind] $f -Force
+        }
+        $art[$kind] = $f
+    }
+}
 
 # --- Copie vers un dossier MTP (shell Windows) ---------------------------------------------
 function Get-MtpFolder($root, [string[]]$path, [switch]$Create) {
@@ -138,6 +169,19 @@ if ($Root) {
         foreach ($f in $saveFiles) { Copy-Item $f.FullName (Join-Path $sd $f.Name) -Force }
         Write-Host ("  {0} sauvegardes -> data\SAVEGAME" -f $saveFiles.Count)
     }
+    if ($art.Count) {
+        $cat = Join-Path $Root 'MUOS\info\catalogue'
+        if (Test-Path $cat) {
+            foreach ($kind in $art.Keys) {
+                $d = Join-Path $cat "External - Ports\$kind"
+                New-Item -ItemType Directory -Force $d | Out-Null
+                Copy-Item $art[$kind] $d -Force
+            }
+            Write-Host "  artwork -> MUOS\info\catalogue\External - Ports"
+        } else {
+            Write-Warning "Pas de MUOS\info\catalogue dans $Root : artwork non copié (MUOS est sur l'autre carte ?)."
+        }
+    }
 } else {
     $shell = New-Object -ComObject Shell.Application
     $dev = $shell.Namespace(17).Items() | Where-Object Name -eq $Device | Select-Object -First 1
@@ -150,6 +194,21 @@ if ($Root) {
     if ($saveFiles) {
         $sd = Get-MtpFolder $dev @($Card, 'ports', 'crusader-no-remorse', 'data', 'SAVEGAME') -Create
         foreach ($f in $saveFiles) { Copy-ToMtp $sd $f.FullName -Settle 3 }
+    }
+    if ($art.Count) {
+        # MUOS est en général sur SD1 (carte système), les ports sur SD2.
+        $muosCard = $null
+        foreach ($c in @('SD1', 'SD2')) {
+            try { Get-MtpFolder $dev @($c, 'MUOS', 'info', 'catalogue') | Out-Null; $muosCard = $c; break } catch { }
+        }
+        if ($muosCard) {
+            foreach ($kind in $art.Keys) {
+                $d = Get-MtpFolder $dev @($muosCard, 'MUOS', 'info', 'catalogue', 'External - Ports', $kind) -Create
+                Copy-ToMtp $d $art[$kind] -Settle 3
+            }
+        } else {
+            Write-Warning "MUOS\info\catalogue introuvable sur SD1 et SD2 : artwork non copié."
+        }
     }
 }
 if ($saveFiles) {
