@@ -6,7 +6,7 @@ A C++20/SDL2 reimplementation of the *Crusader: No Remorse* (Origin, 1995) engin
 
 > **Sister project:** the sequel, *Crusader: No Regret*, is being ported on the same engine in [crusader-no-regret-decomp](https://github.com/sebsebseb1982/crusader-no-regret-decomp) (early work in progress).
 
-![Gameplay screenshot](docs/images/screenshot.png)
+![Gameplay screenshot with the 3D lighting: glowing green liquid and its steam, the red glow of a laser barrier, the Silencer's flashlight](docs/images/screenshot.png)
 
 The maintainer has played through the whole game with this port, from start to finish, and fixed every bug met along the way. Other playthroughs may still turn up some: please report them (see [Contribution](#contribution)).
 
@@ -18,6 +18,8 @@ This repository contains **no game files**: you need your own copy of the origin
 - The **German version 1.07** (dated 11 October 1995) — BIN/CUE image, `.bin` SHA-256: `5AC277B47E9859AACCB4609389D70ACA76927A1988EC983D7AF5F115FE296081`. Its executable is the French 1.08 one translated; the game itself is not cut (same scripts, sprites and damage tables as the French version), only its pictures, voices, movies and texts are German.
 
 ## Recent improvements
+
+- **3D lighting** (Options, **+** (Enhancements), **Display**; off by default): the world is lit in true colour, with no new art. Lamps, screens, force fields and lasers light their surroundings in their own colour, the green liquids glow, explosions and shots flash, rockets carry a flickering light, and items cast shadows cut to their sprites' outlines. Explosions and shots leave volumetric smoke and the liquids steam. The Silencer carries a flashlight (**L**, or **LT** on the controller), and the ambient light sets how dark the scene gets where no lamp reaches. The lighting runs on the GPU (OpenGL 3.3 or ES 3.0), or on the processor without one; it only changes the picture, never how the game plays. See [enhancements.md](enhancements.md#7d-3d-lighting).
 
 - **Level editor** (`crusader-no-remorse-editor`): edit the original maps or create new ones, with the game's own renderer: scenery, globs (prefab rooms), NPCs, and the eggs and item links that drive the scripts. It saves to a mod folder that the game plays with `--mod` (the original data is never modified). Press **F5** in the editor to test the level. See [docs/EDITEUR.md](docs/EDITEUR.md).
 
