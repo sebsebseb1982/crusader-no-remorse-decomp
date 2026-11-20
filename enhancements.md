@@ -447,7 +447,7 @@ The original draws flat sprites under a fixed light. With this option the world 
 
 **Smoke**
 - Explosions leave a dark cloud: six puffs of noise that glow orange for the first second (lit from inside by the explosion), then rise, grow and thin out over five or six seconds.
-- A shot leaves a small wisp blown out of the muzzle along its way, slowed down at once and gone in under a second. Where it hits a wall, a floor or an item, a little dust; a shot that ends in the air (out of range) leaves none. Bright shots in flight (rockets) leave a trail.
+- A shot leaves a small wisp blown out of the muzzle along its way, slowed down at once and gone in under a second. Where it hits a wall, a floor or an item, a little dust; a shot that ends in the air (out of range) leaves none. Rockets in flight carry a flickering orange light (their exhaust) and leave a trail; other bright shots a trail.
 - The light of a shot or an impact is where it is; only explosions and flashes, which the game draws over the scene, light the surface under them.
 - The smoke is a volume: in front of a wall it hides it, behind it it is hidden, and the scene's lights colour it.
 - It follows the game's clock: it stops with the game (menus, pause), goes on a map change. It only reads the world and uses its own numbers, never the game's random generators.

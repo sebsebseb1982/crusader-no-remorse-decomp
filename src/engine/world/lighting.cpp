@@ -54,6 +54,13 @@ bool is_actor(const Item& item, const ShapeInfo* info) {
     return is_npc_id(item.id) || (info && info->is(ShapeInfo::kNpc));
 }
 
+// A rocket in flight: the projectile's frames 0x11..0x20, by direction, for
+// fire types 3, 9 (guided) and 10 (projectile.cpp, projectile_frame).
+// @orig none: port lighting
+bool is_rocket(const Item& item) {
+    return item.shape == kProjectileShape && item.frame >= 0x11 && item.frame <= 0x20;
+}
+
 // Explosion and flash shapes (sprite_process.hpp, list DS:29C2).
 bool is_blast_shape(std::uint16_t shape) { return shape == 0x31C || (shape >= 0x31F && shape <= 0x327); }
 
@@ -410,7 +417,11 @@ void WorldLighting::spawn_smoke() {
                     shot_start_.erase(start);
                 }
             }
-            // A trail behind the bright ones (rockets).
+            // A trail behind rockets, and behind other bright shots.
+            if (is_rocket(*d.item)) {
+                if (ticks_ % 3 == 0) add_puff(centre, SmokePuff::kTrail);
+                continue;
+            }
             if (ticks_ % 4 != 0) continue;
             const Decoded& f = decoded(d.frame);
             int bright = 0;
@@ -558,6 +569,14 @@ void WorldLighting::gather_lights(const World& world, const LightingOptions& opt
         const Decoded& f = decoded(d.frame);
         if (d.item->sprite_only) {
             if (!opt.flash_lights) continue;
+            if (is_rocket(*d.item)) {
+                // A rocket's exhaust: an orange light that flickers, where it is.
+                const float flicker = 0.8f + 0.2f * std::sin(ticks_ * 1.9f + d.item->id * 0.7f) *
+                                                 std::sin(ticks_ * 0.83f + d.item->id);
+                lights.push_back({{float(d.x), float(d.y), d.z * kLightZScale},
+                                  Vec3{1.0f, 0.55f, 0.2f} * (1.6f * flicker), 520, d.item->id});
+                continue;
+            }
             // Flashes, explosions, shots: their bright pixels.
             int count = 0;
             Vec3 sum;

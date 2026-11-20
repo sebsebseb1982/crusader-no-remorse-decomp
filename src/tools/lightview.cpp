@@ -7,7 +7,7 @@
 //        lightview [data_dir] [map] [cx cy] --png out.png [--mouse sx sy] [--drop sx sy]... [--ambient 0-3]
 //                  [--orbit yaw pitch] [--flat] [--no-shadows] [--box-shadows] [--no-bump] [--no-glow]
 //                  [--no-lamp] [--no-smoke] [--fixed-actors] [--no-back-faces] [--normals] [--probe sx sy]...
-//                  [--puff sx sy]... [--ticks N] [--cpu] [--size WxH] [--bench N]
+//                  [--puff sx sy]... [--rocket sx sy]... [--ticks N] [--cpu] [--size WxH] [--bench N]
 //                                                                 one frame to a PNG
 //   Mouse            moving light on the surface under the pointer
 //   Left click       drop a light there        Right click  remove the last one
@@ -27,6 +27,7 @@
 #include "core/typeflags.hpp"
 #include "core/xform.hpp"
 #include "engine/world/lighting.hpp"
+#include "engine/world/projectile.hpp"
 #include "engine/world/render.hpp"
 #include "engine/world/world.hpp"
 #include "platform/gl_lighting.hpp"
@@ -134,7 +135,7 @@ int main(int argc, char** argv) {
     int bench = 1;
     int ticks = 0;  // --ticks: frames of smoke before the picture
     bool cpu = false;
-    std::vector<std::pair<int, int>> puffs;
+    std::vector<std::pair<int, int>> puffs, rockets;
     std::filesystem::path save;
     std::optional<Camera> forced;
     View3D v;
@@ -163,6 +164,7 @@ int main(int argc, char** argv) {
         else if (arg("--no-lamp")) v.opt.player_lamp = false;
         else if (arg("--no-smoke")) v.opt.smoke = false;
         else if (arg("--puff") && i + 2 < argc) puffs.push_back(pair());
+        else if (arg("--rocket") && i + 2 < argc) rockets.push_back(pair());
         else if (arg("--ticks") && i + 1 < argc) ticks = std::max(0, std::stoi(argv[++i]));
         else if (arg("--cpu")) cpu = true;
         else if (arg("--size") && i + 1 < argc) {
@@ -229,7 +231,7 @@ int main(int argc, char** argv) {
         int color = 0;
 
         if (!png.empty()) {
-            if (!drops.empty() || !puffs.empty()) {
+            if (!drops.empty() || !puffs.empty() || !rockets.empty()) {
                 // Surfaces first, then the lights and puffs dropped on them.
                 render(*world, shapes, xform, palette, lighting, camera, v, lights, std::nullopt, mouse_height,
                        kLightColors[color], argb);
@@ -239,6 +241,15 @@ int main(int argc, char** argv) {
                 for (const auto& [px, py] : puffs)
                     if (auto p = lighting.surface_at(px, py))
                         lighting.add_puff(Vec3{p->x, p->y, p->z + 16 * kLightZScale}, SmokePuff::kExplosion);
+                // A rocket (projectile frame 0x11) hanging 30 z units over the surface.
+                for (const auto& [px, py] : rockets)
+                    if (auto p = lighting.surface_at(px, py)) {
+                        world->create(kProjectileShape, 0x11);
+                        const ObjId id = world->pop_to_coords(static_cast<std::int32_t>(p->x / 2),
+                                                              static_cast<std::int32_t>(p->y / 2),
+                                                              static_cast<std::int32_t>(p->z / kLightZScale) + 30);
+                        if (Item* rocket = world->get(id)) rocket->sprite_only = true;
+                    }
             }
             for (int k = 0; k < ticks; ++k) {
                 render(*world, shapes, xform, palette, lighting, camera, v, lights, mouse, mouse_height,
