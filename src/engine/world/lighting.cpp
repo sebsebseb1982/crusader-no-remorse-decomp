@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <cstdio>
 #include <functional>
+#include <map>
 #include <mutex>
 #include <thread>
 
@@ -61,10 +62,45 @@ bool is_rocket(const Item& item) {
     return item.shape == kProjectileShape && item.frame >= 0x11 && item.frame <= 0x20;
 }
 
+// Liquid surfaces (SHAPES.FLX; no TYPEFLAG bit marks them): the pools 0x150
+// and 0x59E (16 x 16), their strips 0x227, 0x228, 0x5A2, thin edges 0x55A,
+// 0x56D, 0x56E, ripples and bubbles 0x1D6, 0x539, 0x54C, 0x580.
+// @orig none: port lighting (liquids)
+bool is_liquid(std::uint16_t shape) {
+    switch (shape) {
+    case 0x150: case 0x59E: case 0x227: case 0x228: case 0x5A2: case 0x55A: case 0x56D: case 0x56E:
+    case 0x1D6: case 0x539: case 0x54C: case 0x580:
+        return true;
+    default:
+        return false;
+    }
+}
+// The pools and their strips give off steam.
+bool steams(std::uint16_t shape) {
+    return shape == 0x150 || shape == 0x59E || shape == 0x227 || shape == 0x228 || shape == 0x5A2;
+}
+
+// The liquids' radioactive green, and how much of their own colour they glow
+// with (times liquid_glow), so that they show but stay a background.
+const Vec3 kLiquidTint{0.45f, 1.0f, 0.35f};
+constexpr float kLiquidGlow = 0.8f;
+// Their light on what is around them: one by 1024 x 1024 cell of liquid.
+constexpr float kLiquidCell = 1024;
+constexpr float kLiquidLight = 1.0f;
+constexpr std::size_t kMaxSteam = 128;
+
 // Explosion and flash shapes (sprite_process.hpp, list DS:29C2).
 bool is_blast_shape(std::uint16_t shape) { return shape == 0x31C || (shape >= 0x31F && shape <= 0x327); }
 
 float srgb_to_linear(std::uint8_t c) { return std::pow(c / 255.0f, 2.2f); }
+
+// How much of a spot's light goes to a point `to` away from the light (to =
+// light - point) at distance `dist`: 1 for a light all round.
+// @orig none: port lighting (the Silencer's lamp)
+float spot(const PointLight& L, const Vec3& to, float dist) {
+    if (L.dir.x == 0 && L.dir.y == 0 && L.dir.z == 0) return 1;
+    return smoothstep(L.cos_outer, L.cos_inner, -dot(to, L.dir) / std::max(dist, 1e-3f));
+}
 
 // Integer hash (also in the shaders).
 // @orig none: port lighting
@@ -113,6 +149,13 @@ float smoke_noise(const Vec3& p, float seed, float t, float feature) {
     const float x = p.x * k + seed * 17.3f, y = p.y * k + seed * 9.1f, z = p.z * k + seed * 5.7f - t * 0.35f;
     return 0.5f * value_noise(x, y, z) + 0.3f * value_noise(x * 2.03f, y * 2.03f, z * 2.03f) +
            0.2f * value_noise(x * 4.01f, y * 4.01f, z * 4.01f);
+}
+
+// @orig none: port lighting (liquids)
+float liquid_glow(const Vec3& p, float t) {
+    const float x = p.x / 170.0f + t * 0.06f, y = p.y / 170.0f - t * 0.04f, z = t * 0.12f;
+    const float n = 0.65f * value_noise(x, y, z) + 0.35f * value_noise(x * 2.1f + 5.2f, y * 2.1f + 1.3f, z * 1.7f);
+    return (0.35f + 0.9f * smoothstep(0.3f, 0.75f, n)) * (0.85f + 0.15f * std::sin(t * 1.1f));
 }
 
 // A frame decoded once: colours (-1 transparent), a normal rounded from the
@@ -332,10 +375,14 @@ void WorldLighting::capture(const World& world, const std::vector<DrawItem>& lis
     emissive_.assign(n, 0);
     set_palette(palette);
     actor_.resize(list_.size());
+    liquid_.resize(list_.size());
     for (std::size_t i = 0; i < list_.size(); ++i) {
         decode(*list_[i].frame);
         actor_[i] = is_actor(*list_[i].item, world.shape_info(list_[i].item->shape));
+        liquid_[i] = opt.liquids && !actor_[i] && !list_[i].item->sprite_only && is_liquid(list_[i].item->shape);
     }
+    if (opt.liquids) gather_liquids(world);
+    else liquids_.clear();
     // Which item shows at each pixel, in the order they were drawn, by bands
     // of rows. Translucent items leave it to what is below; flashes and
     // explosions (drawn as sprites) only glow.
@@ -492,7 +539,9 @@ void WorldLighting::add_puff(const Vec3& at, SmokePuff::Kind kind, float scale, 
             p.rise = 45 + rnd(50 + i) * 30;
             p.radius0 = (45 + rnd(60 + i) * 30) * scale;
             p.radius1 = (140 + rnd(70 + i) * 80) * scale;
-            p.density = 0.03f;
+            // Thinner the bigger, so that a big blast is no thicker to see
+            // through than a small one: what happens in it stays visible.
+            p.density = 0.02f / scale;
             p.life = 4.5f + rnd(80 + i) * 2;
             p.feature = 45;
             break;
@@ -535,10 +584,112 @@ void WorldLighting::add_puff(const Vec3& at, SmokePuff::Kind kind, float scale, 
     }
 }
 
+// The liquids around the view (steam and light from just off screen too).
+// @orig none: port lighting (liquids)
+void WorldLighting::gather_liquids(const World& world) {
+    liquids_.clear();
+    // The view in x - y and x + y (z from 0 up to 256), with a margin.
+    constexpr float kMargin = 900;
+    const float dlo = 4.0f * view_left_ - kMargin, dhi = 4.0f * (view_left_ + width_) + kMargin;
+    const float slo = 8.0f * view_top_ - kMargin, shi = 8.0f * (view_top_ + height_ + 256) + kMargin;
+    world.for_each([&](const Item& item) {
+        if (!is_liquid(item.shape) || item.off_map || item.parent != 0 || item.sprite_only ||
+            (item.flags & (kItemInvisible | kItemContained)))
+            return;
+        const ShapeInfo* info = world.shape_info(item.shape);
+        if (!info || !info->footpad_x || !info->footpad_y) return;
+        const bool mirrored = item.flags & kItemFlipped;
+        const float x = float(world_from_usecode(item.x)), y = float(world_from_usecode(item.y));
+        const float dx = float((mirrored ? info->footpad_y : info->footpad_x) * kFootpadXY);
+        const float dy = float((mirrored ? info->footpad_x : info->footpad_y) * kFootpadXY);
+        if (x - (y - dy) < dlo || (x - dx) - y > dhi || x + y < slo || (x - dx) + (y - dy) > shi) return;
+        const float top = float(item.z + info->footpad_z * kFootpadZ) * kLightZScale;
+        liquids_.push_back({{x - dx, y - dy, top}, {x, y, top}, steams(item.shape)});
+    });
+}
+
+// The liquids' glow on what is around them: a green light high over (so that
+// it falls on the floors past the rims) each cell of liquid, breathing with
+// the glow. It does not light the liquids themselves (their glow is their
+// own).
+// @orig none: port lighting (liquids)
+void WorldLighting::liquid_lights(std::vector<PointLight>& lights) const {
+    struct Cell {
+        float area = 0, x = 0, y = 0, z = 0;
+    };
+    std::map<std::pair<int, int>, Cell> cells;
+    for (const Liquid& l : liquids_) {
+        const float area = (l.hi.x - l.lo.x) * (l.hi.y - l.lo.y);
+        const float cx = (l.lo.x + l.hi.x) * 0.5f, cy = (l.lo.y + l.hi.y) * 0.5f;
+        Cell& c = cells[{static_cast<int>(std::floor(cx / kLiquidCell)), static_cast<int>(std::floor(cy / kLiquidCell))}];
+        c.area += area;
+        c.x += cx * area;
+        c.y += cy * area;
+        c.z += l.hi.z * area;
+    }
+    const float t = ticks_ / 60.0f;
+    const float breathe = 0.85f + 0.15f * std::sin(t * 1.1f);
+    for (const auto& [key, c] : cells) {
+        const float share = std::min(1.0f, c.area / (kLiquidCell * kLiquidCell * 0.5f));
+        if (share < 0.05f) continue;
+        const Vec3 at{c.x / c.area, c.y / c.area, c.z / c.area + 160 * kLightZScale};
+        PointLight light{at, kLiquidTint * (kLiquidLight * share * breathe), 1600, 0};
+        light.liquid = true;
+        lights.push_back(light);
+    }
+}
+
+// Thin steam over the liquids: puffs that need no memory, each a slot of a
+// pool coming back every few seconds at a new place, so it is there as soon
+// as the pool is in view and the same whenever it is seen.
+// @orig none: port lighting (liquids)
+void WorldLighting::steam(std::vector<PuffState>& out) const {
+    const float t = ticks_ / 60.0f;
+    std::size_t count = 0;
+    for (const Liquid& l : liquids_) {
+        if (!l.steams) continue;
+        const float area = (l.hi.x - l.lo.x) * (l.hi.y - l.lo.y);
+        const int slots = std::max(1, static_cast<int>(std::lround(area / (512.0f * 512.0f) * 3)));
+        for (int k = 0; k < slots && count < kMaxSteam; ++k) {
+            const std::uint32_t serial =
+                hash32(static_cast<std::uint32_t>(static_cast<std::int32_t>(l.lo.x)) * 73856093u ^
+                       static_cast<std::uint32_t>(static_cast<std::int32_t>(l.lo.y)) * 19349663u ^
+                       static_cast<std::uint32_t>(k) * 83492791u);
+            const float period = 7.0f + 4.0f * puff_random(serial, 1);
+            const float phase = t / period + puff_random(serial, 2);
+            const float cycle = std::floor(phase), u = phase - cycle;
+            const std::uint32_t round = serial + static_cast<std::uint32_t>(cycle) * 0x9E3779B9u;
+            const float age = u * period;
+            PuffState s;
+            const Vec3 drift{(puff_random(round, 5) * 2 - 1) * 10, (puff_random(round, 6) * 2 - 1) * 10, 5};
+            s.centre = Vec3{l.lo.x + (l.hi.x - l.lo.x) * puff_random(round, 3),
+                            l.lo.y + (l.hi.y - l.lo.y) * puff_random(round, 4), l.hi.z + 4 * kLightZScale} +
+                       drift * age;
+            s.radius = 60 + 90 * u + 30 * puff_random(round, 7);
+            // Off screen: nothing to draw.
+            const float x = s.centre.x, y = s.centre.y, z = s.centre.z / kLightZScale;
+            const float sx = (x - y) * 0.25f - view_left_, sy = (x + y) * 0.125f - z - view_top_;
+            const float r = s.radius * kPixelScale * 1.5f;
+            if (sx < -r || sy < -r || sx > width_ + r || sy > height_ + r) continue;
+            s.density = 0.006f * smoothstep(0.0f, 0.25f, u) * (1 - smoothstep(0.55f, 1.0f, u));
+            s.heat = 0;
+            s.grey = 0.7f;
+            s.seed = puff_random(round, 8) * 100.0f;
+            s.time = age;
+            s.feature = 40;
+            s.emit = 0.08f;
+            if (s.density <= 1e-5f) continue;
+            out.push_back(s);
+            ++count;
+        }
+    }
+}
+
 // The puffs now, far to near.
 // @orig none: port lighting (smoke)
 void WorldLighting::puff_states(std::vector<PuffState>& out) const {
     out.clear();
+    steam(out);
     for (const SmokePuff& p : puffs_) {
         const float age = (ticks_ - p.born) / 60.0f;
         const float u = std::clamp(age / p.life, 0.0f, 1.0f);
@@ -614,16 +765,26 @@ void WorldLighting::gather_lights(const World& world, const LightingOptions& opt
         lights.push_back({centre, col * strength, 260.0f + std::min(f.glow_pixels, 200) * 2.0f, d.item->id});
     }
     if (opt.player_lamp) {
-        // A lamp just over the Silencer's head.
+        // The Silencer's lamp: a beam from his chest the way he faces
+        // (direction 0..15, 0 towards -y, 4 towards +x), tipped down so that
+        // it lights the floor ahead and what stands there.
         const Item* p = world.get(1);
         if (p && !p->off_map && !p->parent) {
             const ShapeInfo* info = world.shape_info(p->shape);
             const float x = float(world_from_usecode(p->x)), y = float(world_from_usecode(p->y));
             const float half = info ? info->footpad_x * kFootpadXY * 0.5f : 32.0f;
-            const float top = float(p->z + (info ? info->footpad_z * kFootpadZ : 40) + 12);
-            lights.push_back({{x - half, y - half, top * kLightZScale}, Vec3{1.0f, 0.92f, 0.8f} * 1.1f, 650, p->id});
+            const float height = float(info ? info->footpad_z * kFootpadZ : 40);
+            const float a = static_cast<float>(world.npc_direction(1) & 15) * 0.39269908f;
+            const Vec3 ahead{std::sin(a), -std::cos(a), 0};
+            const Vec3 at = Vec3{x - half, y - half, (p->z + height * 0.9f) * kLightZScale} + ahead * (half + 8);
+            PointLight lamp{at, Vec3{1.0f, 0.95f, 0.85f} * 4.5f, 1600, p->id};
+            lamp.dir = normalize(ahead + Vec3{0, 0, -0.55f});
+            lamp.cos_inner = 0.92f;   // 23 degrees
+            lamp.cos_outer = 0.77f;   // 40 degrees
+            lights.push_back(lamp);
         }
     }
+    if (opt.liquids) liquid_lights(lights);
 }
 
 // Boxes that can shadow the lit area.
@@ -647,7 +808,9 @@ void WorldLighting::gather_occluders(const World& world) {
         if (!info || info->is(ShapeInfo::kEditor) || info->is(ShapeInfo::kTranslucent)) return;
         // Lasers, electrified floors: light, not matter.
         if (info->is(ShapeInfo::kDamaging)) return;
-        if (!info->footpad_x || !info->footpad_y || !info->footpad_z) return;
+        // Flat items (floors, grates, mats: one z unit of footpad) cast none:
+        // a low light would see the floor tiles shade one another.
+        if (!info->footpad_x || !info->footpad_y || info->footpad_z <= 1) return;
         const bool mirrored = item.flags & kItemFlipped;
         const std::int32_t wx = world_from_usecode(item.x), wy = world_from_usecode(item.y);
         const float x = float(wx), y = float(wy);
@@ -727,18 +890,22 @@ bool WorldLighting::occluded(const Vec3& p, const Vec3& n, ObjId self, std::size
 // @orig none: port lighting
 Vec3 WorldLighting::shade_point(int c, const Vec3& p, const Vec3& n, ObjId self, const LightingOptions& opt,
                                 const std::vector<std::uint32_t>& ids,
-                                const std::vector<std::vector<std::uint32_t>>* boxes) const {
+                                const std::vector<std::vector<std::uint32_t>>* boxes, bool liquid) const {
     const float a = opt.ambient;
     Vec3 light{a, a * 1.02f, a * 1.12f};
     for (std::size_t k = 0; k < ids.size(); ++k) {
         const PointLight& L = lights_[ids[k]];
+        if (liquid && L.liquid) continue;
         const Vec3 to = L.pos - p;
         const float d2 = dot(to, to);
         if (d2 >= L.radius * L.radius) continue;
-        const float ndl = dot(n, to) / std::max(std::sqrt(d2), 1e-3f);
+        const float dist = std::max(std::sqrt(d2), 1e-3f);
+        const float ndl = dot(n, to) / dist;
         if (ndl <= 0) continue;
+        const float cone = spot(L, to, dist);
+        if (cone <= 0) continue;
         const float f = 1 - d2 / (L.radius * L.radius);
-        const float w = ndl * f * f;
+        const float w = ndl * f * f * cone;
         if (opt.shadows &&
             occluded(p, n, self, ids[k], opt.sprite_shadows, boxes ? (*boxes)[k] : per_light_[ids[k]]))
             continue;
@@ -746,6 +913,7 @@ Vec3 WorldLighting::shade_point(int c, const Vec3& p, const Vec3& n, ObjId self,
     }
     Vec3 col = mul(lin_[c], light);
     if (glowing(c)) col = col + lin_[c];
+    if (liquid) col = col + mul(lin_[c], kLiquidTint) * (kLiquidGlow * liquid_glow(p, ticks_ / 60.0f));
     return col;
 }
 
@@ -771,10 +939,25 @@ Vec3 WorldLighting::smoke_over(Vec3 colour, int px, int py, bool clip, float sur
         const float s1 = mid + half;
         if (clip) s0 = std::max(s0, surface_s);
         if (s1 <= s0) continue;
-        const float ds = (s1 - s0) / kSmokeSteps;
+        auto light_at = [&](const Vec3& p) {
+            Vec3 light{opt.ambient, opt.ambient * 1.02f, opt.ambient * 1.12f};
+            for (const PointLight& L : lights_) {
+                const Vec3 to = L.pos - p;
+                const float d2 = dot(to, to);
+                if (d2 >= L.radius * L.radius) continue;
+                const float f = 1 - d2 / (L.radius * L.radius);
+                light = light + L.color * (f * f * 0.8f * spot(L, to, std::sqrt(d2)));
+            }
+            return light;
+        };
+        // A liquid's steam is thin and small: lit as at its centre.
+        const bool steam = puff.emit > 0;
+        const Vec3 centre_light = steam ? light_at(puff.centre) : Vec3{};
+        const int steps = steam ? kSmokeSteps / 2 : kSmokeSteps;
+        const float ds = (s1 - s0) / steps;
         const float len = ds * kRayStepLength;
         // Far to near.
-        for (int i = 0; i < kSmokeSteps; ++i) {
+        for (int i = 0; i < steps; ++i) {
             const Vec3 p = a + kRayStep * (s0 + (i + 0.5f) * ds);
             const float dist = std::sqrt(dot(p - puff.centre, p - puff.centre)) / puff.radius;
             const float shape = 1 - smoothstep(0.35f, 1.0f, dist);
@@ -784,15 +967,9 @@ Vec3 WorldLighting::smoke_over(Vec3 colour, int px, int py, bool clip, float sur
             const float sigma = puff.density * shape * noise;
             if (sigma <= 0) continue;
             const float keep = std::exp(-sigma * len);
-            Vec3 light{opt.ambient, opt.ambient * 1.02f, opt.ambient * 1.12f};
-            for (const PointLight& L : lights_) {
-                const Vec3 to = L.pos - p;
-                const float d2 = dot(to, to);
-                if (d2 >= L.radius * L.radius) continue;
-                const float f = 1 - d2 / (L.radius * L.radius);
-                light = light + L.color * (f * f * 0.8f);
-            }
-            const Vec3 glow = Vec3{1.0f, 0.45f, 0.12f} * (puff.heat * puff.heat * 2.5f * shape);
+            const Vec3 light = steam ? centre_light : light_at(p);
+            const Vec3 glow = Vec3{1.0f, 0.45f, 0.12f} * (puff.heat * puff.heat * 2.5f * shape) +
+                              kLiquidTint * (puff.emit * shape);
             const Vec3 radiance = light * puff.grey + glow;
             colour = colour * keep + radiance * (1 - keep);
         }
@@ -910,7 +1087,9 @@ void WorldLighting::shade_cpu(const Surface8& screen, const LightingOptions& opt
                 Vec3 col;
                 if (emissive_[j]) col = lin_[c];  // a flash: as it is
                 else if (!lit) col = lin_[c] * opt.ambient;
-                else col = shade_point(c, pos_[j], nrm_[j], list_[owner_[j]].item->id, opt, ids, &boxes);
+                else
+                    col = shade_point(c, pos_[j], nrm_[j], list_[owner_[j]].item->id, opt, ids, &boxes,
+                                      liquid_[owner_[j]] != 0);
                 if (!puffs.empty())
                     col = smoke_over(col, x, y, lit, lit ? pos_[j].x + pos_[j].y : 0.0f, opt, puffs);
                 argb[j] = pack(col);
@@ -971,7 +1150,8 @@ bool WorldLighting::shade_gpu(const Surface8& screen, const LightingOptions& opt
             float* o = &f.items[i * 16];
             o[0] = float(d.x_left), o[1] = float(d.x), o[2] = float(d.y_far), o[3] = float(d.y);
             o[4] = float(d.z), o[5] = float(d.z_top);
-            o[6] = float((actor_[i] ? LitFrame::kActor : 0) | (d.mirrored ? LitFrame::kMirrored : 0));
+            o[6] = float((actor_[i] ? LitFrame::kActor : 0) | (d.mirrored ? LitFrame::kMirrored : 0) |
+                         (liquid_[i] ? LitFrame::kLiquid : 0));
             o[7] = float(d.item->id);
             o[8] = float(at.first), o[9] = float(at.second), o[10] = float(dec.w), o[11] = float(dec.h);
             o[12] = float(view_left_ + d.left), o[13] = float(view_top_ + d.top);
@@ -998,6 +1178,7 @@ bool WorldLighting::shade_gpu(const Surface8& screen, const LightingOptions& opt
     f.height = height_;
     f.view_left = view_left_;
     f.view_top = view_top_;
+    f.time = ticks_ / 60.0f;
     f.screen = screen.pixels.data();
     f.options = opt;
     for (int i = 0; i < 256; ++i) f.palette[i] = flat_[i] & 0xFFFFFFu;
@@ -1010,14 +1191,16 @@ bool WorldLighting::shade_gpu(const Surface8& screen, const LightingOptions& opt
             else f.code[j] = static_cast<std::uint16_t>(owner_[j]);
         }
     });
-    f.lights.assign(lights_.size() * 12, 0.0f);
+    f.lights.assign(lights_.size() * 16, 0.0f);
     f.light_boxes.clear();
     for (std::size_t l = 0; l < lights_.size(); ++l) {
         const PointLight& L = lights_[l];
-        float* o = &f.lights[l * 12];
+        float* o = &f.lights[l * 16];
         o[0] = L.pos.x, o[1] = L.pos.y, o[2] = L.pos.z, o[3] = L.radius;
         o[4] = L.color.x, o[5] = L.color.y, o[6] = L.color.z, o[7] = float(L.owner);
-        o[8] = float(f.light_boxes.size()), o[9] = float(per_light_[l].size());
+        o[8] = float(f.light_boxes.size()), o[9] = float(per_light_[l].size()), o[10] = L.liquid ? 1.0f : 0.0f;
+        o[11] = L.cos_inner;
+        o[12] = L.dir.x, o[13] = L.dir.y, o[14] = L.dir.z, o[15] = L.cos_outer;
         for (std::uint32_t b : per_light_[l]) f.light_boxes.push_back(static_cast<std::int32_t>(b));
     }
     f.puffs.assign(puff_now_.size() * 12, 0.0f);
@@ -1026,6 +1209,7 @@ bool WorldLighting::shade_gpu(const Surface8& screen, const LightingOptions& opt
         float* o = &f.puffs[i * 12];
         o[0] = p.centre.x, o[1] = p.centre.y, o[2] = p.centre.z, o[3] = p.radius;
         o[4] = p.density, o[5] = p.heat, o[6] = p.grey, o[7] = p.seed, o[8] = p.time, o[9] = p.feature;
+        o[10] = p.emit;
     }
     if (!gpu_->shade(f, argb)) {
         atlas_reset_ = true;  // the GPU may have lost it
@@ -1072,6 +1256,9 @@ void WorldLighting::probe(const World& world, int x, int y) {
         const PointLight& L = lights_[l];
         std::printf("  light %zu (item %u) at (%.0f %.0f %.1f) distance %.0f\n", l, L.owner, L.pos.x, L.pos.y,
                     L.pos.z / kLightZScale, std::sqrt(dot(L.pos - p, L.pos - p)));
+        if (L.dir.x != 0 || L.dir.y != 0 || L.dir.z != 0)
+            std::printf("    spot towards (%.2f %.2f %.2f), cone %.2f here\n", L.dir.x, L.dir.y, L.dir.z,
+                        spot(L, L.pos - p, std::sqrt(dot(L.pos - p, L.pos - p))));
         for (std::uint32_t bi : per_light_[l]) {
             if (!occluded(p, n, d.item->id, l, true, {bi})) continue;
             const Box& b = boxes_[bi];

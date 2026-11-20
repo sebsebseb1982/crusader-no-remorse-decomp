@@ -29,6 +29,8 @@ enum PadActionId : int {
     kPadJump, kPadMenu, kPadConfirm, kPadSelect,
     // The plain arrows, so that any direction can be moved to any input (appended: CRUSADER.CFG stores indices).
     kPadForward, kPadBackward, kPadTurnLeft, kPadTurnRight,
+    // Port addition: L, the Silencer's lamp with the 3D lighting (GameConfig::flashlight).
+    kPadFlashlight,
     kPadActionCount,
 };
 
@@ -58,6 +60,7 @@ constexpr std::array<PadAction, kPadActionCount> kPadActions = {{
     {"MOVE BACKWARD", 0x50, true, 0},
     {"TURN LEFT", 0x4B, true, 0},
     {"TURN RIGHT", 0x4D, true, 0},
+    {"FLASHLIGHT", 0x26, false, 'l'},
 }};
 
 // The inputs of the controller, in the order of PadSettings::buttons: the
@@ -105,7 +108,7 @@ struct PadSettings {
         b[kPadY] = kPadNextWeapon;
         b[kPadLeftBumper] = kPadRollLeft;
         b[kPadRightBumper] = kPadRollRight;
-        b[kPadLeftTrigger] = kPadNone;
+        b[kPadLeftTrigger] = kPadFlashlight;
         b[kPadRightTrigger] = kPadFire;
         b[kPadLeftStick] = kPadRun;
         b[kPadRightStick] = kPadCrouch;

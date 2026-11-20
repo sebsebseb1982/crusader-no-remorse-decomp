@@ -1218,6 +1218,16 @@ void Game::on_key(const GameKeyEvent& e) {
     // CRUSADER_1138_2B03, at the head of the Controller's keys: the typed
     // cheat code, which sees every key (Shift too).
     cheat_code_key(*world_, e);
+    // Port addition (GameConfig::flashlight): with the 3D lighting, L (no
+    // Ctrl or Alt: Ctrl+L is a cheat) switches the Silencer's lamp, the same
+    // setting as the option. The original gives L nothing to do.
+    if (config_.lighting && e.scancode == 0x26 && !e.extended && !(e.flags & (kCtrl | kAlt))) {
+        if (e.pressed && e.count <= 1) {
+            config_.flashlight = !config_.flashlight;
+            save_config();
+        }
+        return;
+    }
     // Port addition (GameConfig::toggle_run): a Shift press flips running, and
     // the Controller sees Shift held exactly while it is on.
     GameKeyEvent ev = e;
@@ -1777,15 +1787,15 @@ void Game::draw_window(Surface8& screen, int x0, int y0, Draw&& draw) {
 namespace {
 
 // The game's lighting: the scene stays readable (ambient), lamps, screens,
-// flashes, explosions and the Silencer's lamp light it.
+// flashes, explosions and the Silencer's lamp light it; the smoke as chosen
+// (GameConfig::volumetric_smoke).
 // @orig none: port lighting
-const LightingOptions& lighting_options() {
-    static const LightingOptions options = [] {
-        LightingOptions o;
-        o.ambient = 0.5f;
-        return o;
-    }();
-    return options;
+LightingOptions lighting_options(const GameConfig& config) {
+    LightingOptions o;
+    o.ambient = 0.5f;
+    o.smoke = config.volumetric_smoke;
+    o.player_lamp = config.flashlight;
+    return o;
 }
 
 }  // namespace
@@ -1800,7 +1810,7 @@ void Game::set_lighting_gpu(LightingGpu* gpu) {
 bool Game::render_lit(const Surface8& screen, std::vector<std::uint32_t>& argb) {
     if (!config_.lighting || !lighting_ || !lighting_->captured()) return false;
     argb.resize(screen.pixels.size());
-    return lighting_->shade(*world_, screen, palette(), lighting_options(), {}, argb.data());
+    return lighting_->shade(*world_, screen, palette(), lighting_options(config_), {}, argb.data());
 }
 
 // @orig 1188:19C1
@@ -1914,7 +1924,7 @@ void Game::render_view(Surface8& screen, RenderStats* stats, bool keep_view) {
             lighting_ = std::make_unique<WorldLighting>(shapes_, xform_, &anims_);
             lighting_->set_gpu(lighting_gpu_);
         }
-        lighting_->capture(*world_, list, screen, s.view_left, s.view_top, palette(), lighting_options(),
+        lighting_->capture(*world_, list, screen, s.view_left, s.view_top, palette(), lighting_options(config_),
                            kernel_->ticks());
     }
     // SPMGR.C: the screen sprites (aiming mode), over the scene, unless

@@ -6,8 +6,8 @@
 //        lightview [data_dir] --save SAVEGAME_FILE [...]          a saved game, centred on the Silencer
 //        lightview [data_dir] [map] [cx cy] --png out.png [--mouse sx sy] [--drop sx sy]... [--ambient 0-3]
 //                  [--orbit yaw pitch] [--flat] [--no-shadows] [--box-shadows] [--no-bump] [--no-glow]
-//                  [--no-lamp] [--no-smoke] [--fixed-actors] [--no-back-faces] [--normals] [--probe sx sy]...
-//                  [--puff sx sy]... [--rocket sx sy]... [--ticks N] [--cpu] [--size WxH] [--bench N]
+//                  [--no-lamp] [--no-smoke] [--no-liquids] [--fixed-actors] [--no-back-faces] [--normals] [--probe sx sy]...
+//                  [--puff sx sy]... [--puff-scale K] [--rocket sx sy]... [--ticks N] [--cpu] [--size WxH] [--bench N]
 //                                                                 one frame to a PNG
 //   Mouse            moving light on the surface under the pointer
 //   Left click       drop a light there        Right click  remove the last one
@@ -16,7 +16,7 @@
 //   A ambient  N normals view  Tab original picture (unlit)
 //   Q / W  turn the camera  Z / X  tilt it  R  back to the isometric view
 //   T  characters' frames follow the camera  F  far box faces  P  an explosion's smoke at the pointer
-//   M  smoke on / off
+//   M  smoke on / off   V  liquids glow and steam on / off
 //   Arrows / middle drag  scroll   PageUp/PageDown  previous/next map   Esc  quit
 
 #define SDL_MAIN_HANDLED
@@ -133,6 +133,7 @@ int main(int argc, char** argv) {
     std::optional<std::pair<int, int>> mouse;
     std::vector<std::pair<int, int>> probes, drops;
     int bench = 1;
+    float puff_scale = 1;  // --puff-scale: an explosion of that size (the game: 0.8 to 2)
     int ticks = 0;  // --ticks: frames of smoke before the picture
     bool cpu = false;
     std::vector<std::pair<int, int>> puffs, rockets;
@@ -163,7 +164,9 @@ int main(int argc, char** argv) {
         else if (arg("--no-glow")) v.opt.glow_lights = v.opt.flash_lights = false;
         else if (arg("--no-lamp")) v.opt.player_lamp = false;
         else if (arg("--no-smoke")) v.opt.smoke = false;
+        else if (arg("--no-liquids")) v.opt.liquids = false;
         else if (arg("--puff") && i + 2 < argc) puffs.push_back(pair());
+        else if (arg("--puff-scale") && i + 1 < argc) puff_scale = std::stof(argv[++i]);
         else if (arg("--rocket") && i + 2 < argc) rockets.push_back(pair());
         else if (arg("--ticks") && i + 1 < argc) ticks = std::max(0, std::stoi(argv[++i]));
         else if (arg("--cpu")) cpu = true;
@@ -240,7 +243,7 @@ int main(int argc, char** argv) {
                         lights.push_back({*p, scaled(kLightColors[(k + 1) % 4], 1.4f), 800});
                 for (const auto& [px, py] : puffs)
                     if (auto p = lighting.surface_at(px, py))
-                        lighting.add_puff(Vec3{p->x, p->y, p->z + 16 * kLightZScale}, SmokePuff::kExplosion);
+                        lighting.add_puff(Vec3{p->x, p->y, p->z + 16 * kLightZScale}, SmokePuff::kExplosion, puff_scale);
                 // A rocket (projectile frame 0x11) hanging 30 z units over the surface.
                 for (const auto& [px, py] : rockets)
                     if (auto p = lighting.surface_at(px, py)) {
@@ -327,10 +330,11 @@ int main(int argc, char** argv) {
                     case SDLK_t: v.opt.turn_actors = !v.opt.turn_actors; break;
                     case SDLK_f: v.opt.back_faces = !v.opt.back_faces; break;
                     case SDLK_m: v.opt.smoke = !v.opt.smoke; break;
+                    case SDLK_v: v.opt.liquids = !v.opt.liquids; break;
                     case SDLK_p:
                         if (pointer)
                             if (auto p = lighting.surface_at(pointer->first, pointer->second))
-                                lighting.add_puff(Vec3{p->x, p->y, p->z + 16 * kLightZScale}, SmokePuff::kExplosion);
+                                lighting.add_puff(Vec3{p->x, p->y, p->z + 16 * kLightZScale}, SmokePuff::kExplosion, puff_scale);
                         break;
                     case SDLK_PAGEUP:
                     case SDLK_PAGEDOWN:

@@ -73,8 +73,8 @@ constexpr Entry kMainEntries[] = {Entry::Controls, Entry::Display, Entry::Effect
 constexpr Entry kControlsEntries[] = {Entry::Pad,        Entry::Directional, Entry::Aim,
                                       Entry::Draw,       Entry::PreciseAim,  Entry::Run,
                                       Entry::Vibration,  Entry::VibrationIntensity, Entry::Back};
-constexpr Entry kDisplayEntries[] = {Entry::Native, Entry::Zoom,     Entry::Smooth,
-                                     Entry::Follow, Entry::Lighting, Entry::Back};
+constexpr Entry kDisplayEntries[] = {Entry::Native,   Entry::Zoom,  Entry::Smooth,     Entry::Follow,
+                                     Entry::Lighting, Entry::Smoke, Entry::Flashlight, Entry::Back};
 constexpr Entry kEffectsEntries[] = {Entry::Impact, Entry::Blood, Entry::Casings, Entry::Back};
 constexpr Entry kGameEntries[] = {Entry::Autosave, Entry::FixBugs, Entry::Language, Entry::Back};
 constexpr Entry kCheatsEntries[] = {Entry::RemainsLoot, Entry::Back};
@@ -232,6 +232,14 @@ void EnhancementsScreen::draw(Surface8& screen) const {
             name = tr("3D LIGHTING");
             on = config_->lighting;
             break;
+        case Entry::Smoke:
+            name = tr("VOLUMETRIC SMOKE");
+            on = config_->volumetric_smoke;
+            break;
+        case Entry::Flashlight:
+            name = tr("FLASHLIGHT");
+            on = config_->flashlight;
+            break;
         case Entry::Impact:
             name = tr("IMPACT MARKS");
             on = config_->impact_marks;
@@ -328,6 +336,8 @@ void EnhancementsScreen::activate(int row) {
     case Entry::Smooth: config_->smooth_scaling = !config_->smooth_scaling; break;
     case Entry::Follow: config_->follow_player = !config_->follow_player; break;
     case Entry::Lighting: config_->lighting = !config_->lighting; break;
+    case Entry::Smoke: config_->volumetric_smoke = !config_->volumetric_smoke; break;
+    case Entry::Flashlight: config_->flashlight = !config_->flashlight; break;
     case Entry::Impact: config_->impact_marks = !config_->impact_marks; break;
     case Entry::Blood:
         // Off, on, gore, off.

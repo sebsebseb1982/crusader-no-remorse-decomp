@@ -58,7 +58,7 @@ uniform highp isampler2D uLightBoxes;
 uniform highp sampler2D uPuffs;
 uniform highp sampler2D uAtlas;
 uniform int uViewX, uViewY, uWidth, uHeight, uLightCount, uPuffCount, uFlags;
-uniform float uAmbient;
+uniform float uAmbient, uTime;
 out vec4 outColor;
 
 const float K = 3.266;
@@ -67,6 +67,8 @@ const vec3 RIGHT = vec3(0.7071, -0.7071, 0.0);
 const vec3 UP = vec3(-0.3536, -0.3536, 0.8660);
 const vec3 RAY_STEP = vec3(0.5, 0.5, K / 8.0);
 const int SHADOWS = 1, SPRITE_CUT = 2, BUMP = 4, SMOKE = 8;
+const vec3 LIQUID_TINT = vec3(0.45, 1.0, 0.35);
+const float LIQUID_GLOW = 0.8;
 
 vec4 fetchf(highp sampler2D t, int i) { return texelFetch(t, ivec2(i & 1023, i >> 10), 0); }
 vec3 srgb(uint c) { return texelFetch(uPalette, ivec2(int(c), 0), 0).bgr; }
@@ -180,15 +182,29 @@ float smokeNoise(vec3 p, float seed, float time, float feature) {
     return 0.5 * valueNoise(v) + 0.3 * valueNoise(v * 2.03) + 0.2 * valueNoise(v * 4.01);
 }
 
+// How much a liquid glows (liquid_glow in lighting.cpp).
+float liquidGlow(vec3 p, float t) {
+    vec3 v = vec3(p.x / 170.0 + t * 0.06, p.y / 170.0 - t * 0.04, t * 0.12);
+    float n = 0.65 * valueNoise(v) + 0.35 * valueNoise(vec3(v.x * 2.1 + 5.2, v.y * 2.1 + 1.3, v.z * 1.7));
+    return (0.35 + 0.9 * smoothstep(0.3, 0.75, n)) * (0.85 + 0.15 * sin(t * 1.1));
+}
+
+// How much of a spot's light reaches `to` away (spot in lighting.cpp).
+float spotOf(vec4 L2, vec4 L3, vec3 to, float dist) {
+    if (L3.x == 0.0 && L3.y == 0.0 && L3.z == 0.0) return 1.0;
+    return smoothstep(L3.w, L2.w, -dot(to, L3.xyz) / max(dist, 1e-3));
+}
+
 vec3 lightAt(vec3 p) {
     vec3 light = vec3(uAmbient, uAmbient * 1.02, uAmbient * 1.12);
     for (int l = 0; l < uLightCount; ++l) {
-        vec4 L0 = fetchf(uLights, l * 3), L1 = fetchf(uLights, l * 3 + 1);
+        vec4 L0 = fetchf(uLights, l * 4), L1 = fetchf(uLights, l * 4 + 1);
+        vec4 L2 = fetchf(uLights, l * 4 + 2), L3 = fetchf(uLights, l * 4 + 3);
         vec3 to = L0.xyz - p;
         float d2 = dot(to, to), r2 = L0.w * L0.w;
         if (d2 >= r2) continue;
         float f = 1.0 - d2 / r2;
-        light += L1.rgb * (f * f * 0.8);
+        light += L1.rgb * (f * f * 0.8 * spotOf(L2, L3, to, sqrt(d2)));
     }
     return light;
 }
@@ -210,9 +226,13 @@ vec3 smokeOver(vec3 colour, ivec2 pix, bool clip, float surfaceS) {
         float s0 = mid - half_, s1 = mid + half_;
         if (clip) s0 = max(s0, surfaceS);
         if (s1 <= s0) continue;
-        float ds = (s1 - s0) / 8.0;
+        // A liquid's steam is thin and small: lit as at its centre.
+        bool steam = q2.z > 0.0;
+        vec3 centreLight = steam ? lightAt(q0.xyz) : vec3(0.0);
+        int steps = steam ? 4 : 8;
+        float ds = (s1 - s0) / float(steps);
         float len = ds * stepLength;
-        for (int k = 0; k < 8; ++k) {
+        for (int k = 0; k < steps; ++k) {
             vec3 p = A + RAY_STEP * (s0 + (float(k) + 0.5) * ds);
             float dist = length(p - q0.xyz) / q0.w;
             float shape = 1.0 - smoothstep(0.35, 1.0, dist);
@@ -221,8 +241,8 @@ vec3 smokeOver(vec3 colour, ivec2 pix, bool clip, float surfaceS) {
             float sigma = q1.x * shape * noise;
             if (sigma <= 0.0) continue;
             float keep = exp(-sigma * len);
-            vec3 glow = vec3(1.0, 0.45, 0.12) * (q1.y * q1.y * 2.5 * shape);
-            vec3 radiance = lightAt(p) * q1.z + glow;
+            vec3 glow = vec3(1.0, 0.45, 0.12) * (q1.y * q1.y * 2.5 * shape) + LIQUID_TINT * (q2.z * shape);
+            vec3 radiance = (steam ? centreLight : lightAt(p)) * q1.z + glow;
             colour = colour * keep + radiance * (1.0 - keep);
         }
     }
@@ -248,21 +268,29 @@ void main() {
         col = lin(c) * uAmbient;
     } else {
         surfacePoint(int(code), pix, p, n);
-        float self = fetchf(uItems, int(code) * 4 + 1).w;
+        vec4 b = fetchf(uItems, int(code) * 4 + 1);
+        float self = b.w;
+        bool liquid = (int(b.z) & 4) != 0;
         vec3 light = vec3(uAmbient, uAmbient * 1.02, uAmbient * 1.12);
         for (int l = 0; l < uLightCount; ++l) {
-            vec4 L0 = fetchf(uLights, l * 3), L1 = fetchf(uLights, l * 3 + 1), L2 = fetchf(uLights, l * 3 + 2);
+            vec4 L0 = fetchf(uLights, l * 4), L1 = fetchf(uLights, l * 4 + 1), L2 = fetchf(uLights, l * 4 + 2);
+            vec4 L3 = fetchf(uLights, l * 4 + 3);
+            if (liquid && L2.z > 0.5) continue;
             vec3 to = L0.xyz - p;
             float d2 = dot(to, to), r2 = L0.w * L0.w;
             if (d2 >= r2) continue;
-            float ndl = dot(n, to) / max(sqrt(d2), 1e-3);
+            float dist = max(sqrt(d2), 1e-3);
+            float ndl = dot(n, to) / dist;
             if (ndl <= 0.0) continue;
+            float cone = spotOf(L2, L3, to, dist);
+            if (cone <= 0.0) continue;
             float f = 1.0 - d2 / r2;
             if ((uFlags & SHADOWS) != 0 && occluded(p, n, self, L0.xyz, L1.w, int(L2.x), int(L2.y))) continue;
-            light += L1.rgb * (ndl * f * f);
+            light += L1.rgb * (ndl * f * f * cone);
         }
         col = lin(c) * light;
         if (c >= 1u && c <= 14u) col += lin(c);
+        if (liquid) col += lin(c) * LIQUID_TINT * (LIQUID_GLOW * liquidGlow(p, uTime));
     }
     if ((uFlags & SMOKE) != 0 && uPuffCount > 0) col = smokeOver(col, pix, lit, p.x + p.y);
     vec3 o = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
@@ -327,7 +355,7 @@ struct GlLighting::Impl {
     GLuint tex[kUnits] = {};
     int tex_w[kUnits] = {}, tex_h[kUnits] = {};
     GLint u_view_x = -1, u_view_y = -1, u_width = -1, u_height = -1, u_lights = -1, u_puffs = -1, u_flags = -1,
-          u_ambient = -1;
+          u_ambient = -1, u_time = -1;
     std::vector<float> scratch;
     std::vector<std::int32_t> scratch_int;
 
@@ -404,6 +432,7 @@ struct GlLighting::Impl {
         u_puffs = GetUniformLocation(program, "uPuffCount");
         u_flags = GetUniformLocation(program, "uFlags");
         u_ambient = GetUniformLocation(program, "uAmbient");
+        u_time = GetUniformLocation(program, "uTime");
         GenVertexArrays(1, &vao);
         GenFramebuffers(1, &fbo);
         GenTextures(kUnits, tex);
@@ -568,10 +597,11 @@ bool GlLighting::shade(const LitFrame& f, std::uint32_t* argb) {
     g.Uniform1i(g.u_view_y, f.view_top);
     g.Uniform1i(g.u_width, f.width);
     g.Uniform1i(g.u_height, f.height);
-    g.Uniform1i(g.u_lights, static_cast<GLint>(f.lights.size() / 12));
+    g.Uniform1i(g.u_lights, static_cast<GLint>(f.lights.size() / 16));
     g.Uniform1i(g.u_puffs, static_cast<GLint>(f.puffs.size() / 12));
     g.Uniform1i(g.u_flags, (o.shadows ? 1 : 0) | (o.sprite_shadows ? 2 : 0) | (o.bump ? 4 : 0) | (o.smoke ? 8 : 0));
     g.Uniform1f(g.u_ambient, o.ambient);
+    g.Uniform1f(g.u_time, f.time);
     g.BindVertexArray(g.vao);
     g.DrawArrays(kTriangles, 0, 3);
     // Rows come back from the bottom of the framebuffer, which is the top of

@@ -87,6 +87,8 @@ The original has nothing like it. This screen gathers every option the port adds
 | SMOOTHING / LISSAGE | Bilinear filtering of the picture | `smoothscaling` |
 | CAMERA FOLLOW / SUIVI CAMERA | Toggles camera follow | `followplayer` |
 | 3D LIGHTING / ECLAIRAGE 3D | Lights the world in 3D, with shadows (section 7d) | `lighting` |
+| VOLUMETRIC SMOKE / FUMEE 3D | With the 3D lighting: smoke of explosions and shots, steam of liquids (section 7d); on by default | `volumetricsmoke` |
+| FLASHLIGHT / LAMPE TORCHE | With the 3D lighting: the Silencer's lamp lights in front of him (section 7d); on by default, L or the controller's FLASHLIGHT action (LT) switches it in play | `flashlight` |
 
 *EFFECTS / EFFETS*
 
@@ -152,6 +154,7 @@ Each controller input is **translated into a key, or a key combination, of the o
 | ENTER / VALIDER | Enter |
 | SELECT / SELECTIONNER | `s` (selection mode, then next item) |
 | FORWARD / BACKWARD / TURN LEFT / TURN RIGHT | ↑ / ↓ / ← / → |
+| FLASHLIGHT / LAMPE TORCHE | `l` (port key: the Silencer's lamp, section 7d) |
 
 ### 2.3 Configurable inputs (24)
 - 12 buttons: A, B, X, Y, LB, RB, LT, RT, left stick click (L3), right stick click (R3), Start, Select.
@@ -166,7 +169,7 @@ Each controller input is **translated into a key, or a key combination, of the o
 | X | Enter |
 | Y | Next weapon |
 | LB / RB | Roll left / right |
-| LT | None |
+| LT | Flashlight |
 | RT | Fire |
 | L3 | Run |
 | R3 | Crouch / stand |
@@ -429,6 +432,7 @@ The original ejects nothing. With this option every shot of a firearm throws out
 ## 7d. 3D lighting
 
 **Option:** 3D LIGHTING / ECLAIRAGE 3D (`lighting`), DISPLAY page, off by default. `--lighting` switches it on for one run.
+**Option:** VOLUMETRIC SMOKE / FUMEE 3D (`volumetricsmoke`, written only when off), DISPLAY page, on by default: the smoke and the liquids' steam below. Without the 3D lighting it does nothing.
 **Files:** `src/engine/world/lighting.*`, `src/platform/gl_lighting.*`, `src/game/game.cpp`, `src/platform/sdl_presenter.*`; the `lightview` tool and docs/LIGHTVIEW.md
 
 The original draws flat sprites under a fixed light. With this option the world is lit in 3D in true colour.
@@ -439,18 +443,24 @@ The original draws flat sprites under a fixed light. With this option the world 
 **Lights**
 - Items with colour-cycled pixels (palette entries 1..14: lamps, screens, force fields, lasers) light the scene around them in their colour.
 - Flashes, explosions and shots (sprites) light the surface under them.
-- A lamp just over the Silencer's head lights the area around him.
+- The Silencer carries a lamp (FLASHLIGHT / LAMPE TORCHE option, on by default): a beam from his chest the way he faces, tipped down, that lights the floor and what stands in front of him (a cone of 40 degrees, full within 23). He never shadows it himself.
+- **L** switches the lamp on or off in play, the same setting as the option (saved); Ctrl+L stays the cheat. On the controller, the FLASHLIGHT action sends L; it is on **LT** by default. Without the 3D lighting, L does nothing, as in the original.
 - The rest of the scene keeps half its light (ambient), so the game stays readable.
 
 **Shadows**
-- Item boxes cast shadows, cut by their sprites: railings, grids and bodies cast their outline. A light is never shadowed by the item that gives it; lasers and electrified floors cast none.
+- Item boxes cast shadows, cut by their sprites: railings, grids and bodies cast their outline. A light is never shadowed by the item that gives it; lasers, electrified floors and flat items (floors, grates, mats) cast none.
 
-**Smoke**
-- Explosions leave a dark cloud: six puffs of noise that glow orange for the first second (lit from inside by the explosion), then rise, grow and thin out over five or six seconds.
+**Smoke** (VOLUMETRIC SMOKE option)
+- Explosions leave a dark cloud: six puffs of noise that glow orange for the first second (lit from inside by the explosion), then rise, grow and thin out over five or six seconds. It stays see-through, as much for a big blast as for a small one (the bigger, the thinner), so that what happens in it can be followed.
 - A shot leaves a small wisp blown out of the muzzle along its way, slowed down at once and gone in under a second. Where it hits a wall, a floor or an item, a little dust; a shot that ends in the air (out of range) leaves none. Rockets in flight carry a flickering orange light (their exhaust) and leave a trail; other bright shots a trail.
 - The light of a shot or an impact is where it is; only explosions and flashes, which the game draws over the scene, light the surface under them.
 - The smoke is a volume: in front of a wall it hides it, behind it it is hidden, and the scene's lights colour it.
 - It follows the game's clock: it stops with the game (menus, pause), goes on a map change. It only reads the world and uses its own numbers, never the game's random generators.
+
+**Liquids**
+- The green liquids (the pools, their strips and edges, ripples and bubbles: shapes 0x150, 0x59E, 0x227, 0x228, 0x5A2, 0x55A, 0x56D, 0x56E, 0x1D6, 0x539, 0x54C, 0x580; no TYPEFLAG bit marks them) glow a faint radioactive green, in slow patches that drift and breathe.
+- They light what stands around them (walls, rims, floors, machines, pillars, people at the edge) in green, with one light for each 1024 x 1024 cell of liquid, high over it so that it falls on the floors past the rims and reaches 1600 units; it does not light the liquid itself.
+- The pools give off a thin steam: wisps that rise from the surface, drift and fade out over seven to eleven seconds, faintly green. They need no memory (each comes back from the game's clock and the pool's place), so they are there as soon as a pool is in view; they go with the smoke (VOLUMETRIC SMOKE option).
 
 **What is not lit**
 - Everything drawn over the world: the status bar, the aiming sprites, the cursor, menus, screens and cutscenes, shown in their palette colours. Palette fades and colour cycling still apply.
@@ -460,6 +470,7 @@ The original draws flat sprites under a fixed light. With this option the world 
 - On the GPU (OpenGL 3.3, or OpenGL ES 3.0) when there is one: the processor finds which item shows at each pixel and gathers the lights, occluders and smoke; a fragment shader does the rest, in a hidden window of its own, and the picture is read back for the usual presentation. The context is made the first time the option is on.
 - Otherwise on the processor, on all its cores, by 16 x 16 tiles: the same picture, slower. `--cpu-lighting` forces it.
 - Measured with `lightview` (16 lights, shadows, smoke), a frame takes about 3 ms at 640 x 480, 6 ms at 1280 x 720 and 10 ms at 1920 x 1080 with the GPU, against 7, 14 and 26 ms on the processor.
+- The liquids add about 5.5 ms at 1920 x 1080 over two large pools with the GPU, 14 ms on the processor (their steam is marched in half the steps of smoke and lit as at its centre).
 
 ---
 
@@ -710,6 +721,9 @@ The original reads much of its data from the CD and needs it in the drive. The p
 | `remainsloot` | false | `true` |
 | `nativeresolution` | true | `false` |
 | `autosave` | true | `false` |
+| `lighting` | false | `true` |
+| `volumetricsmoke` | true | `false` |
+| `flashlight` | true | `false` |
 | `language` | empty (AUTO) | a language folder is picked: its id (`fr`, `en`, `pt-br`...) |
 | `viewzoom` | 0 (auto), 1..4 with decimals (`1.5`) | ≠ 0 |
 | `padmap` | see section 2.4 | controller config ≠ default. 24 comma-separated action numbers; `-1` = default role; values clamped |

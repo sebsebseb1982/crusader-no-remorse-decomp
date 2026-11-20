@@ -9,9 +9,10 @@
 // box centre with a normal rounded from the sprite's silhouette, bumped by
 // the sprite's own shading. `shade` lights those points with point lights
 // (items with colour-cycled pixels, flashes and explosions, a lamp over the
-// Silencer, extra ones) and shadows cast by the item boxes cut by their
+// Silencer's lamp, extra ones) and shadows cast by the item boxes cut by their
 // sprites, then adds the smoke of explosions and shots (volumes of noise,
-// lit by the same lights). Pixels drawn over the world afterwards (status
+// lit by the same lights). Liquids glow a faint radioactive green, light
+// what stands around them and give off a thin steam. Pixels drawn over the world afterwards (status
 // bar, cursor, menus) are left as they are.
 //
 // The shading runs on a GPU when one is given (LightingGpu, implemented by
@@ -52,6 +53,11 @@ struct PointLight {
     Vec3 color;
     float radius = 700;
     ObjId owner = 0;  // the item giving the light: never shadows it
+    bool liquid = false;  // the glow of a liquid: lights what is around, not the liquid itself
+    // A spot (the Silencer's lamp): only within a cone round `dir` (unit),
+    // full inside cos_inner, nothing outside cos_outer. Zero: all round.
+    Vec3 dir;
+    float cos_inner = 1, cos_outer = 0;
 };
 
 struct LightingOptions {
@@ -61,8 +67,9 @@ struct LightingOptions {
     bool bump = true;
     bool glow_lights = true;     // items with colour-cycled pixels give light
     bool flash_lights = true;    // flashes, explosions, shots give light
-    bool player_lamp = true;     // a lamp over the Silencer (item 1)
+    bool player_lamp = true;     // the Silencer's lamp (item 1): a beam in front of him
     bool smoke = true;           // explosions and shots leave smoke
+    bool liquids = true;         // liquids glow green and steam (the steam with smoke)
     bool show_normals = false;
     // Turned camera (reproject).
     float yaw = 0, pitch = 0;
@@ -99,6 +106,7 @@ struct PuffState {
     float seed;
     float time;     // seconds since birth (noise animation)
     float feature;  // size of the noise's features
+    float emit = 0; // green glow of a liquid's steam
 };
 
 // Everything a GPU needs to shade a frame (WorldLighting::shade).
@@ -111,18 +119,20 @@ struct LitFrame {
 
     int width = 0, height = 0;
     int view_left = 0, view_top = 0;
+    float time = 0;  // seconds of game clock (the liquids' glow)
     const std::uint8_t* screen = nullptr;  // palette indices
     std::vector<std::uint16_t> code;
     std::array<std::uint32_t, 256> palette{};  // 0x00RRGGBB
     // 16 floats an item: box (x_left, x, y_far, y), (z, z_top, flags, id),
     // atlas rectangle (x, y, w, h), frame rectangle (left, top, 0, 0) on screen.
     std::vector<float> items;
-    // 12 floats a light: position, radius; colour, owner; first and count of its occluders.
+    // 16 floats a light: position, radius; colour, owner; first and count of its occluders, liquid,
+    // spot cos_inner; spot direction (zero: all round), cos_outer.
     std::vector<float> lights;
     // 16 floats a box: lo, owner; hi, mirrored; atlas rectangle; sprite left, top, has sprite.
     std::vector<float> boxes;
     std::vector<std::int32_t> light_boxes;  // occluder indices, per light ranges
-    // 12 floats a puff (PuffState: centre, radius, density, heat, grey, seed, time, feature), far to near.
+    // 12 floats a puff (PuffState: centre, radius, density, heat, grey, seed, time, feature, emit), far to near.
     std::vector<float> puffs;
     // Sprites to add to the atlas: RGBA, R opaque, G / B the silhouette normal + 128.
     struct Upload {
@@ -134,7 +144,7 @@ struct LitFrame {
     static constexpr int kAtlasSize = 4096;
     LightingOptions options;
     // Item flags.
-    static constexpr int kActor = 1, kMirrored = 2;
+    static constexpr int kActor = 1, kMirrored = 2, kLiquid = 4;
 };
 
 // A GPU that shades frames (platform layer).
@@ -203,6 +213,9 @@ private:
     void geometry(const LightingOptions& opt);
     void gather_lights(const World& world, const LightingOptions& opt, std::vector<PointLight>& lights);
     void gather_occluders(const World& world);
+    void gather_liquids(const World& world);
+    void liquid_lights(std::vector<PointLight>& lights) const;
+    void steam(std::vector<PuffState>& out) const;
     void spawn_smoke();
     bool on_surface(const Vec3& p) const;
     void puff_states(std::vector<PuffState>& out) const;
@@ -210,7 +223,7 @@ private:
                   const std::vector<std::uint32_t>& boxes) const;
     Vec3 shade_point(int c, const Vec3& p, const Vec3& n, ObjId self, const LightingOptions& opt,
                      const std::vector<std::uint32_t>& tile_lights,
-                     const std::vector<std::vector<std::uint32_t>>* tile_boxes) const;
+                     const std::vector<std::vector<std::uint32_t>>* tile_boxes, bool liquid = false) const;
     Vec3 smoke_over(Vec3 colour, int px, int py, bool clip, float surface_s, const LightingOptions& opt,
                     const std::vector<std::uint32_t>& puffs) const;
     void shade_cpu(const Surface8& screen, const LightingOptions& opt, std::uint32_t* argb);
@@ -235,6 +248,7 @@ private:
     std::vector<std::uint8_t> world_;     // the world picture
     std::vector<std::int32_t> owner_;     // index in list_, -1 none
     std::vector<std::uint8_t> actor_;     // per list_ item: a character (billboard)
+    std::vector<std::uint8_t> liquid_;    // per list_ item: a liquid's surface (glows)
     std::vector<std::uint8_t> emissive_;  // flash / explosion pixel
     std::vector<Vec3> pos_, nrm_;         // CPU shading only
 
@@ -247,6 +261,13 @@ private:
     std::vector<Box> boxes_;
     std::vector<std::vector<std::uint32_t>> per_light_;
     std::vector<std::uint32_t> lit_;  // last shaded picture, for reproject
+
+    // Liquids around the view: their surface box (lighting space), steam or not.
+    struct Liquid {
+        Vec3 lo, hi;
+        bool steams;
+    };
+    std::vector<Liquid> liquids_;
 
     // Smoke.
     std::vector<SmokePuff> puffs_;
@@ -274,5 +295,9 @@ private:
 // 0..1 at lighting-space point p for a puff of seed `seed` at time t, with
 // features of about `feature` units.
 float smoke_noise(const Vec3& p, float seed, float t, float feature);
+
+// How much a liquid glows (about 0.3..1.3) at lighting-space point p at time
+// t (seconds), shared with the shaders: slow patches that drift and breathe.
+float liquid_glow(const Vec3& p, float t);
 
 }  // namespace crusader

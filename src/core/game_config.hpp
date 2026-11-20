@@ -104,6 +104,14 @@ public:
     // 3D (engine/world/lighting.hpp): lamps, screens, flashes and explosions
     // light the scene around them, with shadows.
     bool lighting = false;
+    // Port addition, written when off: "volumetricsmoke", with the 3D
+    // lighting, explosions and shots leave smoke and liquids steam, volumes
+    // lit by the scene.
+    bool volumetric_smoke = true;
+    // Port addition, written when off: "flashlight", with the 3D lighting,
+    // the Silencer carries a lamp that lights in front of him. L (or the
+    // controller's FLASHLIGHT action) switches it in play.
+    bool flashlight = true;
     // Port addition, written when changed: controller rumble and its strength
     // (0..100 percent).
     bool vibration = true;
