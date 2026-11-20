@@ -11,6 +11,7 @@
 #include "engine/usecode/world_intrinsics.hpp"
 #include "engine/world/collision.hpp"
 #include "engine/world/gravity.hpp"
+#include "engine/world/lighting.hpp"
 #include "engine/world/render.hpp"
 #include "engine/world/world.hpp"
 #include "test_saves.hpp"
@@ -259,6 +260,53 @@ void test_translucent_windows(const std::filesystem::path& data) {
     CHECK(opaque > 1000 && blended * 100 < opaque);  // what remains: other items, blends into 8..14
 }
 
+// Port lighting: the wall lamp of the bar in SAVEGAME.5 (item 8239, shape
+// 0x2A0, a dome, box z 72..96) lights from its bulb while whole; its broken
+// frames (4..7) give none, so a lamp shot goes out.
+void test_fixture_lights(const std::filesystem::path& data) {
+    constexpr ObjId kLamp = 8239;
+    const auto typeflags = load_typeflags(data / "STATIC/TYPEFLAG.DAT");
+    World w(typeflags);
+    w.load_saved_items(FlexArchive::open(test_saves(data) / "SAVEGAME.5"));
+    w.expand_glob_eggs(FlexArchive::open(data / "STATIC/GLOB.FLX"));
+    const auto shapes_flex = FlexArchive::open(data / "STATIC/SHAPES.FLX");
+    ShapeCache shapes(shapes_flex, ShapeLayout::World);
+    const auto xform = XformTable::load(data / "STATIC/XFORMPAL.DAT");
+    const auto palette = Palette::load(data / "STATIC/GAMEPAL.PAL");
+    Item* lamp = w.get(kLamp);
+    const Item* player = w.get(1);
+    CHECK(lamp && lamp->shape == 0x2A0 && lamp->frame == 0 && player);
+    if (!lamp || !player) return;
+    WorldLighting lighting(shapes, xform);
+    auto lamp_lights = [&](LightingOptions opt) {
+        const Camera camera{world_from_usecode(player->x), world_from_usecode(player->y), player->z};
+        const int left = ((camera.x - camera.y) >> 2) - 320, top = (((camera.x + camera.y) >> 3) - camera.z) - 240;
+        const auto list = build_display_list(w, shapes, View{left, top}, 640, 480);
+        Surface8 screen(640, 480);
+        draw_display_list(screen, list, &xform);
+        lighting.capture(w, list, screen, left, top, palette, opt, 0);
+        std::vector<std::uint32_t> argb(640 * 480);
+        lighting.shade(w, screen, palette, opt, {}, argb.data());
+        std::vector<PointLight> out;
+        for (const PointLight& l : lighting.lights())
+            if (l.owner == kLamp) out.push_back(l);
+        return out;
+    };
+    const LightingOptions on;
+    const auto lit = lamp_lights(on);
+    CHECK(lit.size() == 1);
+    if (lit.size() == 1) {
+        const float z = lit[0].pos.z / kLightZScale;
+        std::printf("bar lamp: light at %.0f %.0f z %.1f\n", lit[0].pos.x, lit[0].pos.y, z);
+        CHECK(z > 76 && z < 100);  // the bulb, high on the lamp
+    }
+    LightingOptions off = on;
+    off.fixture_lights = false;
+    CHECK(lamp_lights(off).empty());
+    lamp->frame = 4;  // broken
+    CHECK(lamp_lights(on).empty());
+}
+
 // A saved game loaded then written again gives back the original's bytes:
 // the item table (minus its unwritten last 10240 bytes, and status bit 0,
 // cleared by the loading) and its lists.
@@ -304,6 +352,7 @@ int main(int argc, char** argv) {
     if (have_test_saves(data)) {
         test_translucent_windows(data);
         test_save_round_trip(data);
+        test_fixture_lights(data);
     } else {
         ++failures;
     }

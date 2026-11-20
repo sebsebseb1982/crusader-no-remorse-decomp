@@ -89,6 +89,41 @@ constexpr float kLiquidCell = 1024;
 constexpr float kLiquidLight = 1.0f;
 constexpr std::size_t kMaxSteam = 128;
 
+// Light fixtures (SHAPES.FLX; no TYPEFLAG bit marks them): the frames where
+// they are whole give light, their broken frames none, so that a lamp shot
+// goes out. `bulb`: the light is at the sprite's brightest pixels (the bulb),
+// else in the middle of the box (screens, whose frame is bright too).
+struct Fixture {
+    std::uint16_t shape;
+    std::uint32_t lit_frames;  // bit n: frame n gives light
+    Vec3 colour;
+    float strength, radius;
+    bool bulb;
+};
+const Vec3 kWarmLight{1.0f, 0.86f, 0.66f};
+const Vec3 kTubeLight{0.85f, 0.95f, 1.0f};
+const Vec3 kScreenLight{0.55f, 0.75f, 1.0f};
+const Fixture kFixtures[] = {
+    {0x2A0, 0x0F, kWarmLight, 1.3f, 620, true},    // wall lamp, a dome (4..7 broken)
+    {0x269, 0x01, kWarmLight, 1.3f, 650, true},    // ceiling lamp
+    {0x4EB, 0x03, kTubeLight, 1.2f, 620, true},    // strip lights (2, 3 broken)
+    {0x519, 0x03, kTubeLight, 1.2f, 620, true},
+    {0x3B7, 0x0F, kWarmLight, 0.9f, 380, true},    // desk lamps (frames 0..3)
+    {0x435, 0x30, kWarmLight, 1.1f, 520, true},    // a globe on a stand (frames 4, 5)
+    {0x102, 0x01, kScreenLight, 0.45f, 300, false},  // monitors (1: back, 2, 3 broken)
+    {0x165, 0x01, kScreenLight, 0.45f, 300, false},
+    {0x130, 0x01, Vec3{1.0f, 0.75f, 0.35f}, 0.6f, 420, false},  // wall screens with the E (1 broken)
+    {0x1A3, 0x01, Vec3{1.0f, 0.75f, 0.35f}, 0.6f, 420, false},
+};
+
+// @orig none: port lighting (light fixtures)
+const Fixture* fixture(std::uint16_t shape, std::uint32_t frame) {
+    for (const Fixture& f : kFixtures) {
+        if (f.shape == shape) return frame < 32 && (f.lit_frames >> frame & 1) ? &f : nullptr;
+    }
+    return nullptr;
+}
+
 // Explosion and flash shapes (sprite_process.hpp, list DS:29C2).
 bool is_blast_shape(std::uint16_t shape) { return shape == 0x31C || (shape >= 0x31F && shape <= 0x327); }
 
@@ -753,6 +788,41 @@ void WorldLighting::gather_lights(const World& world, const LightingOptions& opt
             const float strength = std::min(2.2f, 0.7f + count / 120.0f);
             lights.push_back({at, col * strength, std::min(900.0f, 300.0f + count * 1.5f), d.item->id});
             continue;
+        }
+        if (opt.fixture_lights) {
+            if (const Fixture* fx = fixture(d.item->shape, d.item->frame)) {
+                // Screen offset (u, v) from the item's anchor, at the depth of
+                // the box's middle: x - y = 4 sx, x + y the depth, z = depth / 8 - sy.
+                float u = 0, v = 0;
+                int bright = 0;
+                if (fx->bulb) {
+                    float su = 0, sv = 0;
+                    for (int y = 0; y < f.h; ++y) {
+                        for (int x = 0; x < f.w; ++x) {
+                            const int c = f.color[y * f.w + x];
+                            if (c < 0 || lum_[c] < 0.85f) continue;
+                            su += float(d.mirrored ? f.w - 1 - x : x);
+                            sv += float(y);
+                            ++bright;
+                        }
+                    }
+                    if (bright > 0) {
+                        u = float(d.left) + su / bright - float(d.sx);
+                        v = float(d.top) + sv / bright - float(d.sy);
+                    }
+                }
+                Vec3 at;
+                if (bright > 0) {
+                    const float depth = (d.x_left - d.x + d.y_far - d.y) * 0.5f;
+                    at = Vec3{d.x + 2 * u + depth * 0.5f, d.y - 2 * u + depth * 0.5f,
+                              (d.z - v + depth / 8) * kLightZScale} +
+                         kToViewer * 12.0f;
+                } else {
+                    at = {(d.x + d.x_left) * 0.5f, (d.y + d.y_far) * 0.5f, (d.z + d.z_top) * 0.5f * kLightZScale};
+                    at = at + kToViewer * 12.0f;
+                }
+                lights.push_back({at, fx->colour * fx->strength, fx->radius, d.item->id});
+            }
         }
         if (!opt.glow_lights || f.glow_pixels < 6) continue;
         Vec3 sum;

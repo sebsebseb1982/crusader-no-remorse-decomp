@@ -10,7 +10,9 @@
 // the sprite's own shading. `shade` lights those points with point lights
 // (items with colour-cycled pixels, flashes and explosions, a lamp over the
 // Silencer's lamp, extra ones) and shadows cast by the item boxes cut by their
-// sprites, then adds the smoke of explosions and shots (volumes of noise,
+// sprites; light fixtures (lamps, tubes, screens: a list of shapes and the
+// frames where they are whole) light too, from their bulb. It then adds the
+// smoke of explosions and shots (volumes of noise,
 // lit by the same lights). Liquids glow a faint radioactive green, light
 // what stands around them and give off a thin steam. Pixels drawn over the world afterwards (status
 // bar, cursor, menus) are left as they are.
@@ -66,6 +68,7 @@ struct LightingOptions {
     bool sprite_shadows = true;  // occluders cut by their sprite (else whole boxes)
     bool bump = true;
     bool glow_lights = true;     // items with colour-cycled pixels give light
+    bool fixture_lights = true;  // lamps and screens give light while whole (not their broken frames)
     bool flash_lights = true;    // flashes, explosions, shots give light
     bool player_lamp = true;     // the Silencer's lamp (item 1): a beam in front of him
     bool smoke = true;           // explosions and shots leave smoke
