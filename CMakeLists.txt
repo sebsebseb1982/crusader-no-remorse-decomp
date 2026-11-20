@@ -163,6 +163,11 @@ target_link_libraries(shapeview PRIVATE crusader_platform)
 add_executable(mapview src/tools/mapview.cpp)
 target_link_libraries(mapview PRIVATE crusader_engine crusader_platform)
 
+add_executable(lightview src/tools/lightview.cpp)
+# Multithreaded (std::thread): -pthread on older glibc.
+find_package(Threads REQUIRED)
+target_link_libraries(lightview PRIVATE crusader_engine crusader_platform Threads::Threads)
+
 add_executable(sortcheck src/tools/sortcheck.cpp)
 target_link_libraries(sortcheck PRIVATE crusader_engine)
 

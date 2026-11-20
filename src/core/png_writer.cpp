@@ -113,4 +113,28 @@ void write_png(const std::filesystem::path& path, const Surface8& s, const Palet
     out.write(reinterpret_cast<const char*>(png.data()), static_cast<std::streamsize>(png.size()));
 }
 
+// @orig none: PNG export for the tools
+void write_png_rgb(const std::filesystem::path& path, int width, int height, const std::uint8_t* rgb) {
+    std::vector<std::uint8_t> png{0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
+    std::vector<std::uint8_t> ihdr;
+    put_u32be(ihdr, static_cast<std::uint32_t>(width));
+    put_u32be(ihdr, static_cast<std::uint32_t>(height));
+    ihdr.insert(ihdr.end(), {8, 2, 0, 0, 0});  // 8-bit, RGB, deflate, no filter, no interlace
+    put_chunk(png, "IHDR", ihdr);
+    std::vector<std::uint8_t> raw;
+    const std::size_t stride = static_cast<std::size_t>(width) * 3;
+    raw.reserve((stride + 1) * height);
+    for (int y = 0; y < height; ++y) {
+        raw.push_back(0);  // filter: none
+        raw.insert(raw.end(), rgb + y * stride, rgb + (y + 1) * stride);
+    }
+    put_chunk(png, "IDAT", zlib_store(raw));
+    put_chunk(png, "IEND", {});
+    std::ofstream out(path, std::ios::binary);
+    if (!out) {
+        throw std::runtime_error("cannot write " + path.string());
+    }
+    out.write(reinterpret_cast<const char*>(png.data()), static_cast<std::streamsize>(png.size()));
+}
+
 }  // namespace crusader
