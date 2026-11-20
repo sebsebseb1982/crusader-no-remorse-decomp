@@ -24,6 +24,7 @@
 #include "core/iso_image.hpp"
 #include "core/language.hpp"
 #include "core/png_writer.hpp"
+#include "platform/gl_lighting.hpp"
 #include "crusader_version.hpp"
 #include "engine/ui/christmas_hat.hpp"
 #include "engine/world/inventory.hpp"
@@ -111,6 +112,7 @@ int main(int argc, char** argv) {
     int png_width = Game::kScreenWidth, png_height = Game::kScreenHeight;
     bool classic = false;  // --classic: the original 640 x 480 view, stretched to the window
     bool lighting = false;  // --lighting: the 3D lighting on for this run (GameConfig::lighting)
+    bool cpu_lighting = false;  // --cpu-lighting: the 3D lighting on the processor, not the GPU
     bool laurie = false;
     double gamma = 1.0;
     std::int32_t scroll_x = 0, scroll_y = 0;
@@ -148,6 +150,7 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--walk") == 0) walk = true;
         else if (std::strcmp(argv[i], "--fire") == 0) fire = true;
         else if (std::strcmp(argv[i], "--lighting") == 0) lighting = true;
+        else if (std::strcmp(argv[i], "--cpu-lighting") == 0) cpu_lighting = true;
         else if (std::strcmp(argv[i], "--use") == 0 && i + 1 < argc) use = std::stoi(argv[++i]);
         else if (std::strcmp(argv[i], "--menu") == 0) menu = true;
         else if (std::strcmp(argv[i], "--menu-load") == 0) menu = menu_load = true;
@@ -186,6 +189,20 @@ int main(int argc, char** argv) {
         Game game(data, {}, mod);
         game.set_port_version(CRUSADER_VERSION);
         if (lighting) game.config().lighting = true;
+        // The 3D lighting on the GPU when there is one (else on the processor),
+        // made the first time the option is on; --cpu-lighting keeps it on the
+        // processor.
+        std::unique_ptr<GlLighting> lighting_gpu;
+        bool lighting_gpu_tried = cpu_lighting;
+        auto start_lighting_gpu = [&] {
+            if (lighting_gpu_tried || !game.config().lighting) return;
+            lighting_gpu_tried = true;
+            std::string why;
+            lighting_gpu = GlLighting::create(&why);
+            if (lighting_gpu) game.set_lighting_gpu(lighting_gpu.get());
+            else std::fprintf(stderr, "3D lighting on the processor: %s\n", why.c_str());
+        };
+        start_lighting_gpu();
         game.set_auto_save_names(auto_save_names);
         {
             const std::time_t now = std::time(nullptr);
@@ -223,6 +240,8 @@ int main(int argc, char** argv) {
                     game.key(0x39, false, false, 0);
                 }
                 game.update(kFrameUs);
+                // The lighting's smoke starts from what each frame shows, as in play.
+                if (lighting) game.render(screen, &stats);
             }
             if (!wav.empty()) write_wav(wav, game.captured_sound(), AsylumMixer::kMixRate);
             if (menu) {  // --menu: Escape, as pressed in play
@@ -398,6 +417,7 @@ int main(int argc, char** argv) {
             }
             fit_screen();
             presenter.set_smooth(game.config().smooth_scaling);
+            start_lighting_gpu();  // when the option has just been switched on
             game.render(screen, &stats);
             if (debug_title) {
                 int ow = 0, oh = 0;

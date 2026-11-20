@@ -429,7 +429,7 @@ The original ejects nothing. With this option every shot of a firearm throws out
 ## 7d. 3D lighting
 
 **Option:** 3D LIGHTING / ECLAIRAGE 3D (`lighting`), DISPLAY page, off by default. `--lighting` switches it on for one run.
-**Files:** `src/engine/world/lighting.*`, `src/game/game.cpp`, `src/platform/sdl_presenter.*`; the `lightview` tool and docs/LIGHTVIEW.md
+**Files:** `src/engine/world/lighting.*`, `src/platform/gl_lighting.*`, `src/game/game.cpp`, `src/platform/sdl_presenter.*`; the `lightview` tool and docs/LIGHTVIEW.md
 
 The original draws flat sprites under a fixed light. With this option the world is lit in 3D in true colour.
 
@@ -445,12 +445,20 @@ The original draws flat sprites under a fixed light. With this option the world 
 **Shadows**
 - Item boxes cast shadows, cut by their sprites: railings, grids and bodies cast their outline. A light is never shadowed by the item that gives it; lasers and electrified floors cast none.
 
+**Smoke**
+- Explosions leave a dark cloud: six puffs of noise that glow orange for the first second (lit from inside by the explosion), then rise, grow and thin out over five or six seconds.
+- A shot leaving the muzzle and its impact leave a light grey wisp (two seconds); bright shots in flight (rockets) a trail.
+- The smoke is a volume: in front of a wall it hides it, behind it it is hidden, and the scene's lights colour it.
+- It follows the game's clock: it stops with the game (menus, pause), goes on a map change. It only reads the world and uses its own numbers, never the game's random generators.
+
 **What is not lit**
 - Everything drawn over the world: the status bar, the aiming sprites, the cursor, menus, screens and cutscenes, shown in their palette colours. Palette fades and colour cycling still apply.
 - Lighting only changes the picture: the game plays the same with or without it.
 
 **Cost**
-- Computed on the processor, on all its cores: about 10 ms a frame at 640 x 480, more at native resolution.
+- On the GPU (OpenGL 3.3, or OpenGL ES 3.0) when there is one: the processor finds which item shows at each pixel and gathers the lights, occluders and smoke; a fragment shader does the rest, in a hidden window of its own, and the picture is read back for the usual presentation. The context is made the first time the option is on.
+- Otherwise on the processor, on all its cores, by 16 x 16 tiles: the same picture, slower. `--cpu-lighting` forces it.
+- Measured with `lightview` (16 lights, shadows, smoke), a frame takes about 3 ms at 640 x 480, 6 ms at 1280 x 720 and 10 ms at 1920 x 1080 with the GPU, against 7, 14 and 26 ms on the processor.
 
 ---
 

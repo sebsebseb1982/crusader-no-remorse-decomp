@@ -150,6 +150,8 @@ public:
     // world lit in 3D, in `argb` (0xAARRGGBB). False when there is nothing to
     // light (option off, cutscene, menu): show `screen` as it is.
     bool render_lit(const Surface8& screen, std::vector<std::uint32_t>& argb);
+    // The GPU that shades the lighting (null: the processor). Kept by the caller.
+    void set_lighting_gpu(LightingGpu* gpu);
     // Where the 640 x 480 area starts in the last rendered screen; the mouse
     // coordinates the game takes are relative to it.
     int ui_x() const { return ui_x_; }
@@ -375,6 +377,7 @@ private:
     Casings casings_;           // port addition (GameConfig::casings)
     // Port addition (GameConfig::lighting), made when first switched on.
     std::unique_ptr<WorldLighting> lighting_;
+    LightingGpu* lighting_gpu_ = nullptr;
     Palette palette_;
     UsecodeFile usecode_;
     ShapeCache shapes_;

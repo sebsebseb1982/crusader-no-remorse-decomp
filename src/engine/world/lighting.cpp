@@ -16,10 +16,15 @@ namespace {
 Vec3 operator+(Vec3 a, Vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
 Vec3 operator-(Vec3 a, Vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
 Vec3 operator*(Vec3 a, float k) { return {a.x * k, a.y * k, a.z * k}; }
+Vec3 mul(Vec3 a, Vec3 b) { return {a.x * b.x, a.y * b.y, a.z * b.z}; }
 float dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 Vec3 normalize(Vec3 a) {
     const float l = std::sqrt(dot(a, a));
     return l > 1e-6f ? a * (1.0f / l) : Vec3{0, 0, 1};
+}
+float smoothstep(float a, float b, float x) {
+    const float t = std::clamp((x - a) / (b - a), 0.0f, 1.0f);
+    return t * t * (3 - 2 * t);
 }
 
 // Camera basis of the isometric view, in lighting space.
@@ -28,8 +33,14 @@ const Vec3 kScreenRight{0.7071f, -0.7071f, 0.0f};
 const Vec3 kScreenUp{-0.3536f, -0.3536f, 0.8660f};
 // Screen pixels per lighting-space unit across the view: (x - y) / 4 = k (x - y) cos 45.
 constexpr float kPixelScale = 0.35355f;
+// Along a pixel's view ray, lighting-space point = A + B s, with s = x + y:
+// A = (2 sx, -2 sx, -sy kLightZScale), B = (1/2, 1/2, kLightZScale / 8).
+const Vec3 kRayStep{0.5f, 0.5f, kLightZScale / 8};
+const float kRayStepLength = std::sqrt(dot(kRayStep, kRayStep));
 
 constexpr int kTile = 16;
+constexpr int kSmokeSteps = 8;
+constexpr std::size_t kMaxPuffs = 160;
 
 // Colour-cycled palette entries (palette_cycle.hpp): blinking lamps,
 // screens, force fields, lasers.
@@ -41,9 +52,60 @@ bool is_actor(const Item& item, const ShapeInfo* info) {
     return is_npc_id(item.id) || (info && info->is(ShapeInfo::kNpc));
 }
 
+// Explosion and flash shapes (sprite_process.hpp, list DS:29C2).
+bool is_blast_shape(std::uint16_t shape) { return shape == 0x31C || (shape >= 0x31F && shape <= 0x327); }
+
 float srgb_to_linear(std::uint8_t c) { return std::pow(c / 255.0f, 2.2f); }
 
+// Integer hash (also in the shaders).
+// @orig none: port lighting
+std::uint32_t hash32(std::uint32_t x) {
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+
+float lattice(std::int32_t x, std::int32_t y, std::int32_t z) {
+    const std::uint32_t h = hash32(static_cast<std::uint32_t>(x) * 73856093u ^ static_cast<std::uint32_t>(y) * 19349663u ^
+                                   static_cast<std::uint32_t>(z) * 83492791u);
+    return static_cast<float>(h & 0xFFFFFFu) / 16777215.0f;
+}
+
+// @orig none: port lighting
+float value_noise(float x, float y, float z) {
+    const float fx = std::floor(x), fy = std::floor(y), fz = std::floor(z);
+    const std::int32_t ix = static_cast<std::int32_t>(fx), iy = static_cast<std::int32_t>(fy),
+                       iz = static_cast<std::int32_t>(fz);
+    float tx = x - fx, ty = y - fy, tz = z - fz;
+    tx = tx * tx * (3 - 2 * tx);
+    ty = ty * ty * (3 - 2 * ty);
+    tz = tz * tz * (3 - 2 * tz);
+    auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
+    const float x00 = lerp(lattice(ix, iy, iz), lattice(ix + 1, iy, iz), tx);
+    const float x10 = lerp(lattice(ix, iy + 1, iz), lattice(ix + 1, iy + 1, iz), tx);
+    const float x01 = lerp(lattice(ix, iy, iz + 1), lattice(ix + 1, iy, iz + 1), tx);
+    const float x11 = lerp(lattice(ix, iy + 1, iz + 1), lattice(ix + 1, iy + 1, iz + 1), tx);
+    return lerp(lerp(x00, x10, ty), lerp(x01, x11, ty), tz);
+}
+
+// A random number 0..1 for puff `serial`, draw `k` (smoke only: never the game's generators).
+float puff_random(std::uint32_t serial, std::uint32_t k) {
+    return static_cast<float>(hash32(serial * 2654435761u + k * 40503u) & 0xFFFFu) / 65535.0f;
+}
+
 }  // namespace
+
+// @orig none: port lighting (smoke)
+float smoke_noise(const Vec3& p, float seed, float t) {
+    constexpr float kFeature = 1.0f / 45.0f;
+    const float x = p.x * kFeature + seed * 17.3f, y = p.y * kFeature + seed * 9.1f,
+                z = p.z * kFeature + seed * 5.7f - t * 0.35f;
+    return 0.5f * value_noise(x, y, z) + 0.3f * value_noise(x * 2.03f, y * 2.03f, z * 2.03f) +
+           0.2f * value_noise(x * 4.01f, y * 4.01f, z * 4.01f);
+}
 
 // A frame decoded once: colours (-1 transparent), a normal rounded from the
 // silhouette (screen x / y, -127..127), and how many pixels of each colour.
@@ -84,6 +146,7 @@ public:
         wake_.notify_all();
         for (auto& t : threads_) t.join();
     }
+    std::size_t size() const { return threads_.size() + 1; }
 
     // @orig none: port lighting
     void run(std::size_t n, const std::function<void(std::size_t)>& f) {
@@ -195,18 +258,17 @@ const WorldLighting::Decoded& WorldLighting::decode(const ShapeFrame& f) {
 // 3D point and normal of the frame pixel (fx, fy) of an item drawn at
 // absolute screen position (sx, sy). `face`: 0 top, 1 +x, 2 +y, 3 billboard.
 // @orig none: port lighting
-void WorldLighting::surface(const World& world, const DrawItem& d, float sx, float sy, int fx, int fy, bool bump,
-                            Vec3& p, Vec3& n, int* face) const {
+void WorldLighting::surface(const DrawItem& d, bool actor, float sx, float sy, int fx, int fy, bool bump, Vec3& p,
+                            Vec3& n, int* face) const {
     const float xl = float(d.x_left), xh = float(d.x), yl = float(d.y_far), yh = float(d.y);
     const float zl = float(d.z), zh = float(d.z_top);
     // Points of the view ray: x = (s + 4sx)/2, y = (s - 4sx)/2, z = s/8 - sy.
     const float ux = 2 * xh - 4 * sx, uy = 2 * yh + 4 * sx, uz = 8 * (zh + sy);
     const float lo = std::max({2 * xl - 4 * sx, 2 * yl + 4 * sx, 8 * (zl + sy)});
     const float hi = std::min({ux, uy, uz});
-    const ShapeInfo* info = world.shape_info(d.item->shape);
     const Decoded& f = decoded(d.frame);
     float s;
-    if (!is_actor(*d.item, info) && hi >= lo - 24) {
+    if (!actor && hi >= lo - 24) {
         s = hi;
         n = hi == uz ? Vec3{0, 0, 1} : hi == ux ? Vec3{1, 0, 0} : Vec3{0, 1, 0};
         if (face) *face = hi == uz ? 0 : hi == ux ? 1 : 2;
@@ -237,45 +299,73 @@ void WorldLighting::surface(const World& world, const DrawItem& d, float sx, flo
     n = normalize(n - tr * (k * gx) + tu * (k * gy));
 }
 
+// The point and normal of an owned pixel.
+// @orig none: port lighting
+void WorldLighting::point_at(int x, int y, Vec3& p, Vec3& n) const {
+    const std::int32_t o = owner_[static_cast<std::size_t>(y) * width_ + x];
+    const DrawItem& d = list_[o];
+    const int fx = d.mirrored ? d.right - 1 - x : x - d.left;
+    surface(d, actor_[o], view_left_ + x + 0.5f, view_top_ + y + 0.5f, fx, y - d.top, true, p, n);
+}
+
 // @orig none: port lighting
 void WorldLighting::capture(const World& world, const std::vector<DrawItem>& list, const Surface8& screen,
-                            int view_left, int view_top, const Palette& palette, const LightingOptions& opt) {
+                            int view_left, int view_top, const Palette& palette, const LightingOptions& opt,
+                            std::uint32_t ticks) {
     list_ = list;
     view_left_ = view_left;
     view_top_ = view_top;
     width_ = screen.width;
     height_ = screen.height;
+    ticks_ = ticks;
     const std::size_t n = static_cast<std::size_t>(width_) * height_;
     world_ = screen.pixels;
     owner_.assign(n, -1);
     emissive_.assign(n, 0);
-    pos_.resize(n);
-    nrm_.resize(n);
     set_palette(palette);
-    // Which item shows at each pixel, in the order they were drawn.
-    // Translucent items leave it to what is below; flashes and explosions
-    // (drawn as sprites) only glow.
+    actor_.resize(list_.size());
     for (std::size_t i = 0; i < list_.size(); ++i) {
-        const DrawItem& d = list_[i];
-        const Decoded& f = decode(*d.frame);
-        const bool translucent = d.shape_flags & ShapeInfo::kTranslucent;
-        for (int fy = 0; fy < f.h; ++fy) {
-            const int y = d.top + fy;
-            if (y < 0 || y >= height_) continue;
-            for (int fx = 0; fx < f.w; ++fx) {
-                if (f.color[fy * f.w + fx] < 0) continue;
-                const int x = d.mirrored ? d.left + (f.w - 1 - fx) : d.left + fx;
-                if (x < 0 || x >= width_) continue;
-                const std::size_t j = static_cast<std::size_t>(y) * width_ + x;
-                if (d.item->sprite_only) {
-                    emissive_[j] = 1;
-                } else if (!translucent) {
-                    owner_[j] = static_cast<std::int32_t>(i);
-                    emissive_[j] = 0;
+        decode(*list_[i].frame);
+        actor_[i] = is_actor(*list_[i].item, world.shape_info(list_[i].item->shape));
+    }
+    // Which item shows at each pixel, in the order they were drawn, by bands
+    // of rows. Translucent items leave it to what is below; flashes and
+    // explosions (drawn as sprites) only glow.
+    const std::size_t bands = std::min<std::size_t>(pool_->size() * 2, static_cast<std::size_t>(height_));
+    pool_->run(bands, [&](std::size_t band) {
+        const int y0 = static_cast<int>(band * height_ / bands), y1 = static_cast<int>((band + 1) * height_ / bands);
+        for (std::size_t i = 0; i < list_.size(); ++i) {
+            const DrawItem& d = list_[i];
+            if (d.bottom <= y0 || d.top >= y1) continue;
+            const Decoded& f = decoded(d.frame);
+            const bool translucent = d.shape_flags & ShapeInfo::kTranslucent;
+            for (int y = std::max(d.top, y0); y < std::min(d.bottom, y1); ++y) {
+                const int fy = y - d.top;
+                for (int fx = 0; fx < f.w; ++fx) {
+                    if (f.color[fy * f.w + fx] < 0) continue;
+                    const int x = d.mirrored ? d.left + (f.w - 1 - fx) : d.left + fx;
+                    if (x < 0 || x >= width_) continue;
+                    const std::size_t j = static_cast<std::size_t>(y) * width_ + x;
+                    if (d.item->sprite_only) {
+                        emissive_[j] = 1;
+                    } else if (!translucent) {
+                        owner_[j] = static_cast<std::int32_t>(i);
+                        emissive_[j] = 0;
+                    }
                 }
             }
         }
-    }
+    });
+    if (opt.smoke) spawn_smoke();
+    else puffs_.clear();
+}
+
+// Position and normal of every owned pixel (processor shading).
+// @orig none: port lighting
+void WorldLighting::geometry(const LightingOptions& opt) {
+    const std::size_t n = static_cast<std::size_t>(width_) * height_;
+    pos_.resize(n);
+    nrm_.resize(n);
     pool_->run(static_cast<std::size_t>(height_), [&](std::size_t row) {
         const int py = static_cast<int>(row);
         for (int px = 0; px < width_; ++px) {
@@ -284,10 +374,124 @@ void WorldLighting::capture(const World& world, const std::vector<DrawItem>& lis
             if (o < 0) continue;
             const DrawItem& d = list_[o];
             const int fx = d.mirrored ? d.right - 1 - px : px - d.left;
-            surface(world, d, view_left_ + px + 0.5f, view_top_ + py + 0.5f, fx, py - d.top, opt.bump, pos_[j],
+            surface(d, actor_[o], view_left_ + px + 0.5f, view_top_ + py + 0.5f, fx, py - d.top, opt.bump, pos_[j],
                     nrm_[j]);
         }
     });
+}
+
+// New flashes, explosions and shots (sprites) leave smoke.
+// @orig none: port lighting (smoke)
+void WorldLighting::spawn_smoke() {
+    std::unordered_map<ObjId, std::uint16_t> seen;
+    for (const DrawItem& d : list_) {
+        if (!d.item->sprite_only) continue;
+        const ObjId id = d.item->id;
+        const std::uint16_t shape = d.item->shape;
+        seen[id] = shape;
+        const auto before = sprites_seen_.find(id);
+        const bool fresh = before == sprites_seen_.end() || before->second != shape;
+        const Vec3 centre{(d.x + d.x_left) * 0.5f, (d.y + d.y_far) * 0.5f, (d.z + d.z_top) * 0.5f * kLightZScale};
+        if (!is_blast_shape(shape)) {
+            // A shot leaving the muzzle, an impact: a wisp where it shows
+            // (these sprites keep their place); a trail behind bright shots
+            // in flight (rockets).
+            if (fresh) {
+                add_puff(centre, SmokePuff::kShot);
+                continue;
+            }
+            if (ticks_ % 4 != 0) continue;
+            const Decoded& f = decoded(d.frame);
+            int bright = 0;
+            for (const auto& [c, k] : f.histogram)
+                if (lum_[c] > 0.62f) bright += k;
+            if (bright >= 20) add_puff(centre, SmokePuff::kTrail);
+            continue;
+        }
+        {
+            if (!fresh) continue;
+            // Over the surface drawn under the anchor (these sprites are
+            // moved up over the scene, sprite_process.hpp).
+            std::optional<Vec3> at;
+            for (int dy = 0; dy < 24 && !at; dy += 4) at = surface_at(d.sx, d.sy - dy);
+            if (!at) at = Vec3{(d.x + d.x_left) * 0.5f, (d.y + d.y_far) * 0.5f, float(d.z) * kLightZScale};
+            // Big shapes are explosions, small ones flashes and impacts.
+            int area = 0;
+            if (const Shape* s = shapes_.get(shape))
+                for (const ShapeFrame& f : s->frames()) area = std::max(area, f.width * f.height);
+            const bool blast = area > 3000;
+            const Vec3 base = *at + Vec3{0, 0, (blast ? 16.0f : 10.0f) * kLightZScale};
+            add_puff(base, blast ? SmokePuff::kExplosion : SmokePuff::kShot,
+                     blast ? std::clamp(std::sqrt(float(area)) / 70.0f, 0.8f, 2.0f) : 1.0f);
+        }
+    }
+    sprites_seen_ = std::move(seen);
+    // Gone when their life is over.
+    std::erase_if(puffs_, [&](const SmokePuff& p) { return (ticks_ - p.born) / 60.0f >= p.life; });
+}
+
+// @orig none: port lighting (smoke)
+void WorldLighting::add_puff(const Vec3& at, SmokePuff::Kind kind, float scale) {
+    const std::uint32_t serial = ++puff_serial_;
+    auto rnd = [&](std::uint32_t k) { return puff_random(serial, k); };
+    const int count = kind == SmokePuff::kExplosion ? 6 : kind == SmokePuff::kShot ? 2 : 1;
+    for (int i = 0; i < count; ++i) {
+        SmokePuff p;
+        p.kind = kind;
+        p.born = ticks_;
+        p.seed = rnd(10 + i) * 100.0f;
+        const float jx = rnd(20 + i) * 2 - 1, jy = rnd(30 + i) * 2 - 1, jz = rnd(40 + i);
+        switch (kind) {
+        case SmokePuff::kExplosion:
+            p.pos = at + Vec3{jx * 60, jy * 60, jz * 40} * scale;
+            p.drift = {jx * 12, jy * 12, 45 + rnd(50 + i) * 30};
+            p.radius0 = (45 + rnd(60 + i) * 30) * scale;
+            p.radius1 = (140 + rnd(70 + i) * 80) * scale;
+            p.density = 0.03f;
+            p.life = 4.5f + rnd(80 + i) * 2;
+            break;
+        case SmokePuff::kShot:
+            p.pos = at + Vec3{jx * 10, jy * 10, jz * 10};
+            p.drift = {jx * 8, jy * 8, 22 + jz * 10};
+            p.radius0 = 20;
+            p.radius1 = 75;
+            p.density = 0.05f;
+            p.life = 2.2f;
+            break;
+        case SmokePuff::kTrail:
+            p.pos = at;
+            p.drift = {jx * 4, jy * 4, 14};
+            p.radius0 = 12;
+            p.radius1 = 42;
+            p.density = 0.016f;
+            p.life = 1.2f;
+            break;
+        }
+        if (puffs_.size() >= kMaxPuffs) puffs_.erase(puffs_.begin());
+        puffs_.push_back(p);
+    }
+}
+
+// The puffs now, far to near.
+// @orig none: port lighting (smoke)
+void WorldLighting::puff_states(std::vector<PuffState>& out) const {
+    out.clear();
+    for (const SmokePuff& p : puffs_) {
+        const float age = (ticks_ - p.born) / 60.0f;
+        const float u = std::clamp(age / p.life, 0.0f, 1.0f);
+        PuffState s;
+        s.centre = p.pos + p.drift * age;
+        s.radius = p.radius0 + (p.radius1 - p.radius0) * (1 - (1 - u) * (1 - u));
+        // Fades in over the first tenth of a second, thins out to nothing.
+        s.density = p.density * std::min(1.0f, age / 0.1f) * std::pow(1 - u, 1.5f);
+        s.heat = p.kind == SmokePuff::kExplosion ? std::max(0.0f, 1 - age / 0.9f) : 0.0f;
+        s.grey = p.kind == SmokePuff::kExplosion ? 0.3f : p.kind == SmokePuff::kShot ? 0.62f : 0.7f;
+        s.seed = p.seed;
+        s.time = age;
+        if (s.density > 1e-5f) out.push_back(s);
+    }
+    std::sort(out.begin(), out.end(),
+              [](const PuffState& a, const PuffState& b) { return dot(a.centre, kToViewer) < dot(b.centre, kToViewer); });
 }
 
 // @orig none: port lighting
@@ -458,9 +662,59 @@ Vec3 WorldLighting::shade_point(int c, const Vec3& p, const Vec3& n, ObjId self,
             continue;
         light = light + L.color * w;
     }
-    Vec3 col{lin_[c].x * light.x, lin_[c].y * light.y, lin_[c].z * light.z};
+    Vec3 col = mul(lin_[c], light);
     if (glowing(c)) col = col + lin_[c];
     return col;
+}
+
+// The puffs `ids` (far to near) over a pixel of linear colour `colour`;
+// with `clip`, only in front of its surface (s = x + y of its point).
+// @orig none: port lighting (smoke)
+Vec3 WorldLighting::smoke_over(Vec3 colour, int px, int py, bool clip, float surface_s, const LightingOptions& opt,
+                               const std::vector<std::uint32_t>& ids) const {
+    const float sx = view_left_ + px + 0.5f, sy = view_top_ + py + 0.5f;
+    const Vec3 a{2 * sx, -2 * sx, -sy * kLightZScale};
+    const float bb = dot(kRayStep, kRayStep);
+    for (std::uint32_t id : ids) {
+        const PuffState& puff = puff_now_[id];
+        // The ray's closest point to the centre, then the half chord (no
+        // b^2 - 4ac: these numbers are far too big for floats).
+        const Vec3 d = a - puff.centre;
+        const float mid = -dot(kRayStep, d) / bb;
+        const Vec3 e = d + kRayStep * mid;
+        const float perp2 = dot(e, e), r2 = puff.radius * puff.radius;
+        if (perp2 >= r2) continue;
+        const float half = std::sqrt((r2 - perp2) / bb);
+        float s0 = mid - half;
+        const float s1 = mid + half;
+        if (clip) s0 = std::max(s0, surface_s);
+        if (s1 <= s0) continue;
+        const float ds = (s1 - s0) / kSmokeSteps;
+        const float len = ds * kRayStepLength;
+        // Far to near.
+        for (int i = 0; i < kSmokeSteps; ++i) {
+            const Vec3 p = a + kRayStep * (s0 + (i + 0.5f) * ds);
+            const float dist = std::sqrt(dot(p - puff.centre, p - puff.centre)) / puff.radius;
+            const float shape = 1 - smoothstep(0.35f, 1.0f, dist);
+            if (shape <= 0) continue;
+            const float noise = std::clamp((smoke_noise(p, puff.seed, puff.time) - 0.3f) * 1.8f, 0.0f, 1.0f);
+            const float sigma = puff.density * shape * noise;
+            if (sigma <= 0) continue;
+            const float keep = std::exp(-sigma * len);
+            Vec3 light{opt.ambient, opt.ambient * 1.02f, opt.ambient * 1.12f};
+            for (const PointLight& L : lights_) {
+                const Vec3 to = L.pos - p;
+                const float d2 = dot(to, to);
+                if (d2 >= L.radius * L.radius) continue;
+                const float f = 1 - d2 / (L.radius * L.radius);
+                light = light + L.color * (f * f * 0.8f);
+            }
+            const Vec3 glow = Vec3{1.0f, 0.45f, 0.12f} * (puff.heat * puff.heat * 2.5f * shape);
+            const Vec3 radiance = light * puff.grey + glow;
+            colour = colour * keep + radiance * (1 - keep);
+        }
+    }
+    return colour;
 }
 
 // The palette shown (fades, colour cycling): linear colours and luminance.
@@ -487,7 +741,26 @@ bool WorldLighting::shade(const World& world, const Surface8& screen, const Pale
     lights_ = std::move(extra);
     gather_lights(world, opt, lights_);
     gather_occluders(world);
+    if (opt.smoke) puff_states(puff_now_);
+    else puff_now_.clear();
+    used_gpu_ = gpu_ && !opt.show_normals && shade_gpu(screen, opt, argb);
+    if (!used_gpu_) shade_cpu(screen, opt, argb);
+    lit_.assign(argb, argb + static_cast<std::size_t>(width_) * height_);
+    return true;
+}
 
+// @orig none: port lighting
+void WorldLighting::shade_cpu(const Surface8& screen, const LightingOptions& opt, std::uint32_t* argb) {
+    geometry(opt);
+    // The puffs' screen circles (absolute screen coordinates).
+    struct Disc {
+        float x, y, r;
+    };
+    std::vector<Disc> discs;
+    for (const PuffState& p : puff_now_) {
+        const float x = p.centre.x, y = p.centre.y, z = p.centre.z / kLightZScale;
+        discs.push_back({(x - y) * 0.25f, (x + y) * 0.125f - z, p.radius * kPixelScale});
+    }
     const int tiles_x = (width_ + kTile - 1) / kTile, tiles_y = (height_ + kTile - 1) / kTile;
     pool_->run(static_cast<std::size_t>(tiles_x) * tiles_y, [&](std::size_t t) {
         const int x0 = static_cast<int>(t % tiles_x) * kTile, y0 = static_cast<int>(t / tiles_x) * kTile;
@@ -526,48 +799,179 @@ bool WorldLighting::shade(const World& world, const Surface8& screen, const Pale
                 }
             }
         }
+        // The puffs over the tile.
+        std::vector<std::uint32_t> puffs;
+        const float tx0 = float(view_left_ + x0), ty0 = float(view_top_ + y0);
+        const float tx1 = float(view_left_ + x1), ty1 = float(view_top_ + y1);
+        for (std::uint32_t i = 0; i < discs.size(); ++i) {
+            const Disc& d = discs[i];
+            const float cx = std::clamp(d.x, tx0, tx1), cy = std::clamp(d.y, ty0, ty1);
+            if ((cx - d.x) * (cx - d.x) + (cy - d.y) * (cy - d.y) < d.r * d.r) puffs.push_back(i);
+        }
         for (int y = y0; y < y1; ++y)
             for (int x = x0; x < x1; ++x) {
                 const std::size_t j = static_cast<std::size_t>(y) * width_ + x;
                 const int c = screen.pixels[j];
-                if (c != world_[j] || emissive_[j]) {
-                    // Drawn over the world (status bar, cursor, menus), or a
-                    // flash: as it is.
+                if (c != world_[j]) {
+                    // Drawn over the world (status bar, cursor, menus): as it is.
                     argb[j] = flat_[c];
-                } else if (owner_[j] < 0) {
-                    argb[j] = pack(lin_[c] * opt.ambient);
-                } else if (opt.show_normals) {
+                    continue;
+                }
+                const bool lit = owner_[j] >= 0 && !emissive_[j];
+                if (opt.show_normals && lit) {
                     const Vec3& n = nrm_[j];
                     argb[j] = 0xFF000000u | std::uint32_t((n.x * 0.5f + 0.5f) * 255) << 16 |
                               std::uint32_t((n.y * 0.5f + 0.5f) * 255) << 8 | std::uint32_t((n.z * 0.5f + 0.5f) * 255);
-                } else {
-                    argb[j] = pack(shade_point(c, pos_[j], nrm_[j], list_[owner_[j]].item->id, opt, ids, &boxes));
+                    continue;
                 }
+                Vec3 col;
+                if (emissive_[j]) col = lin_[c];  // a flash: as it is
+                else if (!lit) col = lin_[c] * opt.ambient;
+                else col = shade_point(c, pos_[j], nrm_[j], list_[owner_[j]].item->id, opt, ids, &boxes);
+                if (!puffs.empty())
+                    col = smoke_over(col, x, y, lit, lit ? pos_[j].x + pos_[j].y : 0.0f, opt, puffs);
+                argb[j] = pack(col);
             }
     });
-    lit_.assign(argb, argb + static_cast<std::size_t>(width_) * height_);
+}
+
+// Where a decoded frame is in the GPU's atlas, added (to upload) if new.
+// @orig none: port lighting (GPU)
+void WorldLighting::atlas_place(const Decoded& d, LitFrame& frame) {
+    if (atlas_.count(&d)) return;
+    constexpr int kSize = LitFrame::kAtlasSize;
+    if (d.w > kSize || d.h > kSize || d.w <= 0 || d.h <= 0) return;
+    if (shelf_x_ + d.w > kSize) {
+        shelf_y_ += shelf_h_;
+        shelf_x_ = 0;
+        shelf_h_ = 0;
+    }
+    if (shelf_y_ + d.h > kSize) {
+        atlas_full_ = true;
+        return;
+    }
+    atlas_[&d] = {shelf_x_, shelf_y_};
+    LitFrame::Upload up{shelf_x_, shelf_y_, d.w, d.h,
+                        std::vector<std::uint8_t>(static_cast<std::size_t>(d.w) * d.h * 4)};
+    for (int i = 0; i < d.w * d.h; ++i) {
+        up.rgba[i * 4] = d.color[i] >= 0 ? 255 : 0;
+        up.rgba[i * 4 + 1] = static_cast<std::uint8_t>(d.nx[i] + 128);
+        up.rgba[i * 4 + 2] = static_cast<std::uint8_t>(d.ny[i] + 128);
+        up.rgba[i * 4 + 3] = 255;
+    }
+    frame.uploads.push_back(std::move(up));
+    shelf_x_ += d.w;
+    shelf_h_ = std::max(shelf_h_, d.h);
+}
+
+// The frame for the GPU: per pixel codes, items, lights, occluders, puffs.
+// @orig none: port lighting (GPU)
+bool WorldLighting::shade_gpu(const Surface8& screen, const LightingOptions& opt, std::uint32_t* argb) {
+    if (list_.size() >= LitFrame::kMaxItems) return false;
+    LitFrame& f = frame_;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        f.uploads.clear();
+        f.atlas_reset = atlas_reset_;
+        atlas_full_ = false;
+        if (atlas_reset_) {
+            atlas_.clear();
+            shelf_x_ = shelf_y_ = shelf_h_ = 0;
+            atlas_reset_ = false;
+        }
+        f.items.assign(list_.size() * 16, 0.0f);
+        for (std::size_t i = 0; i < list_.size(); ++i) {
+            const DrawItem& d = list_[i];
+            const Decoded& dec = decoded(d.frame);
+            atlas_place(dec, f);
+            const auto it = atlas_.find(&dec);
+            const std::pair<int, int> at = it != atlas_.end() ? it->second : std::pair{0, 0};
+            float* o = &f.items[i * 16];
+            o[0] = float(d.x_left), o[1] = float(d.x), o[2] = float(d.y_far), o[3] = float(d.y);
+            o[4] = float(d.z), o[5] = float(d.z_top);
+            o[6] = float((actor_[i] ? LitFrame::kActor : 0) | (d.mirrored ? LitFrame::kMirrored : 0));
+            o[7] = float(d.item->id);
+            o[8] = float(at.first), o[9] = float(at.second), o[10] = float(dec.w), o[11] = float(dec.h);
+            o[12] = float(view_left_ + d.left), o[13] = float(view_top_ + d.top);
+        }
+        f.boxes.assign(boxes_.size() * 16, 0.0f);
+        for (std::size_t i = 0; i < boxes_.size(); ++i) {
+            const Box& b = boxes_[i];
+            float* o = &f.boxes[i * 16];
+            o[0] = b.lo.x, o[1] = b.lo.y, o[2] = b.lo.z, o[3] = float(b.owner);
+            o[4] = b.hi.x, o[5] = b.hi.y, o[6] = b.hi.z, o[7] = b.mirrored ? 1.0f : 0.0f;
+            if (!b.sprite) continue;
+            atlas_place(*b.sprite, f);
+            if (const auto it = atlas_.find(b.sprite); it != atlas_.end()) {
+                o[8] = float(it->second.first), o[9] = float(it->second.second);
+                o[10] = float(b.sprite->w), o[11] = float(b.sprite->h);
+                o[12] = float(b.left), o[13] = float(b.top), o[14] = 1.0f;
+            }
+        }
+        if (!atlas_full_) break;
+        atlas_reset_ = true;  // full: start it again with this frame's sprites
+    }
+    if (atlas_full_) return false;
+    f.width = width_;
+    f.height = height_;
+    f.view_left = view_left_;
+    f.view_top = view_top_;
+    f.screen = screen.pixels.data();
+    f.options = opt;
+    for (int i = 0; i < 256; ++i) f.palette[i] = flat_[i] & 0xFFFFFFu;
+    f.code.resize(static_cast<std::size_t>(width_) * height_);
+    pool_->run(static_cast<std::size_t>(height_), [&](std::size_t row) {
+        for (std::size_t j = row * width_; j < (row + 1) * width_; ++j) {
+            if (screen.pixels[j] != world_[j]) f.code[j] = LitFrame::kFlat;
+            else if (emissive_[j]) f.code[j] = LitFrame::kEmissive;
+            else if (owner_[j] < 0) f.code[j] = LitFrame::kAmbient;
+            else f.code[j] = static_cast<std::uint16_t>(owner_[j]);
+        }
+    });
+    f.lights.assign(lights_.size() * 12, 0.0f);
+    f.light_boxes.clear();
+    for (std::size_t l = 0; l < lights_.size(); ++l) {
+        const PointLight& L = lights_[l];
+        float* o = &f.lights[l * 12];
+        o[0] = L.pos.x, o[1] = L.pos.y, o[2] = L.pos.z, o[3] = L.radius;
+        o[4] = L.color.x, o[5] = L.color.y, o[6] = L.color.z, o[7] = float(L.owner);
+        o[8] = float(f.light_boxes.size()), o[9] = float(per_light_[l].size());
+        for (std::uint32_t b : per_light_[l]) f.light_boxes.push_back(static_cast<std::int32_t>(b));
+    }
+    f.puffs.assign(puff_now_.size() * 12, 0.0f);
+    for (std::size_t i = 0; i < puff_now_.size(); ++i) {
+        const PuffState& p = puff_now_[i];
+        float* o = &f.puffs[i * 12];
+        o[0] = p.centre.x, o[1] = p.centre.y, o[2] = p.centre.z, o[3] = p.radius;
+        o[4] = p.density, o[5] = p.heat, o[6] = p.grey, o[7] = p.seed, o[8] = p.time;
+    }
+    if (!gpu_->shade(f, argb)) {
+        atlas_reset_ = true;  // the GPU may have lost it
+        return false;
+    }
     return true;
 }
 
 // @orig none: port lighting
 std::optional<Vec3> WorldLighting::surface_at(int x, int y) const {
     if (x < 0 || y < 0 || x >= width_ || y >= height_) return std::nullopt;
-    const std::size_t j = static_cast<std::size_t>(y) * width_ + x;
-    if (owner_[j] < 0) return std::nullopt;
-    return pos_[j];
+    if (owner_[static_cast<std::size_t>(y) * width_ + x] < 0) return std::nullopt;
+    Vec3 p, n;
+    point_at(x, y, p, n);
+    return p;
 }
 
 // @orig none: port lighting
 std::optional<Vec3> WorldLighting::light_spot(int x, int y, float height) const {
-    const auto p = surface_at(x, y);
-    if (!p) return std::nullopt;
-    const Vec3 n = nrm_[static_cast<std::size_t>(y) * width_ + x];
+    if (x < 0 || y < 0 || x >= width_ || y >= height_) return std::nullopt;
+    if (owner_[static_cast<std::size_t>(y) * width_ + x] < 0) return std::nullopt;
+    Vec3 p, n;
+    point_at(x, y, p, n);
     const Vec3 off = std::abs(n.z) > 0.7f ? Vec3{} : normalize(Vec3{n.x, n.y, 0}) * 40.0f;
-    return *p + off + Vec3{0, 0, height * kLightZScale};
+    return p + off + Vec3{0, 0, height * kLightZScale};
 }
 
 // @orig none: port lighting (diagnostics)
-void WorldLighting::probe(const World& world, int x, int y) const {
+void WorldLighting::probe(const World& world, int x, int y) {
     if (x < 0 || y < 0 || x >= width_ || y >= height_) return;
     const std::size_t j = static_cast<std::size_t>(y) * width_ + x;
     if (owner_[j] < 0) {
@@ -575,7 +979,8 @@ void WorldLighting::probe(const World& world, int x, int y) const {
         return;
     }
     const DrawItem& d = list_[owner_[j]];
-    const Vec3 p = pos_[j], n = nrm_[j];
+    Vec3 p, n;
+    point_at(x, y, p, n);
     std::printf("probe (%d, %d): item %u shape %u frame %u box x[%d..%d] y[%d..%d] z[%d..%d]\n"
                 "  surface (%.0f %.0f %.1f) normal (%.2f %.2f %.2f)\n",
                 x, y, d.item->id, d.item->shape, d.item->frame, d.x_left, d.x, d.y_far, d.y, d.z, d.z_top, p.x, p.y,
@@ -652,10 +1057,12 @@ void WorldLighting::reproject(const World& world, const Camera& centre, const Li
                            h + 2 * kMargin);
     const int steps = static_cast<int>(std::lround(opt.yaw / 22.5f));
     std::vector<std::pair<const ShapeFrame*, bool>> sprite(around.size());
+    std::vector<std::uint8_t> actor(around.size());
     for (std::size_t k = 0; k < around.size(); ++k) {
         const DrawItem& d = around[k];
+        actor[k] = is_actor(*d.item, world.shape_info(d.item->shape));
         sprite[k] = {d.frame, d.mirrored};
-        if (is_actor(*d.item, world.shape_info(d.item->shape)) && opt.turn_actors) sprite[k] = turned_frame(d, steps);
+        if (actor[k] && opt.turn_actors) sprite[k] = turned_frame(d, steps);
         decode(*d.frame);
         decode(*sprite[k].first);
     }
@@ -690,8 +1097,7 @@ void WorldLighting::reproject(const World& world, const Camera& centre, const Li
     pool_->run(around.size(), [&](std::size_t k) {
         const DrawItem& d = around[k];
         if (d.shape_flags & ShapeInfo::kTranslucent) return;
-        const ShapeInfo* info = world.shape_info(d.item->shape);
-        if (is_actor(*d.item, info) || d.item->sprite_only) {
+        if (actor[k] || d.item->sprite_only) {
             // A sprite facing the turned camera, standing on the box centre.
             const ShapeFrame& frame = *sprite[k].first;
             const bool mirrored = sprite[k].second;
@@ -729,7 +1135,7 @@ void WorldLighting::reproject(const World& world, const Camera& centre, const Li
                 const int ax = d.mirrored ? left + fr.w - 1 - fx : left + fx;
                 Vec3 p, n;
                 int face = 0;
-                surface(world, d, ax + 0.5f, top + fy + 0.5f, fx, fy, opt.bump, p, n, &face);
+                surface(d, false, ax + 0.5f, top + fy + 0.5f, fx, fy, opt.bump, p, n, &face);
                 const Vec3 q = p - c;
                 splat(kPixelScale * dot(q, r) + w / 2.0f, -kPixelScale * dot(q, u) + h / 2.0f, dot(q, f), col, p, n,
                       d.item->id, false);

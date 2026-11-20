@@ -1791,6 +1791,12 @@ const LightingOptions& lighting_options() {
 }  // namespace
 
 // @orig none: port lighting
+void Game::set_lighting_gpu(LightingGpu* gpu) {
+    lighting_gpu_ = gpu;
+    if (lighting_) lighting_->set_gpu(gpu);
+}
+
+// @orig none: port lighting
 bool Game::render_lit(const Surface8& screen, std::vector<std::uint32_t>& argb) {
     if (!config_.lighting || !lighting_ || !lighting_->captured()) return false;
     argb.resize(screen.pixels.size());
@@ -1904,8 +1910,12 @@ void Game::render_view(Surface8& screen, RenderStats* stats, bool keep_view) {
     // Port addition: what the lighting needs of the world just drawn; what
     // comes over it below (aiming sprites, status bar) is shown unlit.
     if (config_.lighting) {
-        if (!lighting_) lighting_ = std::make_unique<WorldLighting>(shapes_, xform_, &anims_);
-        lighting_->capture(*world_, list, screen, s.view_left, s.view_top, palette(), lighting_options());
+        if (!lighting_) {
+            lighting_ = std::make_unique<WorldLighting>(shapes_, xform_, &anims_);
+            lighting_->set_gpu(lighting_gpu_);
+        }
+        lighting_->capture(*world_, list, screen, s.view_left, s.view_top, palette(), lighting_options(),
+                           kernel_->ticks());
     }
     // SPMGR.C: the screen sprites (aiming mode), over the scene, unless
     // suspended in the menu mode (DS:2D8F).

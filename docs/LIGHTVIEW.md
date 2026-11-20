@@ -14,7 +14,9 @@ The lighting itself lives in the engine (src/engine/world/lighting.*) and is in 
    - Characters keep facing the camera and show the frame of the direction they present to it: their current frame is found in ANIM.DAT (action, direction, index) and taken in the direction turned by yaw / 22.5° (16 directions).
    - The far faces of boxes, never drawn, repeat the near ones mirrored through the box (-x from +x, -y from +y).
 
-CPU only, on a pool of worker threads, by 16×16 tiles that keep only the lights reaching them and, for each, the occluders in between: about 10 ms per 640×480 frame with 16 lights and shadows, about 40 ms when turned.
+6. **Smoke.** Explosions and shots leave puffs of value noise (three octaves, rising) that grow and thin out; each pixel's view ray is marched through them in front of its surface, lit by the same lights, an explosion's puffs glowing at first. `--puff sx sy` and `--ticks N` (or P on the pointer) to see it.
+
+On the GPU (src/platform/gl_lighting.*, OpenGL 3.3 or ES 3.0, a hidden window): the processor captures which item shows at each pixel and gathers lights, occluders and puffs into textures, with an atlas of the sprites' masks and silhouette normals; one fragment shader computes geometry, bumps, lights, shadows and smoke, and the picture is read back. Otherwise on a pool of worker threads, by 16×16 tiles that keep only the lights reaching them and, for each, the occluders in between. Both give the same picture (`--cpu` to compare): with 16 lights, shadows and smoke, 3 / 6 / 10 ms at 640×480 / 1280×720 / 1920×1080 on the GPU, 7 / 14 / 26 ms on the processor; turning the camera stays on the processor (about 40 ms).
 
 ## Findings
 
@@ -26,7 +28,7 @@ CPU only, on a pool of worker threads, by 16×16 tiles that keep only the lights
 
 ## Next steps, if pursued
 
-- Move the renderer to the GPU (points or quads per sprite pixel with a depth buffer, lights and shadow maps in shaders): the processor cost grows with the native resolution.
+- The turned camera on the GPU too (points or quads per sprite pixel with a depth buffer).
 - A turned camera in the game: picking, aiming and the combat zone assume the isometric screen and would need a definition for it.
 
 ## Useful commands

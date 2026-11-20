@@ -6,7 +6,8 @@
 //        lightview [data_dir] --save SAVEGAME_FILE [...]          a saved game, centred on the Silencer
 //        lightview [data_dir] [map] [cx cy] --png out.png [--mouse sx sy] [--drop sx sy]... [--ambient 0-3]
 //                  [--orbit yaw pitch] [--flat] [--no-shadows] [--box-shadows] [--no-bump] [--no-glow]
-//                  [--no-lamp] [--fixed-actors] [--no-back-faces] [--normals] [--probe sx sy]... [--bench N]
+//                  [--no-lamp] [--no-smoke] [--fixed-actors] [--no-back-faces] [--normals] [--probe sx sy]...
+//                  [--puff sx sy]... [--ticks N] [--cpu] [--size WxH] [--bench N]
 //                                                                 one frame to a PNG
 //   Mouse            moving light on the surface under the pointer
 //   Left click       drop a light there        Right click  remove the last one
@@ -14,7 +15,8 @@
 //   S shadows  G shadows cut by sprites  B bump  E lights from glowing pixels  L Silencer's lamp
 //   A ambient  N normals view  Tab original picture (unlit)
 //   Q / W  turn the camera  Z / X  tilt it  R  back to the isometric view
-//   T  characters' frames follow the camera  F  far box faces
+//   T  characters' frames follow the camera  F  far box faces  P  an explosion's smoke at the pointer
+//   M  smoke on / off
 //   Arrows / middle drag  scroll   PageUp/PageDown  previous/next map   Esc  quit
 
 #define SDL_MAIN_HANDLED
@@ -27,6 +29,7 @@
 #include "engine/world/lighting.hpp"
 #include "engine/world/render.hpp"
 #include "engine/world/world.hpp"
+#include "platform/gl_lighting.hpp"
 
 #include <SDL.h>
 
@@ -45,8 +48,8 @@ using namespace crusader;
 
 namespace {
 
-constexpr int kW = 640;
-constexpr int kH = 480;
+int kW = 640;  // --size
+int kH = 480;
 constexpr int kScrollStep = 128;
 constexpr float kAmbient[] = {0.08f, 0.22f, 0.45f, 1.0f};
 const Vec3 kLightColors[] = {{1.0f, 0.85f, 0.65f}, {0.55f, 0.75f, 1.0f}, {1.0f, 0.35f, 0.25f}, {0.4f, 1.0f, 0.5f}};
@@ -77,6 +80,7 @@ struct View3D {
     LightingOptions opt;
     bool lit = true;
     int ambient = 1;  // index in kAmbient
+    std::uint32_t ticks = 0;  // the smoke's clock: one tick a frame
 };
 
 // Draws the world around `camera`, lit, into `argb` (kW x kH).
@@ -90,7 +94,7 @@ void render(const World& world, ShapeCache& shapes, const XformTable& xform, con
     const auto list = build_display_list(world, shapes, View{left, top}, kW, kH);
     Surface8 screen(kW, kH);
     draw_display_list(screen, list, &xform);
-    lighting.capture(world, list, screen, left, top, palette, v.opt);
+    lighting.capture(world, list, screen, left, top, palette, v.opt, v.ticks++);
     argb.resize(kW * kH);
     if (!v.lit) {
         for (int i = 0; i < kW * kH; ++i) {
@@ -128,6 +132,9 @@ int main(int argc, char** argv) {
     std::optional<std::pair<int, int>> mouse;
     std::vector<std::pair<int, int>> probes, drops;
     int bench = 1;
+    int ticks = 0;  // --ticks: frames of smoke before the picture
+    bool cpu = false;
+    std::vector<std::pair<int, int>> puffs;
     std::filesystem::path save;
     std::optional<Camera> forced;
     View3D v;
@@ -154,6 +161,13 @@ int main(int argc, char** argv) {
         else if (arg("--no-bump")) v.opt.bump = false;
         else if (arg("--no-glow")) v.opt.glow_lights = v.opt.flash_lights = false;
         else if (arg("--no-lamp")) v.opt.player_lamp = false;
+        else if (arg("--no-smoke")) v.opt.smoke = false;
+        else if (arg("--puff") && i + 2 < argc) puffs.push_back(pair());
+        else if (arg("--ticks") && i + 1 < argc) ticks = std::max(0, std::stoi(argv[++i]));
+        else if (arg("--cpu")) cpu = true;
+        else if (arg("--size") && i + 1 < argc) {
+            if (std::sscanf(argv[++i], "%dx%d", &kW, &kH) != 2 || kW < 64 || kH < 64) kW = 640, kH = 480;
+        }
         else if (arg("--fixed-actors")) v.opt.turn_actors = false;
         else if (arg("--no-back-faces")) v.opt.back_faces = false;
         else if (arg("--normals")) v.opt.show_normals = true;
@@ -177,6 +191,15 @@ int main(int argc, char** argv) {
         } catch (const std::exception&) {
         }
         WorldLighting lighting(shapes, xform, anims ? &*anims : nullptr);
+        // On the GPU unless --cpu (or none can be used).
+        std::unique_ptr<GlLighting> gpu;
+        if (!cpu) {
+            std::string why;
+            gpu = GlLighting::create(&why);
+            if (gpu) std::printf("GPU: %s\n", gpu->description().c_str());
+            else std::printf("no GPU lighting (%s): processor\n", why.c_str());
+        }
+        lighting.set_gpu(gpu.get());
 
         auto load_map = [&](std::size_t m) {
             auto w = std::make_unique<World>(typeflags);
@@ -206,13 +229,20 @@ int main(int argc, char** argv) {
         int color = 0;
 
         if (!png.empty()) {
-            if (!drops.empty()) {
-                // Surfaces first, then the lights dropped on them.
+            if (!drops.empty() || !puffs.empty()) {
+                // Surfaces first, then the lights and puffs dropped on them.
                 render(*world, shapes, xform, palette, lighting, camera, v, lights, std::nullopt, mouse_height,
                        kLightColors[color], argb);
                 for (std::size_t k = 0; k < drops.size(); ++k)
                     if (auto p = lighting.light_spot(drops[k].first, drops[k].second, mouse_height))
                         lights.push_back({*p, scaled(kLightColors[(k + 1) % 4], 1.4f), 800});
+                for (const auto& [px, py] : puffs)
+                    if (auto p = lighting.surface_at(px, py))
+                        lighting.add_puff(Vec3{p->x, p->y, p->z + 16 * kLightZScale}, SmokePuff::kExplosion);
+            }
+            for (int k = 0; k < ticks; ++k) {
+                render(*world, shapes, xform, palette, lighting, camera, v, lights, mouse, mouse_height,
+                       kLightColors[color], argb);
             }
             const auto t0 = SDL_GetPerformanceCounter();
             for (int k = 0; k < bench; ++k)
@@ -223,8 +253,9 @@ int main(int argc, char** argv) {
                             1000.0 * (SDL_GetPerformanceCounter() - t0) / SDL_GetPerformanceFrequency() / bench);
             for (const auto& [px, py] : probes) lighting.probe(*world, px, py);
             write_png_argb(png, argb);
-            std::printf("map %zu camera (%d, %d): %zu lights -> %s\n", map, camera.x, camera.y,
-                        lighting.lights().size(), png.c_str());
+            std::printf("map %zu camera (%d, %d): %zu lights, %zu puffs, %s -> %s\n", map, camera.x, camera.y,
+                        lighting.lights().size(), lighting.puff_count(), lighting.used_gpu() ? "GPU" : "CPU",
+                        png.c_str());
             return 0;
         }
 
@@ -284,6 +315,12 @@ int main(int argc, char** argv) {
                     case SDLK_r: v.opt.yaw = v.opt.pitch = 0; break;
                     case SDLK_t: v.opt.turn_actors = !v.opt.turn_actors; break;
                     case SDLK_f: v.opt.back_faces = !v.opt.back_faces; break;
+                    case SDLK_m: v.opt.smoke = !v.opt.smoke; break;
+                    case SDLK_p:
+                        if (pointer)
+                            if (auto p = lighting.surface_at(pointer->first, pointer->second))
+                                lighting.add_puff(Vec3{p->x, p->y, p->z + 16 * kLightZScale}, SmokePuff::kExplosion);
+                        break;
                     case SDLK_PAGEUP:
                     case SDLK_PAGEDOWN:
                         map = next_map(fixed, map, ev.key.keysym.sym == SDLK_PAGEDOWN ? 1 : -1);
@@ -307,9 +344,10 @@ int main(int argc, char** argv) {
             SDL_RenderPresent(sdl);
             char title[256];
             std::snprintf(title, sizeof title,
-                          "lightview  map %zu  (%d, %d)  lights %zu  %.1f ms  yaw %.0f pitch %.0f  [S]hadows %s "
+                          "lightview  map %zu  (%d, %d)  lights %zu  %.1f ms %s  yaw %.0f pitch %.0f  [S]hadows %s "
                           "[A]mbient %d [Tab] %s",
-                          map, camera.x, camera.y, lighting.lights().size(), ms, v.opt.yaw, v.opt.pitch,
+                          map, camera.x, camera.y, lighting.lights().size(), ms, lighting.used_gpu() ? "GPU" : "CPU",
+                          v.opt.yaw, v.opt.pitch,
                           v.opt.shadows ? "on" : "off", v.ambient, v.lit ? "lit" : "original");
             SDL_SetWindowTitle(window, title);
         }
