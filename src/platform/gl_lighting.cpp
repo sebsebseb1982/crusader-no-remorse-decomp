@@ -175,8 +175,8 @@ float valueNoise(vec3 v) {
     float x11 = mix(lattice(i + ivec3(0, 1, 1)), lattice(i + ivec3(1, 1, 1)), t.x);
     return mix(mix(x00, x10, t.y), mix(x01, x11, t.y), t.z);
 }
-float smokeNoise(vec3 p, float seed, float time) {
-    vec3 v = p * (1.0 / 45.0) + vec3(seed * 17.3, seed * 9.1, seed * 5.7 - time * 0.35);
+float smokeNoise(vec3 p, float seed, float time, float feature) {
+    vec3 v = p * (1.0 / feature) + vec3(seed * 17.3, seed * 9.1, seed * 5.7 - time * 0.35);
     return 0.5 * valueNoise(v) + 0.3 * valueNoise(v * 2.03) + 0.2 * valueNoise(v * 4.01);
 }
 
@@ -217,7 +217,7 @@ vec3 smokeOver(vec3 colour, ivec2 pix, bool clip, float surfaceS) {
             float dist = length(p - q0.xyz) / q0.w;
             float shape = 1.0 - smoothstep(0.35, 1.0, dist);
             if (shape <= 0.0) continue;
-            float noise = clamp((smokeNoise(p, q1.w, q2.x) - 0.3) * 1.8, 0.0, 1.0);
+            float noise = clamp((smokeNoise(p, q1.w, q2.x, q2.y) - 0.3) * 1.8, 0.0, 1.0);
             float sigma = q1.x * shape * noise;
             if (sigma <= 0.0) continue;
             float keep = exp(-sigma * len);

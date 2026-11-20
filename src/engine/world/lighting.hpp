@@ -70,17 +70,23 @@ struct LightingOptions {
     bool back_faces = true;      // far box faces made from the near ones
 };
 
-// A puff of smoke: a ball of noise that rises, grows and thins out.
+// A puff of smoke: a ball of noise that drifts, rises, grows and thins out.
 struct SmokePuff {
-    enum Kind : std::uint8_t { kExplosion, kShot, kTrail };
+    // Explosion: a dark cloud. Muzzle: a wisp blown out of the barrel along
+    // the shot. Impact: dust where a shot hits something. Trail: behind a
+    // bright shot in flight.
+    enum Kind : std::uint8_t { kExplosion, kMuzzle, kImpact, kTrail };
     Vec3 pos;                 // centre at birth, lighting space
-    Vec3 drift;               // lighting-space units a second
+    Vec3 drift;               // lighting-space units a second at birth, slowed by `drag`
+    float drag = 0;           // per second (0: the drift keeps up)
+    float rise = 0;           // lighting-space units a second, upwards
     float radius0 = 40, radius1 = 80;  // at birth, at the end
     float density = 1;        // at birth
     float life = 3;           // seconds
+    float feature = 45;       // size of the noise's features
     float seed = 0;
     std::uint32_t born = 0;   // game tick
-    Kind kind = kShot;
+    Kind kind = kImpact;
 };
 
 // Smoke puff state at a time, as the shaders take it.
@@ -92,6 +98,7 @@ struct PuffState {
     float grey;     // albedo
     float seed;
     float time;     // seconds since birth (noise animation)
+    float feature;  // size of the noise's features
 };
 
 // Everything a GPU needs to shade a frame (WorldLighting::shade).
@@ -115,7 +122,7 @@ struct LitFrame {
     // 16 floats a box: lo, owner; hi, mirrored; atlas rectangle; sprite left, top, has sprite.
     std::vector<float> boxes;
     std::vector<std::int32_t> light_boxes;  // occluder indices, per light ranges
-    // 12 floats a puff (PuffState: centre, radius, density, heat, grey, seed, time), far to near.
+    // 12 floats a puff (PuffState: centre, radius, density, heat, grey, seed, time, feature), far to near.
     std::vector<float> puffs;
     // Sprites to add to the atlas: RGBA, R opaque, G / B the silhouette normal + 128.
     struct Upload {
@@ -164,8 +171,9 @@ public:
     bool shade(const World& world, const Surface8& screen, const Palette& palette, const LightingOptions& opt,
                std::vector<PointLight> extra, std::uint32_t* argb);
 
-    // A puff of smoke of `kind` centred at `at` (lighting space), now.
-    void add_puff(const Vec3& at, SmokePuff::Kind kind, float scale = 1);
+    // A puff of smoke of `kind` centred at `at` (lighting space), now;
+    // `dir` is the shot's direction for a muzzle wisp.
+    void add_puff(const Vec3& at, SmokePuff::Kind kind, float scale = 1, Vec3 dir = {});
     void clear_smoke() { puffs_.clear(); }
     std::size_t puff_count() const { return puffs_.size(); }
 
@@ -196,6 +204,7 @@ private:
     void gather_lights(const World& world, const LightingOptions& opt, std::vector<PointLight>& lights);
     void gather_occluders(const World& world);
     void spawn_smoke();
+    bool on_surface(const Vec3& p) const;
     void puff_states(std::vector<PuffState>& out) const;
     bool occluded(const Vec3& p, const Vec3& n, ObjId self, std::size_t light, bool sprite_cut,
                   const std::vector<std::uint32_t>& boxes) const;
@@ -243,6 +252,7 @@ private:
     std::vector<SmokePuff> puffs_;
     std::vector<PuffState> puff_now_;  // far to near
     std::unordered_map<ObjId, std::uint16_t> sprites_seen_;  // sprite item -> shape
+    std::unordered_map<ObjId, Vec3> shot_start_;  // projectile -> where it was first seen
     std::uint32_t puff_serial_ = 0;
 
     // GPU atlas: where each decoded frame is (x, y), shelf packing.
@@ -261,7 +271,8 @@ private:
 };
 
 // The smoke's noise (value noise, three octaves), shared with the shaders:
-// 0..1 at lighting-space point p for a puff of seed `seed` at time t.
-float smoke_noise(const Vec3& p, float seed, float t);
+// 0..1 at lighting-space point p for a puff of seed `seed` at time t, with
+// features of about `feature` units.
+float smoke_noise(const Vec3& p, float seed, float t, float feature);
 
 }  // namespace crusader

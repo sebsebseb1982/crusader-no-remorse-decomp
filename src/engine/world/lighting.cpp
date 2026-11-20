@@ -1,5 +1,7 @@
 #include "engine/world/lighting.hpp"
 
+#include "engine/world/projectile.hpp"
+
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -99,10 +101,9 @@ float puff_random(std::uint32_t serial, std::uint32_t k) {
 }  // namespace
 
 // @orig none: port lighting (smoke)
-float smoke_noise(const Vec3& p, float seed, float t) {
-    constexpr float kFeature = 1.0f / 45.0f;
-    const float x = p.x * kFeature + seed * 17.3f, y = p.y * kFeature + seed * 9.1f,
-                z = p.z * kFeature + seed * 5.7f - t * 0.35f;
+float smoke_noise(const Vec3& p, float seed, float t, float feature) {
+    const float k = 1.0f / feature;
+    const float x = p.x * k + seed * 17.3f, y = p.y * k + seed * 9.1f, z = p.z * k + seed * 5.7f - t * 0.35f;
     return 0.5f * value_noise(x, y, z) + 0.3f * value_noise(x * 2.03f, y * 2.03f, z * 2.03f) +
            0.2f * value_noise(x * 4.01f, y * 4.01f, z * 4.01f);
 }
@@ -391,21 +392,38 @@ void WorldLighting::spawn_smoke() {
         seen[id] = shape;
         const auto before = sprites_seen_.find(id);
         const bool fresh = before == sprites_seen_.end() || before->second != shape;
-        const Vec3 centre{(d.x + d.x_left) * 0.5f, (d.y + d.y_far) * 0.5f, (d.z + d.z_top) * 0.5f * kLightZScale};
-        if (!is_blast_shape(shape)) {
-            // A shot leaving the muzzle, an impact: a wisp where it shows
-            // (these sprites keep their place); a trail behind bright shots
-            // in flight (rockets).
+        // Shots and impacts are points: the item's location.
+        const Vec3 centre{float(d.x), float(d.y), d.z * kLightZScale};
+        if (shape == kProjectileShape) {
+            // A shot: first seen just out of the muzzle; seen again, its way
+            // gives the direction the muzzle wisp is blown in.
             if (fresh) {
-                add_puff(centre, SmokePuff::kShot);
+                shot_start_[id] = centre;
                 continue;
             }
+            if (const auto start = shot_start_.find(id); start != shot_start_.end()) {
+                // Once it has moved (it moves every other tick or so): blown
+                // from where it was first drawn, at the muzzle, along its way.
+                const Vec3 way = centre - start->second;
+                if (dot(way, way) > 1.0f) {
+                    add_puff(start->second, SmokePuff::kMuzzle, 1, way);
+                    shot_start_.erase(start);
+                }
+            }
+            // A trail behind the bright ones (rockets).
             if (ticks_ % 4 != 0) continue;
             const Decoded& f = decoded(d.frame);
             int bright = 0;
             for (const auto& [c, k] : f.histogram)
                 if (lum_[c] > 0.62f) bright += k;
             if (bright >= 20) add_puff(centre, SmokePuff::kTrail);
+            continue;
+        }
+        if (!is_blast_shape(shape)) {
+            // An impact (these sprites keep their place): dust, only where the
+            // shot met something; a shot that ran out of range in the air
+            // leaves none.
+            if (fresh && on_surface(centre)) add_puff(centre, SmokePuff::kImpact);
             continue;
         }
         {
@@ -421,20 +439,35 @@ void WorldLighting::spawn_smoke() {
                 for (const ShapeFrame& f : s->frames()) area = std::max(area, f.width * f.height);
             const bool blast = area > 3000;
             const Vec3 base = *at + Vec3{0, 0, (blast ? 16.0f : 10.0f) * kLightZScale};
-            add_puff(base, blast ? SmokePuff::kExplosion : SmokePuff::kShot,
-                     blast ? std::clamp(std::sqrt(float(area)) / 70.0f, 0.8f, 2.0f) : 1.0f);
+            add_puff(base, blast ? SmokePuff::kExplosion : SmokePuff::kImpact,
+                     blast ? std::clamp(std::sqrt(float(area)) / 70.0f, 0.8f, 2.0f) : 1.5f);
         }
     }
     sprites_seen_ = std::move(seen);
+    std::erase_if(shot_start_, [&](const auto& s) { return !sprites_seen_.count(s.first); });
     // Gone when their life is over.
     std::erase_if(puffs_, [&](const SmokePuff& p) { return (ticks_ - p.born) / 60.0f >= p.life; });
 }
 
+// Whether a point is on (or just in front of) the surface drawn where it
+// projects: an impact on a wall, a floor, an item, not in the air.
 // @orig none: port lighting (smoke)
-void WorldLighting::add_puff(const Vec3& at, SmokePuff::Kind kind, float scale) {
+bool WorldLighting::on_surface(const Vec3& p) const {
+    const float x = p.x, y = p.y, z = p.z / kLightZScale;
+    const int px = static_cast<int>(std::floor((x - y) * 0.25f)) - view_left_;
+    const int py = static_cast<int>(std::floor((x + y) * 0.125f - z)) - view_top_;
+    for (int dy = -2; dy <= 2; dy += 2)
+        for (int dx = -2; dx <= 2; dx += 2)
+            if (const auto s = surface_at(px + dx, py + dy); s && dot(*s - p, *s - p) < 64.0f * 64.0f) return true;
+    return false;
+}
+
+// @orig none: port lighting (smoke)
+void WorldLighting::add_puff(const Vec3& at, SmokePuff::Kind kind, float scale, Vec3 dir) {
     const std::uint32_t serial = ++puff_serial_;
     auto rnd = [&](std::uint32_t k) { return puff_random(serial, k); };
-    const int count = kind == SmokePuff::kExplosion ? 6 : kind == SmokePuff::kShot ? 2 : 1;
+    const int count = kind == SmokePuff::kExplosion ? 6 : kind == SmokePuff::kMuzzle ? 2 : 1;
+    const Vec3 ahead = dot(dir, dir) > 1e-6f ? normalize(dir) : Vec3{};
     for (int i = 0; i < count; ++i) {
         SmokePuff p;
         p.kind = kind;
@@ -444,27 +477,46 @@ void WorldLighting::add_puff(const Vec3& at, SmokePuff::Kind kind, float scale) 
         switch (kind) {
         case SmokePuff::kExplosion:
             p.pos = at + Vec3{jx * 60, jy * 60, jz * 40} * scale;
-            p.drift = {jx * 12, jy * 12, 45 + rnd(50 + i) * 30};
+            p.drift = {jx * 12, jy * 12, 0};
+            p.rise = 45 + rnd(50 + i) * 30;
             p.radius0 = (45 + rnd(60 + i) * 30) * scale;
             p.radius1 = (140 + rnd(70 + i) * 80) * scale;
             p.density = 0.03f;
             p.life = 4.5f + rnd(80 + i) * 2;
+            p.feature = 45;
             break;
-        case SmokePuff::kShot:
-            p.pos = at + Vec3{jx * 10, jy * 10, jz * 10};
-            p.drift = {jx * 8, jy * 8, 22 + jz * 10};
-            p.radius0 = 20;
-            p.radius1 = 75;
+        case SmokePuff::kMuzzle:
+            // Blown out along the shot, quickly slowed down, hardly rising.
+            p.pos = at + ahead * (i * 6.0f);
+            p.drift = ahead * (140.0f + 80.0f * i) + Vec3{jx * 10, jy * 10, jz * 10};
+            p.drag = 5;
+            p.rise = 8;
+            p.radius0 = 9;
+            p.radius1 = 28 + 8 * i;
+            p.density = 0.08f;
+            p.life = 0.7f + 0.2f * i;
+            p.feature = 12;
+            break;
+        case SmokePuff::kImpact:
+            p.pos = at;
+            p.drift = Vec3{jx * 20, jy * 20, 0} * scale;
+            p.drag = 3;
+            p.rise = 12;
+            p.radius0 = 8 * scale;
+            p.radius1 = 30 * scale;
             p.density = 0.05f;
-            p.life = 2.2f;
+            p.life = 1.1f * scale;
+            p.feature = 14;
             break;
         case SmokePuff::kTrail:
             p.pos = at;
-            p.drift = {jx * 4, jy * 4, 14};
-            p.radius0 = 12;
-            p.radius1 = 42;
-            p.density = 0.016f;
-            p.life = 1.2f;
+            p.drift = {jx * 4, jy * 4, 0};
+            p.rise = 14;
+            p.radius0 = 10;
+            p.radius1 = 34;
+            p.density = 0.02f;
+            p.life = 1.0f;
+            p.feature = 16;
             break;
         }
         if (puffs_.size() >= kMaxPuffs) puffs_.erase(puffs_.begin());
@@ -480,14 +532,20 @@ void WorldLighting::puff_states(std::vector<PuffState>& out) const {
         const float age = (ticks_ - p.born) / 60.0f;
         const float u = std::clamp(age / p.life, 0.0f, 1.0f);
         PuffState s;
-        s.centre = p.pos + p.drift * age;
+        // The drift slows down (drag), the rise keeps up.
+        const float travelled = p.drag > 0 ? (1 - std::exp(-p.drag * age)) / p.drag : age;
+        s.centre = p.pos + p.drift * travelled + Vec3{0, 0, p.rise * age};
         s.radius = p.radius0 + (p.radius1 - p.radius0) * (1 - (1 - u) * (1 - u));
-        // Fades in over the first tenth of a second, thins out to nothing.
-        s.density = p.density * std::min(1.0f, age / 0.1f) * std::pow(1 - u, 1.5f);
+        // Fades in (at once for a muzzle wisp), thins out to nothing.
+        const float fade_in = p.kind == SmokePuff::kMuzzle ? 0.02f : 0.1f;
+        s.density = p.density * std::min(1.0f, age / fade_in) * std::pow(1 - u, 1.5f);
         s.heat = p.kind == SmokePuff::kExplosion ? std::max(0.0f, 1 - age / 0.9f) : 0.0f;
-        s.grey = p.kind == SmokePuff::kExplosion ? 0.3f : p.kind == SmokePuff::kShot ? 0.62f : 0.7f;
+        s.grey = p.kind == SmokePuff::kExplosion ? 0.3f
+                 : p.kind == SmokePuff::kImpact  ? 0.55f
+                                                 : 0.75f;
         s.seed = p.seed;
         s.time = age;
+        s.feature = p.feature;
         if (s.density > 1e-5f) out.push_back(s);
     }
     std::sort(out.begin(), out.end(),
@@ -511,14 +569,19 @@ void WorldLighting::gather_lights(const World& world, const LightingOptions& opt
             if (count < 4) continue;
             Vec3 col = sum * (1.0f / count);
             col = col * (1.0f / std::max({col.x, col.y, col.z, 0.05f}));
-            // These sprites are moved up over the scene (sprite_process.hpp):
-            // the light goes over the surface drawn under their anchor.
-            std::optional<Vec3> at;
-            for (int dy = 0; dy < 24 && !at; dy += 4) at = surface_at(d.sx, d.sy - dy);
-            if (!at) at = Vec3{(d.x + d.x_left) * 0.5f, (d.y + d.y_far) * 0.5f, float(d.z) * kLightZScale};
+            // Shots and impacts keep their place: the light is where they
+            // are. Explosions and flashes are moved up over the scene
+            // (sprite_process.hpp): their light goes over the surface drawn
+            // under their anchor.
+            Vec3 at{float(d.x), float(d.y), d.z * kLightZScale};
+            if (is_blast_shape(d.item->shape)) {
+                std::optional<Vec3> under;
+                for (int dy = 0; dy < 24 && !under; dy += 4) under = surface_at(d.sx, d.sy - dy);
+                at = under ? *under + Vec3{0, 0, 24 * kLightZScale}
+                           : Vec3{(d.x + d.x_left) * 0.5f, (d.y + d.y_far) * 0.5f, float(d.z + 24) * kLightZScale};
+            }
             const float strength = std::min(2.2f, 0.7f + count / 120.0f);
-            lights.push_back({*at + Vec3{0, 0, 24 * kLightZScale}, col * strength,
-                              std::min(900.0f, 300.0f + count * 1.5f), d.item->id});
+            lights.push_back({at, col * strength, std::min(900.0f, 300.0f + count * 1.5f), d.item->id});
             continue;
         }
         if (!opt.glow_lights || f.glow_pixels < 6) continue;
@@ -697,7 +760,8 @@ Vec3 WorldLighting::smoke_over(Vec3 colour, int px, int py, bool clip, float sur
             const float dist = std::sqrt(dot(p - puff.centre, p - puff.centre)) / puff.radius;
             const float shape = 1 - smoothstep(0.35f, 1.0f, dist);
             if (shape <= 0) continue;
-            const float noise = std::clamp((smoke_noise(p, puff.seed, puff.time) - 0.3f) * 1.8f, 0.0f, 1.0f);
+            const float noise =
+                std::clamp((smoke_noise(p, puff.seed, puff.time, puff.feature) - 0.3f) * 1.8f, 0.0f, 1.0f);
             const float sigma = puff.density * shape * noise;
             if (sigma <= 0) continue;
             const float keep = std::exp(-sigma * len);
@@ -942,7 +1006,7 @@ bool WorldLighting::shade_gpu(const Surface8& screen, const LightingOptions& opt
         const PuffState& p = puff_now_[i];
         float* o = &f.puffs[i * 12];
         o[0] = p.centre.x, o[1] = p.centre.y, o[2] = p.centre.z, o[3] = p.radius;
-        o[4] = p.density, o[5] = p.heat, o[6] = p.grey, o[7] = p.seed, o[8] = p.time;
+        o[4] = p.density, o[5] = p.heat, o[6] = p.grey, o[7] = p.seed, o[8] = p.time, o[9] = p.feature;
     }
     if (!gpu_->shade(f, argb)) {
         atlas_reset_ = true;  // the GPU may have lost it
