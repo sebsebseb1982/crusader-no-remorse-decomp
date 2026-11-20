@@ -110,6 +110,7 @@ int main(int argc, char** argv) {
     bool new_game = false, save_given = false, fullscreen = false, debug_title = false, auto_save_names = false;
     int png_width = Game::kScreenWidth, png_height = Game::kScreenHeight;
     bool classic = false;  // --classic: the original 640 x 480 view, stretched to the window
+    bool lighting = false;  // --lighting: the 3D lighting on for this run (GameConfig::lighting)
     bool laurie = false;
     double gamma = 1.0;
     std::int32_t scroll_x = 0, scroll_y = 0;
@@ -146,6 +147,7 @@ int main(int argc, char** argv) {
         }
         else if (std::strcmp(argv[i], "--walk") == 0) walk = true;
         else if (std::strcmp(argv[i], "--fire") == 0) fire = true;
+        else if (std::strcmp(argv[i], "--lighting") == 0) lighting = true;
         else if (std::strcmp(argv[i], "--use") == 0 && i + 1 < argc) use = std::stoi(argv[++i]);
         else if (std::strcmp(argv[i], "--menu") == 0) menu = true;
         else if (std::strcmp(argv[i], "--menu-load") == 0) menu = menu_load = true;
@@ -183,6 +185,7 @@ int main(int argc, char** argv) {
         }
         Game game(data, {}, mod);
         game.set_port_version(CRUSADER_VERSION);
+        if (lighting) game.config().lighting = true;
         game.set_auto_save_names(auto_save_names);
         {
             const std::time_t now = std::time(nullptr);
@@ -255,7 +258,17 @@ int main(int argc, char** argv) {
                 game.key(0x1C, false, false, 0);
             }
             game.render(screen, &stats);
-            write_png(png, screen, game.palette());
+            if (std::vector<std::uint32_t> lit; game.render_lit(screen, lit)) {
+                std::vector<std::uint8_t> rgb(lit.size() * 3);
+                for (std::size_t i = 0; i < lit.size(); ++i) {
+                    rgb[i * 3] = static_cast<std::uint8_t>(lit[i] >> 16);
+                    rgb[i * 3 + 1] = static_cast<std::uint8_t>(lit[i] >> 8);
+                    rgb[i * 3 + 2] = static_cast<std::uint8_t>(lit[i]);
+                }
+                write_png_rgb(png, screen.width, screen.height, rgb.data());
+            } else {
+                write_png(png, screen, game.palette());
+            }
             std::printf("%s\n", diagnostics(game, stats, 0).c_str());
             for (const auto& [n, calls] : game.machine().unbound_intrinsic_calls()) {
                 std::printf("  missing intrinsic 0x%03X: %u calls\n", n, calls);
@@ -279,6 +292,7 @@ int main(int argc, char** argv) {
         // Native resolution: the game is drawn at the largest whole fraction of
         // the window that is still 640 x 480 or more, so the pixels keep their
         // shape and a wider window shows more of the surroundings.
+        std::vector<std::uint32_t> lit;  // the lit frame (GameConfig::lighting)
         auto fit_screen = [&]() {
             int w = 0, h = 0;
             presenter.output_size(&w, &h);
@@ -392,7 +406,9 @@ int main(int argc, char** argv) {
                 std::snprintf(size, sizeof size, "  view %dx%d in %dx%d", screen.width, screen.height, ow, oh);
                 presenter.set_title(diagnostics(game, stats, fps) + size);
             }
-            presenter.present(screen, game.palette());
+            // Port addition (lighting option): the world lit in 3D, in true colour.
+            if (game.render_lit(screen, lit)) presenter.present_argb(lit.data(), screen.width, screen.height);
+            else presenter.present(screen, game.palette());
         }
         print_faults(game);
         return 0;

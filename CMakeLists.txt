@@ -84,6 +84,7 @@ add_library(crusader_engine
   src/engine/world/projectile.cpp
   src/engine/world/damage_marks.cpp
   src/engine/world/casings.cpp
+  src/engine/world/lighting.cpp
   src/engine/world/death_loot.cpp
   src/engine/world/attack.cpp
   src/engine/world/activity.cpp
@@ -125,7 +126,9 @@ add_library(crusader_engine
   src/engine/ui/movie_player.cpp
   src/engine/world/auto_firer.cpp
   src/engine/world/render.cpp)
-target_link_libraries(crusader_engine PUBLIC crusader_core)
+# The lighting (lighting.cpp) runs on worker threads: -pthread on older glibc.
+find_package(Threads REQUIRED)
+target_link_libraries(crusader_engine PUBLIC crusader_core Threads::Threads)
 
 # Platform layer (replaces SUPERVGA/VPORT/BASEPAL hardware access).
 add_library(crusader_platform
@@ -164,9 +167,7 @@ add_executable(mapview src/tools/mapview.cpp)
 target_link_libraries(mapview PRIVATE crusader_engine crusader_platform)
 
 add_executable(lightview src/tools/lightview.cpp)
-# Multithreaded (std::thread): -pthread on older glibc.
-find_package(Threads REQUIRED)
-target_link_libraries(lightview PRIVATE crusader_engine crusader_platform Threads::Threads)
+target_link_libraries(lightview PRIVATE crusader_engine crusader_platform)
 
 add_executable(sortcheck src/tools/sortcheck.cpp)
 target_link_libraries(sortcheck PRIVATE crusader_engine)

@@ -31,6 +31,9 @@ public:
     // DOSBox's "output=opengl") instead of nearest pixels (its "openglnb").
     void set_smooth(bool smooth);
     void present(const Surface8& frame, const Palette& palette);
+    // A true-colour frame (0xAARRGGBB, width x height): the lit world
+    // (GameConfig::lighting).
+    void present_argb(const std::uint32_t* frame, int width, int height);
     void maximize();
     // Desktop fullscreen on / off (Alt+Enter).
     void toggle_fullscreen();

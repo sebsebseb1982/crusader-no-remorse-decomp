@@ -100,6 +100,10 @@ public:
     // game pixels are bigger than the screen's (zoom above x1, or the 640 x 480
     // view in a bigger window).
     bool smooth_scaling = false;
+    // Port addition, written only when set: "lighting", the world is lit in
+    // 3D (engine/world/lighting.hpp): lamps, screens, flashes and explosions
+    // light the scene around them, with shadows.
+    bool lighting = false;
     // Port addition, written when changed: controller rumble and its strength
     // (0..100 percent).
     bool vibration = true;

@@ -109,6 +109,7 @@ GameConfig GameConfig::parse(std::string_view text) {
         else if (key == "directionalmove") c.directional_move = value == "true";
         else if (key == "viewzoom") c.view_zoom_pct = view_zoom_pct_of(value);
         else if (key == "smoothscaling") c.smooth_scaling = value == "true";
+        else if (key == "lighting") c.lighting = value == "true";
         else if (key == "nativeresolution") c.native_resolution = value != "false";
         else if (key == "autosave") c.autosave = value != "false";
         else if (key == "directionalaim") c.directional_aim = value == "true";
@@ -186,6 +187,8 @@ std::string GameConfig::text() const {
     else out.erase("goremode");
     if (casings) out.set("casings", "true");
     else out.erase("casings");
+    if (lighting) out.set("lighting", "true");
+    else out.erase("lighting");
     if (remains_loot) out.set("remainsloot", "true");
     else out.erase("remainsloot");
     if (!language.empty()) out.set("language", language);

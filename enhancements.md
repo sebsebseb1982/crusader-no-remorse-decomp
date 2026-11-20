@@ -25,6 +25,7 @@ The changes fall into four groups:
 7. [Zoom](#7-zoom)
    - [7b. Impact marks](#7b-impact-marks)
    - [7c. Casings](#7c-casings)
+   - [7d. 3D lighting](#7d-3d-lighting)
 8. [Autosave](#8-autosave)
    - [8b. Language](#8b-language)
 9. [Toggle run](#9-toggle-run)
@@ -85,6 +86,7 @@ The original has nothing like it. This screen gathers every option the port adds
 | ZOOM | Cycles AUTO → x1 → x1.5 → x2 → … → xN → AUTO | `viewzoom` |
 | SMOOTHING / LISSAGE | Bilinear filtering of the picture | `smoothscaling` |
 | CAMERA FOLLOW / SUIVI CAMERA | Toggles camera follow | `followplayer` |
+| 3D LIGHTING / ECLAIRAGE 3D | Lights the world in 3D, with shadows (section 7d) | `lighting` |
 
 *EFFECTS / EFFETS*
 
@@ -421,6 +423,34 @@ The original ejects nothing. With this option every shot of a firearm throws out
 - Unlike the other marks, it replaces the colour underneath with the palette's nearest brass or red, instead of darkening it.
 - It follows the impact marks' rules: drawn inside the floor's opaque pixels, covered by what stands in front, gone on a map change, a load, or when the option is switched off; not saved. At most 512 casings lie on a map; past that the oldest goes, and the other marks stay.
 - Casings only read the world and use their own numbers, never the game's random generators, so the game plays the same with or without them.
+
+---
+
+## 7d. 3D lighting
+
+**Option:** 3D LIGHTING / ECLAIRAGE 3D (`lighting`), DISPLAY page, off by default. `--lighting` switches it on for one run.
+**Files:** `src/engine/world/lighting.*`, `src/game/game.cpp`, `src/platform/sdl_presenter.*`; the `lightview` tool and docs/LIGHTVIEW.md
+
+The original draws flat sprites under a fixed light. With this option the world is lit in 3D in true colour.
+
+**Geometry**
+- Each pixel of the scene gets a 3D point and a normal, from the box of the item that shows there (TYPEFLAG.DAT footpads): the top, +x or +y face the view ray enters. Characters (the NPC table, ids 1..255, and NPC shapes) are billboards, rounded from their silhouette. The sprite's own shading adds small bumps.
+
+**Lights**
+- Items with colour-cycled pixels (palette entries 1..14: lamps, screens, force fields, lasers) light the scene around them in their colour.
+- Flashes, explosions and shots (sprites) light the surface under them.
+- A lamp just over the Silencer's head lights the area around him.
+- The rest of the scene keeps half its light (ambient), so the game stays readable.
+
+**Shadows**
+- Item boxes cast shadows, cut by their sprites: railings, grids and bodies cast their outline. A light is never shadowed by the item that gives it; lasers and electrified floors cast none.
+
+**What is not lit**
+- Everything drawn over the world: the status bar, the aiming sprites, the cursor, menus, screens and cutscenes, shown in their palette colours. Palette fades and colour cycling still apply.
+- Lighting only changes the picture: the game plays the same with or without it.
+
+**Cost**
+- Computed on the processor, on all its cores: about 10 ms a frame at 640 x 480, more at native resolution.
 
 ---
 

@@ -38,6 +38,7 @@
 #include "core/weapon_overlay.hpp"
 #include "engine/world/casings.hpp"
 #include "engine/world/damage_marks.hpp"
+#include "engine/world/lighting.hpp"
 #include "engine/world/render.hpp"
 #include "engine/world/world.hpp"
 #include "engine/world/world_mouse.hpp"
@@ -145,6 +146,10 @@ public:
     // shows more around the camera, and the menus, screens, films and cursor
     // stay 640 x 480 in the middle (see ui_x / ui_y for the mouse).
     void render(Surface8& screen, RenderStats* stats = nullptr);
+    // Port addition (GameConfig::lighting): the screen just rendered, with the
+    // world lit in 3D, in `argb` (0xAARRGGBB). False when there is nothing to
+    // light (option off, cutscene, menu): show `screen` as it is.
+    bool render_lit(const Surface8& screen, std::vector<std::uint32_t>& argb);
     // Where the 640 x 480 area starts in the last rendered screen; the mouse
     // coordinates the game takes are relative to it.
     int ui_x() const { return ui_x_; }
@@ -368,6 +373,8 @@ private:
     WeaponOverlay weapon_overlay_;
     DamageMarks damage_marks_;  // port addition (GameConfig::impact_marks)
     Casings casings_;           // port addition (GameConfig::casings)
+    // Port addition (GameConfig::lighting), made when first switched on.
+    std::unique_ptr<WorldLighting> lighting_;
     Palette palette_;
     UsecodeFile usecode_;
     ShapeCache shapes_;

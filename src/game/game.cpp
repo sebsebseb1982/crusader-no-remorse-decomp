@@ -1774,8 +1774,32 @@ void Game::draw_window(Surface8& screen, int x0, int y0, Draw&& draw) {
     copy_block(window_, 0, 0, screen, x0, y0, kScreenWidth, kScreenHeight);
 }
 
+namespace {
+
+// The game's lighting: the scene stays readable (ambient), lamps, screens,
+// flashes, explosions and the Silencer's lamp light it.
+// @orig none: port lighting
+const LightingOptions& lighting_options() {
+    static const LightingOptions options = [] {
+        LightingOptions o;
+        o.ambient = 0.5f;
+        return o;
+    }();
+    return options;
+}
+
+}  // namespace
+
+// @orig none: port lighting
+bool Game::render_lit(const Surface8& screen, std::vector<std::uint32_t>& argb) {
+    if (!config_.lighting || !lighting_ || !lighting_->captured()) return false;
+    argb.resize(screen.pixels.size());
+    return lighting_->shade(*world_, screen, palette(), lighting_options(), {}, argb.data());
+}
+
 // @orig 1188:19C1
 void Game::render(Surface8& screen, RenderStats* stats) {
+    if (lighting_) lighting_->forget();
     // A screen larger than 640 x 480 (native resolution) shows more of the
     // scene around the camera; everything else stays 640 x 480, centred.
     const bool large = screen.width >= kScreenWidth && screen.height >= kScreenHeight &&
@@ -1877,6 +1901,12 @@ void Game::render_view(Surface8& screen, RenderStats* stats, bool keep_view) {
         }();
         if (casings) casings_.draw(surface, d, damage_marks_);
     });
+    // Port addition: what the lighting needs of the world just drawn; what
+    // comes over it below (aiming sprites, status bar) is shown unlit.
+    if (config_.lighting) {
+        if (!lighting_) lighting_ = std::make_unique<WorldLighting>(shapes_, xform_, &anims_);
+        lighting_->capture(*world_, list, screen, s.view_left, s.view_top, palette(), lighting_options());
+    }
     // SPMGR.C: the screen sprites (aiming mode), over the scene, unless
     // suspended in the menu mode (DS:2D8F).
     for (const ScreenSprite& sprite : world_->state.screen_sprites.all()) {
