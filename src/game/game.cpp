@@ -1811,7 +1811,7 @@ namespace {
 // @orig none: port lighting
 LightingOptions lighting_options(const GameConfig& config) {
     LightingOptions o;
-    o.ambient = 0.7f;
+    o.ambient = 0.85f;
     o.smoke = config.volumetric_smoke;
     o.player_lamp = config.flashlight;
     return o;
