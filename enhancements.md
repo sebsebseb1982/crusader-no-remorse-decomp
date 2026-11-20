@@ -444,6 +444,7 @@ The original draws flat sprites under a fixed light. With this option the world 
 **Lights**
 - Items with colour-cycled pixels (palette entries 1..14: lamps, screens, force fields, lasers) light the scene around them in their colour.
 - Flashes, explosions and shots (sprites) light the surface under them.
+- Firearms flash at the muzzle: each shot of the BA-40, BA-41, RP-22, RP-32, SG-A1, AC-88 and GL-303, the player's or an enemy's, lights a warm flash at the end of the gun for a fifteenth of a second, which lights the shooter and the walls around. Where a bullet lands, the spark gives only a small light. Energy weapons and rockets need no flash: their shot glows by itself from the muzzle on.
 - The Silencer carries a lamp (FLASHLIGHT / LAMPE TORCHE option, on by default): a beam from his chest the way he faces, tipped down, that lights the floor and what stands in front of him (a cone of 40 degrees, full within 23). He never shadows it himself.
 - **L** switches the lamp on or off in play, the same setting as the option (saved); Ctrl+L stays the cheat. On the controller, the FLASHLIGHT action sends L; it is on **LT** by default. Without the 3D lighting, L does nothing, as in the original.
 - The rest of the scene keeps most of its light (AMBIENT LIGHT / LUMIERE AMBIANTE option, 85 % of its light by default), so the game stays readable. Lower, the lamps stand out more; 100 does not darken the scene at all.

@@ -7,7 +7,7 @@
 //        lightview [data_dir] [map] [cx cy] --png out.png [--mouse sx sy] [--drop sx sy]... [--ambient 0-3]
 //                  [--orbit yaw pitch] [--flat] [--no-shadows] [--box-shadows] [--no-bump] [--no-glow] [--no-fixtures]
 //                  [--no-lamp] [--no-smoke] [--no-liquids] [--fixed-actors] [--no-back-faces] [--normals] [--probe sx sy]...
-//                  [--puff sx sy]... [--puff-scale K] [--rocket sx sy]... [--ticks N] [--cpu] [--size WxH] [--bench N]
+//                  [--puff sx sy]... [--puff-scale K] [--rocket sx sy]... [--shot TYPE] [--ticks N] [--cpu] [--size WxH] [--bench N]
 //                                                                 one frame to a PNG
 //   Mouse            moving light on the surface under the pointer
 //   Left click       drop a light there        Right click  remove the last one
@@ -16,7 +16,7 @@
 //   A ambient  N normals view  Tab original picture (unlit)
 //   Q / W  turn the camera  Z / X  tilt it  R  back to the isometric view
 //   T  characters' frames follow the camera  F  far box faces  P  an explosion's smoke at the pointer
-//   M  smoke on / off   V  liquids glow and steam on / off
+//   M  smoke on / off   V  liquids glow and steam on / off   H  a BA-40 shot of the Silencer (muzzle flash)
 //   Arrows / middle drag  scroll   PageUp/PageDown  previous/next map   Esc  quit
 
 #define SDL_MAIN_HANDLED
@@ -137,6 +137,7 @@ int main(int argc, char** argv) {
     int ticks = 0;  // --ticks: frames of smoke before the picture
     bool cpu = false;
     std::vector<std::pair<int, int>> puffs, rockets;
+    int shot = -1;  // --shot: the Silencer fires this fire type (its muzzle flash)
     std::filesystem::path save;
     std::optional<Camera> forced;
     View3D v;
@@ -169,6 +170,7 @@ int main(int argc, char** argv) {
         else if (arg("--puff") && i + 2 < argc) puffs.push_back(pair());
         else if (arg("--puff-scale") && i + 1 < argc) puff_scale = std::stof(argv[++i]);
         else if (arg("--rocket") && i + 2 < argc) rockets.push_back(pair());
+        else if (arg("--shot") && i + 1 < argc) shot = std::stoi(argv[++i], nullptr, 0);
         else if (arg("--ticks") && i + 1 < argc) ticks = std::max(0, std::stoi(argv[++i]));
         else if (arg("--cpu")) cpu = true;
         else if (arg("--size") && i + 1 < argc) {
@@ -233,6 +235,11 @@ int main(int argc, char** argv) {
         std::vector<std::uint32_t> argb;
         float mouse_height = 40;
         int color = 0;
+        // A shot of the Silencer the way he faces, from about the height of his gun.
+        const auto fire = [&](int fire_type) {
+            if (const Item* p = world->get(1); p && !p->off_map)
+                lighting.shot_fired(1, p->x, p->y, p->z + 32, world->npc_direction(1), fire_type, v.ticks);
+        };
 
         if (!png.empty()) {
             if (!drops.empty() || !puffs.empty() || !rockets.empty()) {
@@ -255,6 +262,7 @@ int main(int argc, char** argv) {
                         if (Item* rocket = world->get(id)) rocket->sprite_only = true;
                     }
             }
+            if (shot >= 0) fire(shot);
             for (int k = 0; k < ticks; ++k) {
                 render(*world, shapes, xform, palette, lighting, camera, v, lights, mouse, mouse_height,
                        kLightColors[color], argb);
@@ -333,6 +341,7 @@ int main(int argc, char** argv) {
                     case SDLK_f: v.opt.back_faces = !v.opt.back_faces; break;
                     case SDLK_m: v.opt.smoke = !v.opt.smoke; break;
                     case SDLK_v: v.opt.liquids = !v.opt.liquids; break;
+                    case SDLK_h: fire(0xB); break;
                     case SDLK_p:
                         if (pointer)
                             if (auto p = lighting.surface_at(pointer->first, pointer->second))

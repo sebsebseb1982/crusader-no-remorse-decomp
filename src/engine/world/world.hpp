@@ -368,6 +368,11 @@ struct WorldHooks {
     // Port addition (impact marks, damage_marks.hpp): a shot of `fire_type`
     // ended at (x, y, z) on `hit`, 0 when on nothing. Must not change the world.
     std::function<void(ObjId hit, std::int32_t x, std::int32_t y, std::int32_t z, int fire_type)> shot_landed;
+    // Port addition (muzzle flashes, lighting.hpp): `shooter` fired a shot of
+    // `fire_type` from its muzzle at (x, y, z) towards direction `dir`
+    // (0..15). Must not change the world.
+    std::function<void(ObjId shooter, std::int32_t x, std::int32_t y, std::int32_t z, int dir, int fire_type)>
+        shot_fired;
     // Port addition (blood marks): an NPC lost hit points to a shot or a
     // blast (report_wound). Must not change the world.
     std::function<void(const Wound& wound)> npc_wounded;

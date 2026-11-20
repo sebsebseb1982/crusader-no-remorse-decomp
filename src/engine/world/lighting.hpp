@@ -188,6 +188,14 @@ public:
     // `dir` is the shot's direction for a muzzle wisp.
     void add_puff(const Vec3& at, SmokePuff::Kind kind, float scale = 1, Vec3 dir = {});
     void clear_smoke() { puffs_.clear(); }
+
+    // A shot of `fire_type` fired by `shooter` from its muzzle at (x, y, z)
+    // (usecode units) towards `dir` (0..15) at game tick `ticks`: firearms
+    // and the grenade launcher light a short flash there (World hooks
+    // shot_fired). Energy weapons and rockets need none: their shot glows.
+    void shot_fired(ObjId shooter, std::int32_t x, std::int32_t y, std::int32_t z, int dir, int fire_type,
+                    std::uint32_t ticks);
+    std::size_t muzzle_flash_count() const { return flashes_.size(); }
     std::size_t puff_count() const { return puffs_.size(); }
 
     // Experiment: the captured scene from a turned camera (opt.yaw, opt.pitch)
@@ -278,6 +286,17 @@ private:
     std::unordered_map<ObjId, std::uint16_t> sprites_seen_;  // sprite item -> shape
     std::unordered_map<ObjId, Vec3> shot_start_;  // projectile -> where it was first seen
     std::uint32_t puff_serial_ = 0;
+
+    // Muzzle flashes: light for `life` ticks from `born`, fading.
+    struct MuzzleFlash {
+        Vec3 pos;
+        Vec3 colour;
+        float radius;
+        std::uint32_t born;
+        std::uint32_t life;
+        ObjId owner;
+    };
+    std::vector<MuzzleFlash> flashes_;
 
     // GPU atlas: where each decoded frame is (x, y), shelf packing.
     std::unordered_map<const Decoded*, std::pair<int, int>> atlas_;

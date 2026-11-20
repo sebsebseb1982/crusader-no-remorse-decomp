@@ -17,6 +17,7 @@
 #include "test_saves.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <iterator>
 #include <optional>
@@ -307,6 +308,61 @@ void test_fixture_lights(const std::filesystem::path& data) {
     CHECK(lamp_lights(on).empty());
 }
 
+// Port lighting: a shot of a firearm lights a short warm flash at the muzzle,
+// ahead of it, fading out in 4 ticks; energy weapons (their shot glows) none.
+void test_muzzle_flash(const std::filesystem::path& data) {
+    const auto typeflags = load_typeflags(data / "STATIC/TYPEFLAG.DAT");
+    World w(typeflags);
+    w.load_saved_items(FlexArchive::open(test_saves(data) / "SAVEGAME.5"));
+    w.expand_glob_eggs(FlexArchive::open(data / "STATIC/GLOB.FLX"));
+    const auto shapes_flex = FlexArchive::open(data / "STATIC/SHAPES.FLX");
+    ShapeCache shapes(shapes_flex, ShapeLayout::World);
+    const auto xform = XformTable::load(data / "STATIC/XFORMPAL.DAT");
+    const auto palette = Palette::load(data / "STATIC/GAMEPAL.PAL");
+    const Item* player = w.get(1);
+    CHECK(player != nullptr);
+    if (!player) return;
+    WorldLighting lighting(shapes, xform);
+    LightingOptions opt;
+    opt.player_lamp = false;  // its light is the player's too
+    auto player_lights = [&](std::uint32_t ticks) {
+        const Camera camera{world_from_usecode(player->x), world_from_usecode(player->y), player->z};
+        const int left = ((camera.x - camera.y) >> 2) - 320, top = (((camera.x + camera.y) >> 3) - camera.z) - 240;
+        const auto list = build_display_list(w, shapes, View{left, top}, 640, 480);
+        Surface8 screen(640, 480);
+        draw_display_list(screen, list, &xform);
+        lighting.capture(w, list, screen, left, top, palette, opt, ticks);
+        std::vector<std::uint32_t> argb(640 * 480);
+        lighting.shade(w, screen, palette, opt, {}, argb.data());
+        std::vector<PointLight> out;
+        for (const PointLight& l : lighting.lights())
+            if (l.owner == 1) out.push_back(l);
+        return out;
+    };
+    CHECK(player_lights(100).empty());
+    const std::int32_t mz = player->z + 32;
+    lighting.shot_fired(1, player->x, player->y, mz, 4, 0xB, 100);  // BA-40, towards +x
+    const auto fresh = player_lights(100);
+    CHECK(fresh.size() == 1);
+    if (fresh.size() == 1) {
+        const PointLight& l = fresh[0];
+        std::printf("muzzle flash: %.0f %.0f z %.1f, colour %.2f %.2f %.2f\n", l.pos.x, l.pos.y,
+                    l.pos.z / kLightZScale, l.color.x, l.color.y, l.color.z);
+        CHECK(l.pos.x > world_from_usecode(player->x) && std::abs(l.pos.y - world_from_usecode(player->y)) < 1);
+        CHECK(std::abs(l.pos.z / kLightZScale - mz) < 0.5f);
+        CHECK(l.color.x > l.color.y && l.color.y > l.color.z && l.color.x > 1.5f);  // warm, bright
+        const auto later = player_lights(102);
+        CHECK(later.size() == 1 && later[0].color.x < l.color.x * 0.5f);
+    }
+    CHECK(player_lights(104).empty());
+    CHECK(lighting.muzzle_flash_count() == 0);
+    lighting.shot_fired(1, player->x, player->y, mz, 4, 5, 200);  // PA-21: the plasma bolt glows itself
+    CHECK(player_lights(200).empty());
+    lighting.shot_fired(1, player->x, player->y, mz, 4, 2, 300);  // SG-A1
+    opt.flash_lights = false;
+    CHECK(player_lights(300).empty());
+}
+
 // A saved game loaded then written again gives back the original's bytes:
 // the item table (minus its unwritten last 10240 bytes, and status bit 0,
 // cleared by the loading) and its lists.
@@ -353,6 +409,7 @@ int main(int argc, char** argv) {
         test_translucent_windows(data);
         test_save_round_trip(data);
         test_fixture_lights(data);
+        test_muzzle_flash(data);
     } else {
         ++failures;
     }

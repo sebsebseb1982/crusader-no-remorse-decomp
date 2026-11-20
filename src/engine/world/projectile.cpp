@@ -237,6 +237,7 @@ Pid fire_weapon(Kernel& kernel, World& world, const AnimDat& anims, ObjId shoote
     origin.y += dy;
     origin.z += dz;
     dir &= 0xF;
+    if (world.hooks().shot_fired) world.hooks().shot_fired(shooter, origin.x, origin.y, origin.z, dir, fire_type);
 
     const auto random_damage = [&world](int type) {  // FireType::getRandomDamage
         const dtable::FireType* t = dtable::fire_type(type);

@@ -127,6 +127,30 @@ const Fixture* fixture(std::uint16_t shape, std::uint32_t frame) {
 // Explosion and flash shapes (sprite_process.hpp, list DS:29C2).
 bool is_blast_shape(std::uint16_t shape) { return shape == 0x31C || (shape >= 0x31F && shape <= 0x327); }
 
+// The impact of a bullet (impact_sprite: fire types 1, 2, 0xB, 0xD): a
+// spark, so a small light, smaller than the flash at the muzzle.
+constexpr std::uint16_t kBulletImpactShape = 0x1D8;
+
+// Muzzle flash by fire type (dtable.cpp: the weapons' fire types): bullets
+// 1 (RP-22, RP-32), 0xB (BA-40, BA-41), several pellets 2 (SG-A1) and 0xD
+// (AC-88), grenades 3 (GL-303). Energy weapons and rockets have none: their
+// shot is a bright sprite that lights from the muzzle on.
+struct FlashKind {
+    Vec3 colour;
+    float strength;
+    float radius;
+    std::uint32_t life;  // ticks (60 a second)
+};
+std::optional<FlashKind> muzzle_flash(int fire_type) {
+    const Vec3 gunfire{1.0f, 0.72f, 0.38f};
+    switch (fire_type) {
+    case 1: case 0xB: return FlashKind{gunfire, 2.4f, 650, 4};
+    case 2: case 0xD: return FlashKind{gunfire, 2.8f, 750, 5};
+    case 3: return FlashKind{Vec3{1.0f, 0.6f, 0.3f}, 2.0f, 600, 5};
+    default: return std::nullopt;
+    }
+}
+
 float srgb_to_linear(std::uint8_t c) { return std::pow(c / 255.0f, 2.2f); }
 
 // How much of a spot's light goes to a point `to` away from the light (to =
@@ -404,6 +428,7 @@ void WorldLighting::capture(const World& world, const std::vector<DrawItem>& lis
     width_ = screen.width;
     height_ = screen.height;
     ticks_ = ticks;
+    std::erase_if(flashes_, [&](const MuzzleFlash& f) { return ticks - f.born >= f.life; });
     const std::size_t n = static_cast<std::size_t>(width_) * height_;
     world_ = screen.pixels;
     owner_.assign(n, -1);
@@ -750,6 +775,22 @@ void WorldLighting::puff_states(std::vector<PuffState>& out) const {
 }
 
 // @orig none: port lighting
+void WorldLighting::shot_fired(ObjId shooter, std::int32_t x, std::int32_t y, std::int32_t z, int dir, int fire_type,
+                               std::uint32_t ticks) {
+    const auto kind = muzzle_flash(fire_type);
+    if (!kind) return;
+    // A little ahead of the muzzle (direction 0 towards -y, 4 towards +x),
+    // so that the wall the shooter faces catches it as much as the shooter.
+    const float a = static_cast<float>(dir & 15) * 0.39269908f;
+    const Vec3 ahead{std::sin(a), -std::cos(a), 0};
+    const Vec3 at = Vec3{float(world_from_usecode(x)), float(world_from_usecode(y)), float(z) * kLightZScale} +
+                    ahead * 10.0f;
+    // Each flash a little brighter or dimmer than the last.
+    const float flicker = 0.85f + 0.3f * float(hash32(ticks * 2654435761u + shooter) & 0xFF) / 255.0f;
+    flashes_.push_back({at, kind->colour * (kind->strength * flicker), kind->radius, ticks, kind->life, shooter});
+}
+
+// @orig none: port lighting
 void WorldLighting::gather_lights(const World& world, const LightingOptions& opt, std::vector<PointLight>& lights) {
     for (const DrawItem& d : list_) {
         const Decoded& f = decoded(d.frame);
@@ -785,8 +826,13 @@ void WorldLighting::gather_lights(const World& world, const LightingOptions& opt
                 at = under ? *under + Vec3{0, 0, 24 * kLightZScale}
                            : Vec3{(d.x + d.x_left) * 0.5f, (d.y + d.y_far) * 0.5f, float(d.z + 24) * kLightZScale};
             }
-            const float strength = std::min(2.2f, 0.7f + count / 120.0f);
-            lights.push_back({at, col * strength, std::min(900.0f, 300.0f + count * 1.5f), d.item->id});
+            float strength = std::min(2.2f, 0.7f + count / 120.0f);
+            float radius = std::min(900.0f, 300.0f + count * 1.5f);
+            if (d.item->shape == kBulletImpactShape) {
+                strength *= 0.4f;
+                radius *= 0.6f;
+            }
+            lights.push_back({at, col * strength, radius, d.item->id});
             continue;
         }
         if (opt.fixture_lights) {
@@ -833,6 +879,15 @@ void WorldLighting::gather_lights(const World& world, const LightingOptions& opt
         const float strength = std::min(1.2f, 0.35f + f.glow_pixels / 80.0f);
         const Vec3 centre{(d.x + d.x_left) * 0.5f, (d.y + d.y_far) * 0.5f, (d.z_top + 4.0f) * kLightZScale};
         lights.push_back({centre, col * strength, 260.0f + std::min(f.glow_pixels, 200) * 2.0f, d.item->id});
+    }
+    if (opt.flash_lights) {
+        // Muzzle flashes: full on the tick of the shot, then fading out.
+        for (const MuzzleFlash& f : flashes_) {
+            const float age = float(ticks_ - f.born) / float(f.life);
+            if (age >= 1) continue;
+            const float k = (1 - age) * (1 - age);
+            lights.push_back({f.pos, f.colour * k, f.radius * (0.6f + 0.4f * k), f.owner});
+        }
     }
     if (opt.player_lamp) {
         // The Silencer's lamp: a beam from his chest the way he faces
