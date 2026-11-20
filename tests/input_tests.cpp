@@ -10,6 +10,7 @@
 #include <SDL.h>
 
 #include <cstdio>
+#include <string>
 
 using namespace crusader;
 
@@ -673,6 +674,41 @@ void test_real_shift() {
     CHECK(c && c->right && c->pressed);
 }
 
+// The 8BitDo Ultimate 2 Wireless over Bluetooth (issue #23): its right stick
+// is axes 2 and 3, not triggers, unless the player maps it themselves. The
+// mapping is for Linux only: SDL ignores it elsewhere.
+void test_gamepad_mapping_fixes() {
+#ifdef __linux__
+    const char* guid_text = "05000000c82d00001260000001000000";
+    const SDL_JoystickGUID guid = SDL_JoystickGetGUIDFromString(guid_text);
+    auto mapping = [&]() {
+        char* m = SDL_GameControllerMappingForGUID(guid);
+        std::string s = m ? m : "";
+        SDL_free(m);
+        return s;
+    };
+    if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0) {
+        std::printf("test_gamepad_mapping_fixes skipped: %s\n", SDL_GetError());
+        return;
+    }
+    add_gamepad_mapping_fixes();
+    const std::string fixed = mapping();
+    CHECK(fixed.find("rightx:a2") != std::string::npos && fixed.find("righty:a3") != std::string::npos);
+    CHECK(fixed.find("lefttrigger:b8") != std::string::npos && fixed.find("righttrigger:b9") != std::string::npos);
+    SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
+
+    // The player's own mapping, loaded by SDL at its start, stays.
+    const std::string user = std::string(guid_text) + ",My pad,a:b0,rightx:a4,righty:a5,platform:Linux";
+    SDL_SetHint("SDL_GAMECONTROLLERCONFIG", user.c_str());
+    if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) == 0) {
+        add_gamepad_mapping_fixes();
+        CHECK(mapping().find("rightx:a4") != std::string::npos);
+        SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
+    }
+    SDL_SetHint("SDL_GAMECONTROLLERCONFIG", nullptr);
+#endif
+}
+
 }  // namespace
 
 int main() {
@@ -687,6 +723,7 @@ int main() {
     test_gamepad_directional_release();
     test_gamepad_directional_snapback();
     test_gamepad_directional_turn_back();
+    test_gamepad_mapping_fixes();
     std::printf(failures ? "%d failure(s)\n" : "all input checks passed\n", failures);
     return failures ? 1 : 0;
 }

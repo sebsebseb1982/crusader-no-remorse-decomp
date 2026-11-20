@@ -41,6 +41,10 @@ struct _SDL_GameController;
 
 namespace crusader {
 
+// Puts right the SDL mappings of the controllers SDL gets wrong (init() calls
+// it). A mapping the player gives in SDL_GAMECONTROLLERCONFIG still wins.
+void add_gamepad_mapping_fixes();
+
 class Gamepad {
 public:
     Gamepad() = default;

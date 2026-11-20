@@ -63,12 +63,31 @@ int sector_of(double angle, int count, int held, double hold) {
 
 }  // namespace
 
+// Controllers whose SDL mapping is wrong, corrected from a player's
+// CRUSADER_PAD_DEBUG log:
+// - 8BitDo Ultimate 2 Wireless over Bluetooth on Linux (issue #23): SDL's entry
+//   (sdl2-compat on Fedora) has no right stick and takes its axes 2 and 3 for
+//   the triggers, so the right stick fired. The triggers are buttons 8 and 9
+//   (also axes 5 and 4). Over USB the pad has another GUID, mapped right.
+const char* const kGamepadMappingFixes[] = {
+    "05000000c82d00001260000001000000,8BitDo Ultimate 2 Wireless,a:b0,b:b1,x:b3,y:b4,back:b10,guide:b12,start:b11,"
+    "leftstick:b13,rightstick:b14,leftshoulder:b6,rightshoulder:b7,dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,"
+    "leftx:a0,lefty:a1,rightx:a2,righty:a3,lefttrigger:b8,righttrigger:b9,platform:Linux",
+};
+
+// Replaces SDL's built-in mappings with the corrections. SDL keeps a mapping
+// the player gives in SDL_GAMECONTROLLERCONFIG(_FILE) over these.
+void add_gamepad_mapping_fixes() {
+    for (const char* mapping : kGamepadMappingFixes) SDL_GameControllerAddMapping(mapping);
+}
+
 Gamepad::~Gamepad() {
     if (controller_) SDL_GameControllerClose(reinterpret_cast<SDL_GameController*>(controller_));
 }
 
 void Gamepad::init() {
     if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0) return;
+    add_gamepad_mapping_fixes();
     for (int i = 0; i < SDL_NumJoysticks() && !controller_; ++i) open(i);
 }
 

@@ -227,6 +227,8 @@ Files: `src/engine/ui/load_screen.*` (`set_auto_name`, `dated_name`), `src/game/
 ### 2.10 Diagnostics
 The environment variable `CRUSADER_PAD_DEBUG=1` prints the detected controller (name, GUID, SDL mapping) and each raw and translated input. It helps diagnose a wrong mapping on handhelds.
 
+A wrong mapping is fixed with SDL's own `SDL_GAMECONTROLLERCONFIG` variable (or `SDL_GAMECONTROLLERCONFIG_FILE`, a `gamecontrollerdb.txt`), which takes precedence over everything else. The port also corrects the SDL mappings it knows to be wrong (`kGamepadMappingFixes` in `sdl_gamepad.cpp`): the 8BitDo Ultimate 2 Wireless over Bluetooth on Linux, whose right stick SDL took for the triggers (issue #23).
+
 ---
 
 ## 3. Directional movement (left stick)
