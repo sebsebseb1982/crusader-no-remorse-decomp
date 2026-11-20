@@ -37,8 +37,8 @@
 // rows. Keys: up / '8' and down / '2' change row, Enter opens or toggles,
 // Escape (or "retour") goes back from a page to the first one, with the
 // page's row focused, and closes the window from the first one. Left / right
-// adjust vibration intensity. Mouse: pressing a row focuses and activates it.
-// While the controller screen is open it gets every event.
+// adjust vibration intensity and the ambient light. Mouse: pressing a row
+// focuses and activates it. While the controller screen is open it gets every event.
 
 #include "core/font.hpp"
 #include "core/game_config.hpp"
@@ -69,7 +69,7 @@ public:
         // Controls.
         Pad, Directional, Aim, Draw, PreciseAim, Run, Vibration, VibrationIntensity,
         // Display.
-        Native, Zoom, Smooth, Follow, Lighting, Smoke, Flashlight,
+        Native, Zoom, Smooth, Follow, Lighting, Smoke, Flashlight, Ambient,
         // Effects.
         Impact, Blood, Casings,
         // Game.

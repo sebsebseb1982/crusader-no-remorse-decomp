@@ -98,6 +98,17 @@ void check_config() {
         check(lamp.text().find("flashlight=false") != std::string::npos && !GameConfig::parse(lamp.text()).flashlight,
               "config flashlight off round trip");
     }
+    // "ambientlight" (port addition): 85 by default, written only when changed, clamped.
+    {
+        GameConfig ambient = GameConfig::parse("irq=7\r\n");
+        check(ambient.ambient_light == 85 && ambient.text().find("ambientlight") == std::string::npos,
+              "config ambientlight default 85");
+        ambient.ambient_light = 40;
+        check(ambient.text().find("ambientlight=40") != std::string::npos &&
+                  GameConfig::parse(ambient.text()).ambient_light == 40,
+              "config ambientlight round trip");
+        check(GameConfig::parse("ambientlight=150\r\n").ambient_light == 100, "config ambientlight clamped");
+    }
     // The controller's left trigger switches the lamp (L) by default.
     check(PadSettings{}.buttons[kPadLeftTrigger] == kPadFlashlight && kPadActions[kPadFlashlight].scancode == 0x26,
           "pad left trigger: flashlight");

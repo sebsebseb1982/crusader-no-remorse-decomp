@@ -149,6 +149,19 @@ void test_vibration_settings() {
     choose(smooth, Entry::Display);
     choose(smooth, Entry::Smooth);
     CHECK(config.smooth_scaling);
+
+    // The ambient light: Enter adds 5 and wraps after 100, left / right by 5 within 0..100.
+    choose(smooth, Entry::Ambient);
+    CHECK(config.ambient_light == 90);
+    smooth.key(gump_key::kLeft);
+    CHECK(config.ambient_light == 85);
+    config.ambient_light = 100;
+    smooth.key(gump_key::kRight);
+    CHECK(config.ambient_light == 100);
+    smooth.key(gump_key::kEnter);
+    CHECK(config.ambient_light == 0);
+    smooth.key(gump_key::kLeft);
+    CHECK(config.ambient_light == 0);
 }
 
 void test_enhancements_pages() {

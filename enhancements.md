@@ -89,6 +89,7 @@ The original has nothing like it. This screen gathers every option the port adds
 | 3D LIGHTING / ECLAIRAGE 3D | Lights the world in 3D, with shadows (section 7d) | `lighting` |
 | VOLUMETRIC SMOKE / FUMEE 3D | With the 3D lighting: smoke of explosions and shots, steam of liquids (section 7d); on by default | `volumetricsmoke` |
 | FLASHLIGHT / LAMPE TORCHE | With the 3D lighting: the Silencer's lamp lights in front of him (section 7d); on by default, L or the controller's FLASHLIGHT action (LT) switches it in play | `flashlight` |
+| AMBIENT LIGHT / LUMIERE AMBIANTE | With the 3D lighting: how bright the scene stays where no lamp reaches, 0 to 100 % by 5 (left / right); 85 % by default | `ambientlight` |
 
 *EFFECTS / EFFETS*
 
@@ -445,7 +446,7 @@ The original draws flat sprites under a fixed light. With this option the world 
 - Flashes, explosions and shots (sprites) light the surface under them.
 - The Silencer carries a lamp (FLASHLIGHT / LAMPE TORCHE option, on by default): a beam from his chest the way he faces, tipped down, that lights the floor and what stands in front of him (a cone of 40 degrees, full within 23). He never shadows it himself.
 - **L** switches the lamp on or off in play, the same setting as the option (saved); Ctrl+L stays the cheat. On the controller, the FLASHLIGHT action sends L; it is on **LT** by default. Without the 3D lighting, L does nothing, as in the original.
-- The rest of the scene keeps half its light (ambient), so the game stays readable.
+- The rest of the scene keeps most of its light (AMBIENT LIGHT / LUMIERE AMBIANTE option, 85 % of its light by default), so the game stays readable. Lower, the lamps stand out more; 100 does not darken the scene at all.
 
 **Shadows**
 - Item boxes cast shadows, cut by their sprites: railings, grids and bodies cast their outline. A light is never shadowed by the item that gives it; lasers, electrified floors and flat items (floors, grates, mats) cast none.
@@ -724,6 +725,7 @@ The original reads much of its data from the CD and needs it in the drive. The p
 | `lighting` | false | `true` |
 | `volumetricsmoke` | true | `false` |
 | `flashlight` | true | `false` |
+| `ambientlight` | 85, clamped to 0..100 | ≠ 85 |
 | `language` | empty (AUTO) | a language folder is picked: its id (`fr`, `en`, `pt-br`...) |
 | `viewzoom` | 0 (auto), 1..4 with decimals (`1.5`) | ≠ 0 |
 | `padmap` | see section 2.4 | controller config ≠ default. 24 comma-separated action numbers; `-1` = default role; values clamped |

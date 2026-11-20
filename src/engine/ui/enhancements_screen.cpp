@@ -73,8 +73,8 @@ constexpr Entry kMainEntries[] = {Entry::Controls, Entry::Display, Entry::Effect
 constexpr Entry kControlsEntries[] = {Entry::Pad,        Entry::Directional, Entry::Aim,
                                       Entry::Draw,       Entry::PreciseAim,  Entry::Run,
                                       Entry::Vibration,  Entry::VibrationIntensity, Entry::Back};
-constexpr Entry kDisplayEntries[] = {Entry::Native,   Entry::Zoom,  Entry::Smooth,     Entry::Follow,
-                                     Entry::Lighting, Entry::Smoke, Entry::Flashlight, Entry::Back};
+constexpr Entry kDisplayEntries[] = {Entry::Native,   Entry::Zoom,  Entry::Smooth,     Entry::Follow, Entry::Lighting,
+                                     Entry::Smoke,    Entry::Flashlight, Entry::Ambient, Entry::Back};
 constexpr Entry kEffectsEntries[] = {Entry::Impact, Entry::Blood, Entry::Casings, Entry::Back};
 constexpr Entry kGameEntries[] = {Entry::Autosave, Entry::FixBugs, Entry::Language, Entry::Back};
 constexpr Entry kCheatsEntries[] = {Entry::RemainsLoot, Entry::Back};
@@ -240,6 +240,10 @@ void EnhancementsScreen::draw(Surface8& screen) const {
             name = tr("FLASHLIGHT");
             on = config_->flashlight;
             break;
+        case Entry::Ambient:
+            name = tr("AMBIENT LIGHT");
+            value = std::to_string(config_->ambient_light) + "%";
+            break;
         case Entry::Impact:
             name = tr("IMPACT MARKS");
             on = config_->impact_marks;
@@ -338,6 +342,7 @@ void EnhancementsScreen::activate(int row) {
     case Entry::Lighting: config_->lighting = !config_->lighting; break;
     case Entry::Smoke: config_->volumetric_smoke = !config_->volumetric_smoke; break;
     case Entry::Flashlight: config_->flashlight = !config_->flashlight; break;
+    case Entry::Ambient: config_->ambient_light = (config_->ambient_light + 5) % 105; break;
     case Entry::Impact: config_->impact_marks = !config_->impact_marks; break;
     case Entry::Blood:
         // Off, on, gore, off.
@@ -377,6 +382,7 @@ void EnhancementsScreen::key(std::uint16_t code) {
     }
     if (closed_) return;
     const bool on_intensity = row_of(Entry::VibrationIntensity) == focus_;
+    const bool on_ambient = row_of(Entry::Ambient) == focus_;
     switch (code) {
     case gump_key::kEscape: back(); break;
     case gump_key::kEnter: activate(focus_); break;
@@ -386,6 +392,7 @@ void EnhancementsScreen::key(std::uint16_t code) {
             config_->vibration_intensity -= 10;
             if (vibration_preview_) vibration_preview_();
         }
+        if (on_ambient) config_->ambient_light = std::max(config_->ambient_light - 5, 0);
         break;
     case gump_key::kRight:
     case '6':
@@ -393,6 +400,7 @@ void EnhancementsScreen::key(std::uint16_t code) {
             config_->vibration_intensity += 10;
             if (vibration_preview_) vibration_preview_();
         }
+        if (on_ambient) config_->ambient_light = std::min(config_->ambient_light + 5, 100);
         break;
     case gump_key::kUp:
     case '8': focus_ = std::max(focus_ - 1, 0); break;
