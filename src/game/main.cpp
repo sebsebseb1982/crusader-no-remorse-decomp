@@ -1,7 +1,7 @@
 // crusader: runs the game from a saved game (milestone 1: the world runs, the
 // camera moves with the arrow keys).
 //
-//   crusader [data | game.iso | GAME.GOG] [--mod DIR] [--save N | --new-game | --map N [--egg E]] [-laurie] [--fullscreen] [--auto-save-names]  (neither: the start-up movies, then the menu) [--movie NAME | --movie-overlay NAME] [--frames N [--scroll DX DY] [--walk] [--fire] [--use ID] [--menu | --menu-load | --menu-credits | --menu-options | --menu-gamepad | --menu-new] --png out.png [--wav out.wav]]
+//   crusader [data | game.iso | GAME.GOG] [--mod DIR] [--save N | --new-game | --map N [--egg E]] [-laurie] [--fullscreen] [--auto-save-names]  (neither: the start-up movies, then the menu) [--movie NAME | --movie-overlay NAME] [--frames N [--scroll DX DY] [--walk] [--fire] [--use ID] [--menu | --menu-load | --menu-credits | --menu-options | --menu-gamepad | --menu-display | --menu-new] --png out.png [--wav out.wav]]
 //
 // With --png, runs N frames of 1/60 s without a window, moving the camera by
 // (DX, DY) usecode units per frame or making the player walk, and writes the
@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
     bool laurie = false;
     double gamma = 1.0;
     std::int32_t scroll_x = 0, scroll_y = 0;
-    bool walk = false, fire = false, menu = false, menu_load = false, menu_credits = false, menu_options = false, menu_gamepad = false,
+    bool walk = false, fire = false, menu = false, menu_load = false, menu_credits = false, menu_options = false, menu_gamepad = false, menu_display = false,
          menu_new = false;
     std::string png, wav, movie;
     int use = 0;
@@ -157,6 +157,7 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--menu-credits") == 0) menu = menu_credits = true;
         else if (std::strcmp(argv[i], "--menu-options") == 0) menu = menu_options = true;
         else if (std::strcmp(argv[i], "--menu-gamepad") == 0) menu = menu_options = menu_gamepad = true;
+        else if (std::strcmp(argv[i], "--menu-display") == 0) menu = menu_options = menu_display = true;
         else if (std::strcmp(argv[i], "--menu-new") == 0) menu = menu_new = true;
         else if (std::strcmp(argv[i], "--scroll") == 0 && i + 2 < argc) {
             scroll_x = std::stoi(argv[++i]);
@@ -267,10 +268,17 @@ int main(int argc, char** argv) {
                 game.key(0x1C, false, true, 0, 0x0D);
                 game.key(0x1C, false, false, 0);
             }
-            if (menu_gamepad) {  // then the "manette" button, clicked
+            if (menu_gamepad || menu_display) {  // then the enhancements button, clicked
                 game.mouse_move(440, 330);
                 game.mouse_button(1, true, 440, 330);
                 game.mouse_button(1, false, 440, 330);
+                auto press = [&](std::uint8_t scancode, std::uint8_t ascii) {
+                    game.key(scancode, scancode != 0x1C, true, 0, ascii);
+                    game.key(scancode, scancode != 0x1C, false, 0);
+                };
+                if (menu_display) press(0x50, 0);  // down to DISPLAY
+                press(0x1C, 0x0D);                 // the page (CONTROLS first)
+                if (menu_gamepad) press(0x1C, 0x0D);  // CONTROLLER, first on it
             }
             if (menu_new) {  // Enter on "new game": the difficulty screen
                 game.key(0x1C, false, true, 0, 0x0D);
