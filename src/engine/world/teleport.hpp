@@ -31,7 +31,8 @@
 // teleport egg (family 8) teleports to egg (quality & 0xFF) of map (the
 // egg's map number), waiting when the quality high byte is set
 // (SHAPHAND_1098_0072, no sound reset); other eggs get usecode event 7
-// ("hatch"). On the way out, event 0x15.
+// ("hatch"). On the way out, event 0x15. Whether the egg has hatched is
+// the process's own field (+0x50), saved with it.
 // MainActor::I_switchMap(map) starts a process that, when it runs, ends every
 // process and sound (GAMEPAL_1028_03f6) and teleports to egg 0x1E of `map`.
 
@@ -47,7 +48,12 @@ constexpr std::uint16_t kTeleportStartEgg = 0x1E;  // where a mission starts
 // switch, which has already stopped them (1028:0477).
 Pid start_teleport_to_egg(Kernel& kernel, World& world, int map, std::uint16_t egg, bool wait, bool stop_sounds);
 Pid start_switch_map(Kernel& kernel, World& world, int map);
-Pid start_egg_hatcher(Kernel& kernel, World& world, ObjId egg);
+// `restored`: the process stands for the one saved with the game, which the
+// port does not load (it rebuilds the fast area instead). An egg the player
+// stands in had hatched before the save: it starts hatched, or its hatch
+// would run a second time (issue #26: TRIGEGG's TRIGGER toggles its door,
+// saved open, which then shut as the player came and opened as he left).
+Pid start_egg_hatcher(Kernel& kernel, World& world, ObjId egg, bool restored = false);
 
 // The egg the teleport goes to (0 if none), in the search order.
 ObjId find_teleport_egg(const World& world, std::uint16_t egg);

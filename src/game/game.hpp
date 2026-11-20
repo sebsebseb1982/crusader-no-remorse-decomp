@@ -438,6 +438,7 @@ private:
     bool auto_save_names_ = false;     // set_auto_save_names
     bool christmas_ = false;           // set_christmas
     bool weasel_intro_played_ = false;  // DS:5ECF
+    bool restoring_fast_area_ = false;  // load_save_file rebuilds the saved fast area
     // The game process's pass count (type 0x245, +0x40 / +0x44) and its value
     // at the last animation pass of the scenery (DS:2D3B), item_anim.hpp.
     std::uint32_t game_passes_ = 0;

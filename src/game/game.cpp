@@ -447,7 +447,7 @@ void Game::reset_world() {
     // where the original restores the saved state, and the reset would undo
     // the player's saved stance.
     hooks.monster_egg = [this](ObjId egg) { spawn_from_egg(*kernel_, *world_, anims_, npc_types_, egg); };
-    hooks.egg_hatcher = [this](ObjId egg) { start_egg_hatcher(*kernel_, *world_, egg); };
+    hooks.egg_hatcher = [this](ObjId egg) { start_egg_hatcher(*kernel_, *world_, egg, restoring_fast_area_); };
     // 1040:04BC: stumble (0x3B, replacing the current animations), stand
     // up (4 in combat, else 0), and a grunt on the NPC's voice.
     hooks.hard_landing = [this](ObjId npc) {
@@ -635,7 +635,11 @@ void Game::load_save_file(const std::filesystem::path& path) {
         for (const auto& [id, event] : restarts) world_->hooks().start_event(id, event);
     }
     world_->clear_fast_area();
+    // The eggs' hatchers stand for the saved ones: an egg the player stands
+    // in had hatched already (start_egg_hatcher, issue #26).
+    restoring_fast_area_ = true;
     world_->set_camera(player->x, player->y, player->z);
+    restoring_fast_area_ = false;
     // An NPC saved while its death played (dead, last action 0x12 or 0x14,
     // short of the action's last frame): without its animation process it
     // would stay as it was, often still standing, and never become a body

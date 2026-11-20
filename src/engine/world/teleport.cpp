@@ -102,25 +102,21 @@ class EggHatcher : public Process {
 public:
     static constexpr std::uint16_t kType = 0x20F;
 
-    EggHatcher(Kernel& kernel, World& world, ObjId egg) : kernel_(kernel), world_(world) {
+    EggHatcher(Kernel& kernel, World& world, ObjId egg, bool restored) : kernel_(kernel), world_(world) {
         set_owner(egg);
         set_type(kType);
+        // Port only: see start_egg_hatcher.
+        if (restored) {
+            const Item* e = world_.get(egg);
+            hatched_ = e && world_.family_of(e->shape) != 7 && player_inside(*e);
+        }
     }
 
 protected:
     void run() override {
         const Item* egg = world_.get(owner());
-        const Item* player = world_.get(kPlayer);
-        if (!egg || !player || world_.family_of(egg->shape) == 7) return;
-        const ShapeInfo* info = world_.shape_info(player->shape);
-        const int foot_x = info ? info->footpad_x : 0, foot_y = info ? info->footpad_y : 0;
-        const int range_x = egg->npc_number >> 4, range_y = egg->npc_number & 0xF;
-        auto u16 = [](std::int32_t v) { return static_cast<std::uint16_t>(v); };
-        const std::uint16_t px = u16(player->x), py = u16(player->y);
-        bool inside = !(px < u16(egg->x - range_x * 32) || u16(egg->x + range_x * 32) < u16(px - foot_x * 16 + 1) ||
-                        py < u16(egg->y - range_y * 32) || u16(egg->y + range_y * 32) < u16(py - foot_y * 16 + 1));
-        const int pz = player->z & 0xFF, ez = egg->z & 0xFF;
-        if (inside && (ez + 0x30 < pz || pz < ez - 0x30)) inside = false;
+        if (!egg || !world_.get(kPlayer) || world_.family_of(egg->shape) == 7) return;
+        const bool inside = player_inside(*egg);
         if (!hatched_) {
             if (inside) {
                 hatched_ = true;
@@ -133,6 +129,21 @@ protected:
     }
 
 private:
+    // @orig 1098:0718
+    bool player_inside(const Item& egg) const {
+        const Item* player = world_.get(kPlayer);
+        if (!player) return false;
+        const ShapeInfo* info = world_.shape_info(player->shape);
+        const int foot_x = info ? info->footpad_x : 0, foot_y = info ? info->footpad_y : 0;
+        const int range_x = egg.npc_number >> 4, range_y = egg.npc_number & 0xF;
+        auto u16 = [](std::int32_t v) { return static_cast<std::uint16_t>(v); };
+        const std::uint16_t px = u16(player->x), py = u16(player->y);
+        const bool inside = !(px < u16(egg.x - range_x * 32) || u16(egg.x + range_x * 32) < u16(px - foot_x * 16 + 1) ||
+                              py < u16(egg.y - range_y * 32) || u16(egg.y + range_y * 32) < u16(py - foot_y * 16 + 1));
+        const int pz = player->z & 0xFF, ez = egg.z & 0xFF;
+        return inside && !(ez + 0x30 < pz || pz < ez - 0x30);
+    }
+
     // @orig 1098:05FD
     void hatch(const Item& egg) {
         if (world_.family_of(egg.shape) == 8) {
@@ -220,8 +231,8 @@ Pid start_switch_map(Kernel& kernel, World& world, int map) {
     return kernel.spawn<SwitchMap>(kernel, world, map).pid();
 }
 
-Pid start_egg_hatcher(Kernel& kernel, World& world, ObjId egg) {
-    return kernel.spawn<EggHatcher>(kernel, world, egg).pid();
+Pid start_egg_hatcher(Kernel& kernel, World& world, ObjId egg, bool restored) {
+    return kernel.spawn<EggHatcher>(kernel, world, egg, restored).pid();
 }
 
 }  // namespace crusader
