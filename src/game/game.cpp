@@ -49,6 +49,9 @@ namespace crusader {
 
 namespace {
 
+// 1468:2869: Escape, Space and Enter held stop a movie.
+constexpr std::array<std::uint8_t, 3> kMovieStopKeys = {0x01, 0x39, 0x1C};
+
 struct WeaponVibration {
     std::uint16_t low_frequency;
     std::uint16_t high_frequency;
@@ -1026,12 +1029,28 @@ void Game::start_movie(const std::string& name, MovieKind kind, Surface8 screen)
     // 1468:3ABC: the colour cycling pauses.
     world_->state.cycle_paused = true;
     movie_resumes_cycle_ = !world_->state.movie_keeps_cycle_paused;
+    // Port addition (issue #24): the original stops a movie whenever one of
+    // its keys is down (1468:2869), even the one that started it. Enter and
+    // Space use a computer whose usecode plays an overlay (MVA03B in
+    // mission 3) 2 frames later, the key still held, and the movie vanished
+    // at once. A key held from before the movie counts only once released
+    // and pressed again.
+    for (std::size_t i = 0; i < kMovieStopKeys.size(); ++i) {
+        movie_keys_held_at_start_[i] = keyboard_.down(kMovieStopKeys[i], false) != 0;
+    }
     kernel_->interrupt_slice();
 }
 
 // @orig 1468:03E3 1468:2869
 void Game::update_movie(std::uint32_t elapsed_us) {
-    movie_->advance(elapsed_us, [this](std::uint8_t scancode) { return keyboard_.down(scancode, false) != 0; });
+    movie_->advance(elapsed_us, [this](std::uint8_t scancode) {
+        const bool down = keyboard_.down(scancode, false) != 0;
+        const auto key = std::find(kMovieStopKeys.begin(), kMovieStopKeys.end(), scancode);
+        if (key == kMovieStopKeys.end()) return down;
+        bool& stale = movie_keys_held_at_start_[static_cast<std::size_t>(key - kMovieStopKeys.begin())];
+        if (!down) stale = false;
+        return down && !stale;
+    });
     if (movie_->take_playback_start() && audio_) {
         // 1468:03E3: dsfx_stop_all, music_pause (not for an overlay).
         audio_->stop_all();
@@ -1792,7 +1811,7 @@ namespace {
 // @orig none: port lighting
 LightingOptions lighting_options(const GameConfig& config) {
     LightingOptions o;
-    o.ambient = 0.5f;
+    o.ambient = 0.7f;
     o.smoke = config.volumetric_smoke;
     o.player_lamp = config.flashlight;
     return o;

@@ -429,6 +429,9 @@ private:
     // Player field +0xC2: the movie resumes the colour cycling when it ends
     // (DS:5FFE clear when it started).
     bool movie_resumes_cycle_ = true;
+    // Port addition (issue #24): the keys that stop a movie (Escape, Space,
+    // Enter) already held when it started, ignored until they are released.
+    std::array<bool, 3> movie_keys_held_at_start_{};
     // A movie of Weasel's shop: the game palette and the colour cycling come
     // back after it (13E0:0CD8).
     bool weasel_movie_ = false;

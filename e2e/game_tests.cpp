@@ -614,6 +614,44 @@ void test_new_game(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
+// Bug (issue #24): in mission 3, using the computer with the files (0x4FF,
+// item 2580 of the save) showed its schematic MVA03B for a blink only. The
+// key that uses it (Enter or Space of the selection mode) is one of those
+// that stop a movie (1468:2869), and the overlay starts 2 frames after the
+// press, before a finger lifts. The movie must play on until a key is
+// pressed again; then EVENT waits and the transmission 3H follows.
+void test_movie_ignores_held_use_key(const std::filesystem::path& data) {
+    constexpr ObjId kComputer = 2580;
+    for (const std::uint8_t key : {std::uint8_t{0x1C}, std::uint8_t{0x39}}) {
+        Game game(data, test_saves(data));
+        game.load_save_file(test_saves(data) / "issue24-schema-mission3-ordinateur.sav");
+        World& w = game.world();
+        CHECK(w.get(kComputer) && w.get(kComputer)->shape == 0x4FF);
+        game.key(key, false, true, 0, key == 0x1C ? '\r' : ' ');
+        use_item(w, kComputer);
+        int frames = 0, last = 0;
+        bool overlay = false;
+        for (int f = 0; f < 60 * 25 && last <= 200 && (frames == 0 || game.movie()); ++f) {
+            if (f == 6) game.key(key, false, false, 0);  // 100 ms
+            game.update(kFrameUs);
+            if (const MoviePlayer* m = game.movie()) {
+                overlay = overlay || m->kind() == MovieKind::kOverlay;
+                last = m->frame();
+                ++frames;
+            }
+        }
+        std::printf("held use key 0x%02X: overlay %d, %d frames on screen, movie frame %d\n", key, overlay, frames,
+                    last);
+        CHECK(overlay && last > 200 && game.movie());
+        // A new press still stops it.
+        game.key(key, false, true, 0);
+        game.update(kFrameUs);
+        game.key(key, false, false, 0);
+        CHECK(!game.movie());
+        CHECK(game.machine().faults().empty());
+    }
+}
+
 // Bug: back at the rebel base after mission 1, Escape crashed the game.
 // The map switch (MainActor::I_switchMap, GAMEPAL_1028_03f6) failed every
 // process, the Controller included, which the game still sent the keys to.
@@ -6555,6 +6593,10 @@ int main(int argc, char** argv) {
         test_saved_busy_items(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--held-use-key-movie") {
+        test_movie_ignores_held_use_key(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--courier-keycard") {
         test_courier_keycard(data);
         return failures ? 1 : 0;
@@ -6763,6 +6805,7 @@ int main(int argc, char** argv) {
     test_editor_mod(data);
     test_movies(data);
     test_back_to_base(data);
+    test_movie_ignores_held_use_key(data);
     test_mission2_final_scene(data);
     test_mission2_npc_teleport(data);
     // The tests that play on the test saves autosave into them (Game::kAutoSave): not kept.
