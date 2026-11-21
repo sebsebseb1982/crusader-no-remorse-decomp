@@ -104,6 +104,12 @@ constexpr std::size_t kMaxSteam = 128;
 // fades, twice a second (the alarm lights, whose lit frames are those of an
 // alert: set_alert, world_intrinsics.hpp). `halo`: the glow round the bulb
 // (PointLight::halo), lamps only: a screen's light comes from its whole face.
+// `face`: a machine lit from inside behind its glass (vending machines, a
+// drinks fridge), its glass on the box's +x (1) or +y (2) face: the light
+// sits just in front of the glass and shines out of it, a spot, so the wall
+// behind the machine stays dark. `levels`: the light's strength by lit
+// frame (from frame 0), for a light that flickers with the sprite's
+// animation (TYPEFLAG, item_anim.cpp), a vending machine's neon; null: whole.
 struct Fixture {
     std::uint16_t shape;
     std::uint32_t lit_frames;  // bit n: frame n gives light
@@ -113,12 +119,22 @@ struct Fixture {
     bool pulse = false;
     float halo = 0;
     float halo_gain = 1;
+    std::uint8_t face = 0;
+    const float* levels = nullptr;
 };
 const Vec3 kWarmLight{1.0f, 0.86f, 0.66f};
 const Vec3 kTubeLight{0.85f, 0.95f, 1.0f};
 const Vec3 kScreenLight{0.55f, 0.75f, 1.0f};
 const Vec3 kRedLight{1.0f, 0.38f, 0.25f};
 const Vec3 kAlarmLight{1.0f, 0.15f, 0.08f};
+const Vec3 kVendingLight{0.75f, 0.88f, 1.0f};
+// How far in front of its glass a lit machine's light is, how high up its
+// box (0 floor, 1 top), and its cone round the face's normal.
+constexpr float kFaceOut = 20;
+constexpr float kFaceHeight = 0.55f;
+constexpr float kFaceCosInner = 0.35f, kFaceCosOuter = -0.15f;
+// A vending machine's neon (frames 0..2): bright, dimmer, off.
+const float kVendingLevels[] = {1.0f, 0.65f, 0.2f};
 const Fixture kFixtures[] = {
     {0x2A0, 0x0F, kWarmLight, 1.3f, 620, true, false, 44},  // wall lamp, a dome (4..7 broken)
     {0x269, 0x01, kWarmLight, 1.3f, 650, true, false, 48},  // ceiling lamp
@@ -137,6 +153,12 @@ const Fixture kFixtures[] = {
     {0x174, 0x02, kAlarmLight, 1.4f, 520, true, true, 44},  // alarm lights (0 off, 1 on, 2 broken)
     {0x271, 0x02, kAlarmLight, 1.4f, 520, true, true, 44},
     {0x477, 0x0C, kAlarmLight, 0.8f, 320, true, true, 30},  // alarm box: 2, 3 its frames 0, 1 on
+    // Vending machines (PEPSIEW +x, PEPSINS +y; frames 0..2, their neon
+    // flickering; shot: replaced by 0x39F, 0x3A0) and a drinks fridge (+x;
+    // 1 broken, DAMAGE.FLX).
+    {0x094, 0x07, kVendingLight, 0.9f, 400, false, false, 60, 0.3f, 1, kVendingLevels},
+    {0x09A, 0x07, kVendingLight, 0.9f, 400, false, false, 60, 0.3f, 2, kVendingLevels},
+    {0x40B, 0x01, kTubeLight, 0.8f, 360, false, false, 56, 0.3f, 1},
 };
 
 // The fixtures' light against the ambient light (LightingOptions::ambient):
@@ -168,6 +190,7 @@ const Smoulder kSmoulders[] = {
     {0x431, 0xFFFF00},             // server cabinets (8..23)
     {0x409, 0xF0},                 // arcade cabinets
     {0x39F, 0x01}, {0x3A0, 0x01},  // vending machines, broken (PEPSIEW, PEPSINS replaced)
+    {0x40B, 0x02},                 // drinks fridge
     // Fans: shot, they are replaced by these shapes, frame 0.
     {0x3CE, 0x01, true}, {0x3D3, 0x01, true},  // RFANBADE, RFANBADN (RFANEW, RFANNS)
     {0x32C, 0x03, true}, {0x32D, 0x03, true},  // MFAN_EW, MFAN_NS broken
@@ -1017,8 +1040,15 @@ void WorldLighting::gather_lights(const World& world, const LightingOptions& opt
                         v = float(d.top) + sv / bright - float(d.sy);
                     }
                 }
-                Vec3 at;
-                if (bright > 0) {
+                Vec3 at, dir;
+                if (fx->face) {
+                    // Mirrored, the glass shows on the other face.
+                    const bool on_x = (fx->face == 1) != d.mirrored;
+                    const float z = (d.z + (d.z_top - d.z) * kFaceHeight) * kLightZScale;
+                    at = on_x ? Vec3{d.x + kFaceOut, (d.y + d.y_far) * 0.5f, z}
+                              : Vec3{(d.x + d.x_left) * 0.5f, d.y + kFaceOut, z};
+                    dir = on_x ? Vec3{1, 0, 0} : Vec3{0, 1, 0};
+                } else if (bright > 0) {
                     const float depth = (d.x_left - d.x + d.y_far - d.y) * 0.5f;
                     at = Vec3{d.x + 2 * u + depth * 0.5f, d.y - 2 * u + depth * 0.5f,
                               (d.z - v + depth / 8) * kLightZScale} +
@@ -1028,10 +1058,16 @@ void WorldLighting::gather_lights(const World& world, const LightingOptions& opt
                     at = at + kToViewer * 12.0f;
                 }
                 float strength = fx->strength * fixture_boost(opt.ambient);
+                if (fx->levels) strength *= fx->levels[d.item->frame];  // lit frames only: 0..2
                 if (fx->pulse) strength *= 0.3f + 0.7f * (0.5f + 0.5f * std::sin(ticks_ * (2 * 3.14159265f * 2 / 60)));
                 PointLight light{at, fx->colour * strength, fx->radius, d.item->id};
                 light.halo = fx->halo;
                 light.halo_gain = fx->halo_gain;
+                if (fx->face) {
+                    light.dir = dir;
+                    light.cos_inner = kFaceCosInner;
+                    light.cos_outer = kFaceCosOuter;
+                }
                 lights.push_back(light);
                 continue;  // in place of the light of its colour-cycled pixels (the alarms')
             }

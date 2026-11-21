@@ -359,6 +359,46 @@ void test_wall_lamp_lights(const std::filesystem::path& data) {
     CHECK(wisps == 0);
 }
 
+// Port lighting: the vending machine 4876 of map 1 (PEPSIEW 0x94, frame 0,
+// its glass on +x) is lit from inside: one light in front of its glass,
+// shining out of it (a spot along +x) with a glow over the glass, dimmed
+// with its flickering neon; shot (replaced by 0x39F), none, and it smoulders.
+void test_vending_machine_lights(const std::filesystem::path& data) {
+    constexpr ObjId kVending = 4876;
+    const auto typeflags = load_typeflags(data / "STATIC/TYPEFLAG.DAT");
+    World w(typeflags);
+    w.load_fixed_map(FlexArchive::open(data / "STATIC/FIXED.DAT"), 1);
+    w.expand_glob_eggs(FlexArchive::open(data / "STATIC/GLOB.FLX"));
+    const auto shapes_flex = FlexArchive::open(data / "STATIC/SHAPES.FLX");
+    ShapeCache shapes(shapes_flex, ShapeLayout::World);
+    const auto xform = XformTable::load(data / "STATIC/XFORMPAL.DAT");
+    const auto palette = Palette::load(data / "STATIC/GAMEPAL.PAL");
+    Item* vending = w.get(kVending);
+    CHECK(vending && vending->shape == 0x94 && vending->frame == 0);
+    if (!vending) return;
+    WorldLighting lighting(shapes, xform);
+    auto lights_of = [&] { return lights_owned_by(w, shapes, xform, palette, lighting, {57502, 40510, 96}, kVending, 120); };
+    const auto lit = lights_of();
+    CHECK(lit.size() == 1);
+    if (lit.size() == 1) {
+        const PointLight& l = lit[0];
+        std::printf("vending machine: light (%.0f, %.0f, %.0f), dir (%.0f, %.0f, %.0f)\n", l.pos.x, l.pos.y, l.pos.z,
+                    l.dir.x, l.dir.y, l.dir.z);
+        CHECK(l.dir.x == 1 && l.dir.y == 0 && l.cos_outer < 0 && l.halo > 0 && l.color.z >= l.color.x);
+    }
+    // Its neon flickers (frames 0..2, TYPEFLAG animation): its light with it.
+    vending->frame = 2;
+    const auto off = lights_of();
+    CHECK(off.size() == 1);
+    if (lit.size() == 1 && off.size() == 1) CHECK(off[0].color.z < 0.3f * lit[0].color.z);
+    vending->shape = 0x39F;  // shot: the broken machine (its usecode: frame 0)
+    vending->frame = 0;
+    CHECK(lights_of().empty());
+    int wisps = 0;
+    for (const PuffState& p : lighting.puffs_shown()) wisps += p.feature == 9;
+    CHECK(wisps >= 2);
+}
+
 // Port lighting (smoke): broken machines smoulder, a lamp does not. The
 // charger 5744 (RECHAGNS, shape 0x136) of map 1, shot (frame 0 -> 4, its
 // usecode), keeps a wisp rising from it.
@@ -521,6 +561,7 @@ int main(int argc, char** argv) {
     test_crate_stack_order(data);
     test_wall_lamp_lights(data);
     test_broken_charger_smoulders(data);
+    test_vending_machine_lights(data);
     test_alarm_lights(data);
     if (have_test_saves(data)) {
         test_translucent_windows(data);
