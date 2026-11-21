@@ -69,12 +69,13 @@ bool is_rocket(const Item& item) {
 
 // Liquid surfaces (SHAPES.FLX; no TYPEFLAG bit marks them): the pools 0x150
 // and 0x59E (16 x 16), their strips 0x227, 0x228, 0x5A2, thin edges 0x55A,
-// 0x56D, 0x56E, ripples and bubbles 0x1D6, 0x539, 0x54C, 0x580.
+// 0x56D, 0x56E, ripples and bubbles 0x1D6, 0x539, 0x54C, 0x580, and the
+// bubbling green puddle G_POOL 0x15D (12 x 9, frames 0..3 animated).
 // @orig none: port lighting (liquids)
 bool is_liquid(std::uint16_t shape) {
     switch (shape) {
     case 0x150: case 0x59E: case 0x227: case 0x228: case 0x5A2: case 0x55A: case 0x56D: case 0x56E:
-    case 0x1D6: case 0x539: case 0x54C: case 0x580:
+    case 0x1D6: case 0x539: case 0x54C: case 0x580: case 0x15D:
         return true;
     default:
         return false;
@@ -82,7 +83,7 @@ bool is_liquid(std::uint16_t shape) {
 }
 // The pools and their strips give off steam.
 bool steams(std::uint16_t shape) {
-    return shape == 0x150 || shape == 0x59E || shape == 0x227 || shape == 0x228 || shape == 0x5A2;
+    return shape == 0x150 || shape == 0x59E || shape == 0x227 || shape == 0x228 || shape == 0x5A2 || shape == 0x15D;
 }
 
 // The liquids' radioactive green, and how much of their own colour they glow
@@ -110,7 +111,10 @@ constexpr std::size_t kMaxSteam = 128;
 // behind the machine stays dark. `levels`: the light's strength by lit
 // frame (from frame 0), for a light that flickers with the sprite's
 // animation (TYPEFLAG, item_anim.cpp), a vending machine's neon; null: whole.
+// `flicker`: a flame's light wavers (kFlame), an electric arc's jumps from
+// one strength to another a few times a second (kSpark); each item its own.
 struct Fixture {
+    enum Flicker : std::uint8_t { kSteady, kFlame, kSpark };
     std::uint16_t shape;
     std::uint32_t lit_frames;  // bit n: frame n gives light
     Vec3 colour;
@@ -121,13 +125,23 @@ struct Fixture {
     float halo_gain = 1;
     std::uint8_t face = 0;
     const float* levels = nullptr;
+    Flicker flicker = kSteady;
 };
+Fixture flickering(Fixture f, Fixture::Flicker how) {
+    f.flicker = how;
+    return f;
+}
 const Vec3 kWarmLight{1.0f, 0.86f, 0.66f};
 const Vec3 kTubeLight{0.85f, 0.95f, 1.0f};
 const Vec3 kScreenLight{0.55f, 0.75f, 1.0f};
 const Vec3 kRedLight{1.0f, 0.38f, 0.25f};
 const Vec3 kAlarmLight{1.0f, 0.15f, 0.08f};
 const Vec3 kVendingLight{0.75f, 0.88f, 1.0f};
+const Vec3 kTerminalOrange{1.0f, 0.6f, 0.25f};
+const Vec3 kTeleportLight{0.45f, 0.65f, 1.0f};
+const Vec3 kArcLight{0.45f, 0.7f, 1.0f};
+const Vec3 kFieldLight{0.6f, 0.55f, 1.0f};
+const Vec3 kFireLight{1.0f, 0.55f, 0.2f};
 // How far in front of its glass a lit machine's light is, how high up its
 // box (0 floor, 1 top), and its cone round the face's normal.
 constexpr float kFaceOut = 20;
@@ -159,6 +173,49 @@ const Fixture kFixtures[] = {
     {0x094, 0x07, kVendingLight, 0.9f, 400, false, false, 60, 0.3f, 1, kVendingLevels},
     {0x09A, 0x07, kVendingLight, 0.9f, 400, false, false, 60, 0.3f, 2, kVendingLevels},
     {0x40B, 0x01, kTubeLight, 0.8f, 360, false, false, 56, 0.3f, 1},
+    // Lamps on desks (swan necks 0x405, 0x406: 4..7 broken; the mushroom
+    // 0x414: 3..5 broken), standing lamps 0x407 (3..5 broken), globes on a
+    // wall bracket 0x3D8 (4..11 broken).
+    {0x405, 0x0F, kWarmLight, 0.9f, 380, true, false, 28},
+    {0x406, 0x0F, kWarmLight, 0.9f, 380, true, false, 28},
+    {0x414, 0x07, kWarmLight, 0.9f, 380, true, false, 30},
+    {0x407, 0x07, kWarmLight, 1.1f, 520, true, false, 40},
+    {0x3D8, 0x0F, kWarmLight, 1.0f, 460, true, false, 36},
+    // Wall terminals: an orange screen (frame 0) or a blue one (1); 2, 3
+    // off, 4, 5 broken.
+    {0x3AB, 0x01, kTerminalOrange, 0.45f, 300, false},
+    {0x3AB, 0x02, kScreenLight, 0.45f, 300, false},
+    {0x474, 0x01, kTerminalOrange, 0.45f, 300, false},
+    {0x474, 0x02, kScreenLight, 0.45f, 300, false},
+    // The blue teleporter pad (RTELEPAD), a faint glow from its pool.
+    {0x188, 0x03, kTeleportLight, 0.5f, 340, false},
+    // Force fields (EWALLEW, EWALLNS: translucent, no colour-cycled pixels).
+    {0x329, 0x7F, kFieldLight, 0.5f, 360, false},
+    {0x32A, 0x7F, kFieldLight, 0.5f, 360, false},
+    // Electric arcs: those of the transformers (SHOCKEW, SHOCKNS, destroyed
+    // with them: TRANSFOR) and of the shock walls (WSHOCKNS, WSHOCKEW).
+    flickering({0x1C2, 0x7F, kArcLight, 1.0f, 380, false}, Fixture::kSpark),
+    flickering({0x1C9, 0x7F, kArcLight, 1.0f, 380, false}, Fixture::kSpark),
+    flickering({0x459, 0x7F, kArcLight, 1.0f, 380, false}, Fixture::kSpark),
+    flickering({0x45A, 0x7F, kArcLight, 1.0f, 380, false}, Fixture::kSpark),
+    // Fires (items, not sprites): what burns (class ITEM, Item::I_create:
+    // 0x085, 0x44A, 0x456, 0x591..0x593), the jets of the flame traps
+    // (FLAMEBOX: 0x43A..0x43C, 0x50A, 0x4CB, 0x518) and the columns of
+    // NOSTRIL (0x515, 0x516). Every frame burns.
+    flickering({0x085, 0x1F, kFireLight, 1.3f, 520, true, false, 30}, Fixture::kFlame),
+    flickering({0x44A, 0x1F, kFireLight, 1.3f, 520, true, false, 30}, Fixture::kFlame),
+    flickering({0x456, 0x1F, kFireLight, 1.3f, 520, true, false, 30}, Fixture::kFlame),
+    flickering({0x591, 0x3FF, kFireLight, 1.3f, 560, true, false, 30}, Fixture::kFlame),
+    flickering({0x592, 0x3FF, kFireLight, 1.1f, 460, true, false, 26}, Fixture::kFlame),
+    flickering({0x593, 0x3FF, kFireLight, 1.3f, 560, true, false, 30}, Fixture::kFlame),
+    flickering({0x43A, 0x3F, kFireLight, 1.4f, 560, true, false, 30}, Fixture::kFlame),
+    flickering({0x43B, 0x0FFFFFFF, kFireLight, 1.4f, 560, true, false, 30}, Fixture::kFlame),
+    flickering({0x43C, 0x1F, kFireLight, 1.4f, 560, true, false, 30}, Fixture::kFlame),
+    flickering({0x50A, 0x0FFFFFFF, kFireLight, 1.4f, 560, true, false, 30}, Fixture::kFlame),
+    flickering({0x4CB, 0x1F, kFireLight, 1.4f, 560, true, false, 30}, Fixture::kFlame),
+    flickering({0x518, 0x3F, kFireLight, 1.4f, 560, true, false, 30}, Fixture::kFlame),
+    flickering({0x515, 0x3FFFFF, kFireLight, 1.4f, 560, true, false, 30}, Fixture::kFlame),
+    flickering({0x516, 0xFFFFF, kFireLight, 1.4f, 560, true, false, 30}, Fixture::kFlame),
 };
 
 // The fixtures' light against the ambient light (LightingOptions::ambient):
@@ -167,11 +224,18 @@ float fixture_boost(float ambient) { return 1 + 1.2f * std::clamp(ambient, 0.0f,
 
 // Broken machines (SHAPES.FLX, their frames once shot, as the usecode or
 // DAMAGE.FLX leave them): they smoulder, a thin wisp rising from them for
-// good. Electronics only: a lamp has none, nor a tank or a desk.
+// good. Electronics only: a lamp has none, nor a tank or a desk. Fires
+// (items, every frame: the fixtures that burn, kFixtures) give off a thick
+// dark smoke as long as they burn.
 struct Smoulder {
+    enum Kind : std::uint8_t {
+        kWisp,   // a thin wisp from the top of the thing
+        kMotor,  // a fan: a thicker smoke from its hub, in the middle of its face
+        kFire,   // a fire: thick dark smoke rising fast from its top
+    };
     std::uint16_t shape;
-    std::uint32_t frames;  // bit n: frame n is broken
-    bool motor = false;    // a fan: a thicker smoke from its hub, in the middle of its face
+    std::uint32_t frames;  // bit n: frame n is broken (a fire: burns)
+    Kind kind = kWisp;
 };
 const Smoulder kSmoulders[] = {
     // Screens and computers.
@@ -189,11 +253,18 @@ const Smoulder kSmoulders[] = {
     {0x3BF, 0xF0}, {0x3C0, 0xF0},  // cabinets
     {0x431, 0xFFFF00},             // server cabinets (8..23)
     {0x409, 0xF0},                 // arcade cabinets
+    {0x2ED, 0x02}, {0x2EE, 0x02},  // computer cabinets
+    {0x37B, 0x02}, {0x37C, 0x02}, {0x380, 0x02}, {0x381, 0x02},  // consoles
+    {0x3AB, 0x30}, {0x474, 0x30},  // wall terminals
+    {0x3D4, 0x0A},                 // black cabinets (1, 3)
+    {0x3E1, 0xF0},                 // beige consoles
+    {0x3E4, 0x2A}, {0x3E5, 0x2A},  // computers (1, 3, 5)
+    {0x433, 0x0C}, {0x434, 0x0C},  // copiers (COPY_EW, COPY_NS)
     {0x39F, 0x01}, {0x3A0, 0x01},  // vending machines, broken (PEPSIEW, PEPSINS replaced)
     {0x40B, 0x02},                 // drinks fridge
     // Fans: shot, they are replaced by these shapes, frame 0.
-    {0x3CE, 0x01, true}, {0x3D3, 0x01, true},  // RFANBADE, RFANBADN (RFANEW, RFANNS)
-    {0x32C, 0x03, true}, {0x32D, 0x03, true},  // MFAN_EW, MFAN_NS broken
+    {0x3CE, 0x01, Smoulder::kMotor}, {0x3D3, 0x01, Smoulder::kMotor},  // RFANBADE, RFANBADN (RFANEW, RFANNS)
+    {0x32C, 0x03, Smoulder::kMotor}, {0x32D, 0x03, Smoulder::kMotor},  // MFAN_EW, MFAN_NS broken
     {0x3E7, 0x0C}, {0x3E8, 0x0C},  // wall vents (WVENTNS, WVENTEW)
     // Power: chargers, generators, transformers.
     {0x136, 0x30}, {0x158, 0x30},  // chargers (RECHAGNS, RECHAGEW: both parts)
@@ -202,7 +273,16 @@ const Smoulder kSmoulders[] = {
     {0x1BF, 0x02},                 // TRANSFOR
     {0x073, 0x02}, {0x0C8, 0x02}, {0x0FF, 0x02}, {0x21C, 0x02}, {0x2A5, 0x02},  // power units
     {0x4F6, 0x0C}, {0x55C, 0x0C},
+    {0x176, 0xF0},                 // power cubes
+    {0x454, 0xF0}, {0x455, 0xF0},  // heaters
+    {0x1F1, 0x38}, {0x1FA, 0x38}, {0x1F0, 0x02}, {0x1F9, 0x02},  // heating conduits
     {0x1B6, 0x20}, {0x1B8, 0x200}, {0x1D7, 0x200},  // cameras (CAMERACO, CAMERANS, CAMERAEW)
+    // Fires: what burns, the flame traps' jets, NOSTRIL's columns.
+    {0x085, 0x1F, Smoulder::kFire}, {0x44A, 0x1F, Smoulder::kFire}, {0x456, 0x1F, Smoulder::kFire},
+    {0x591, 0x3FF, Smoulder::kFire}, {0x592, 0x3FF, Smoulder::kFire}, {0x593, 0x3FF, Smoulder::kFire},
+    {0x43A, 0x3F, Smoulder::kFire}, {0x43B, 0x0FFFFFFF, Smoulder::kFire}, {0x43C, 0x1F, Smoulder::kFire},
+    {0x50A, 0x0FFFFFFF, Smoulder::kFire}, {0x4CB, 0x1F, Smoulder::kFire}, {0x518, 0x3F, Smoulder::kFire},
+    {0x515, 0x3FFFFF, Smoulder::kFire}, {0x516, 0xFFFFF, Smoulder::kFire},
 };
 constexpr std::size_t kMaxSmoulder = 64;
 
@@ -268,6 +348,19 @@ std::uint32_t hash32(std::uint32_t x) {
     x *= 0x846ca68bu;
     x ^= x >> 16;
     return x;
+}
+
+// A flickering fixture's strength now (Fixture::flicker), times its own.
+// @orig none: port lighting (light fixtures)
+float flicker_at(const Fixture& fx, ObjId id, std::uint32_t ticks) {
+    if (fx.flicker == Fixture::kFlame) {
+        const float t = float(ticks);
+        return 0.8f + 0.12f * std::sin(t * 0.9f + id * 0.7f) + 0.08f * std::sin(t * 2.3f + id * 1.3f);
+    }
+    // An arc: a new strength every 4 ticks, now and then almost out.
+    const std::uint32_t step = ticks / 4;
+    const float r = float(hash32((step + id * 7919u) * 2654435761u) & 0xFF) / 255.0f;
+    return r < 0.15f ? 0.25f : 0.6f + 0.5f * r;
 }
 
 float lattice(std::int32_t x, std::int32_t y, std::int32_t z) {
@@ -870,8 +963,8 @@ void WorldLighting::steam(std::vector<PuffState>& out) const {
     }
 }
 
-// Thin smoke rising from the broken electric things in view (kSmoulders):
-// as the steam, puffs that need no memory, each slot of an item coming back
+// Thin smoke rising from the broken electric things in view (kSmoulders),
+// thick smoke from the fires: as the steam, puffs that need no memory, each slot of an item coming back
 // every few seconds, so that it smoulders as soon as it is seen.
 // @orig none: port lighting (smoke)
 void WorldLighting::smoulder(std::vector<PuffState>& out) const {
@@ -882,7 +975,7 @@ void WorldLighting::smoulder(std::vector<PuffState>& out) const {
         const Item& item = *d.item;
         const Smoulder* kind = item.sprite_only ? nullptr : smoulders(item.shape, item.frame);
         if (!kind) continue;
-        const bool motor = kind->motor;
+        const bool motor = kind->kind == Smoulder::kMotor, fire = kind->kind == Smoulder::kFire;
         // From the top of the thing, in the middle of its box. A fan's motor:
         // the middle of its face (the box's middle, on its near side along
         // its thin axis), a little out of it.
@@ -893,9 +986,9 @@ void WorldLighting::smoulder(std::vector<PuffState>& out) const {
             else top.y = float(d.y) + 10;
         }
         // Its slots share a period, evenly spaced: a steady thread.
-        const int slots = motor ? 8 : 6;
+        const int slots = motor || fire ? 8 : 6;
         const std::uint32_t own = hash32(item.id * 2654435761u);
-        const float period = (motor ? 3.4f : 2.6f) + 0.8f * puff_random(own, 1);
+        const float period = (motor ? 3.4f : fire ? 2.2f : 2.6f) + 0.8f * puff_random(own, 1);
         for (int k = 0; k < slots && count < kMaxSmoulder; ++k) {
             const std::uint32_t serial = hash32(own ^ static_cast<std::uint32_t>(k) * 83492791u);
             const float phase = t / period + puff_random(own, 2) + (k + 0.4f * puff_random(serial, 2)) / slots;
@@ -904,7 +997,14 @@ void WorldLighting::smoulder(std::vector<PuffState>& out) const {
             const float age = u * period;
             PuffState s;
             const Vec3 drift{(puff_random(round, 5) * 2 - 1) * 6, (puff_random(round, 6) * 2 - 1) * 6, 0};
-            if (motor) {
+            if (fire) {
+                // Out of the flames' top, thick and dark, rising fast and
+                // spreading; hot at first.
+                s.centre = top + drift * (age * 1.5f) + Vec3{0, 0, 70 * age};
+                s.radius = 14 + 56 * u;
+                s.density = 0.035f * smoothstep(0.0f, 0.1f, u) * (1 - smoothstep(0.35f, 1.0f, u));
+                s.grey = 0.15f;
+            } else if (motor) {
                 // Thick and dark, pushed out of the face, then rising.
                 s.centre = top + drift * age + Vec3{0, 0, 2 + 48 * age};
                 s.radius = 12 + 48 * u;
@@ -917,10 +1017,10 @@ void WorldLighting::smoulder(std::vector<PuffState>& out) const {
                 s.grey = 0.5f;
             }
             if (s.density <= 1e-5f) continue;
-            s.heat = 0;
+            s.heat = fire ? 0.35f * (1 - smoothstep(0.0f, 0.25f, u)) : 0.0f;
             s.seed = puff_random(round, 8) * 100.0f;
             s.time = age;
-            s.feature = 9;
+            s.feature = fire ? 14.0f : 9.0f;
             out.push_back(s);
             ++count;
         }
@@ -1059,6 +1159,7 @@ void WorldLighting::gather_lights(const World& world, const LightingOptions& opt
                 }
                 float strength = fx->strength * fixture_boost(opt.ambient);
                 if (fx->levels) strength *= fx->levels[d.item->frame];  // lit frames only: 0..2
+                if (fx->flicker != Fixture::kSteady) strength *= flicker_at(*fx, d.item->id, ticks_);
                 if (fx->pulse) strength *= 0.3f + 0.7f * (0.5f + 0.5f * std::sin(ticks_ * (2 * 3.14159265f * 2 / 60)));
                 PointLight light{at, fx->colour * strength, fx->radius, d.item->id};
                 light.halo = fx->halo;

@@ -549,6 +549,157 @@ void test_save_round_trip(const std::filesystem::path& data) {
         CHECK(list_diffs == 0);
     }
 }
+
+// Port lighting, the shapes added after a review of SHAPES.FLX: a map of
+// FIXED.DAT, its first item of a shape (whole and in view), and what it gives.
+struct LightingScene {
+    std::vector<ShapeInfo> typeflags;
+    World w;
+    FlexArchive shapes_flex;
+    ShapeCache shapes;
+    XformTable xform;
+    Palette palette;
+    WorldLighting lighting;
+    explicit LightingScene(const std::filesystem::path& data, std::size_t map)
+        : typeflags(load_typeflags(data / "STATIC/TYPEFLAG.DAT")), w(typeflags),
+          shapes_flex(FlexArchive::open(data / "STATIC/SHAPES.FLX")), shapes(shapes_flex, ShapeLayout::World),
+          xform(XformTable::load(data / "STATIC/XFORMPAL.DAT")), palette(Palette::load(data / "STATIC/GAMEPAL.PAL")),
+          lighting(shapes, xform) {
+        w.load_fixed_map(FlexArchive::open(data / "STATIC/FIXED.DAT"), map);
+        w.expand_glob_eggs(FlexArchive::open(data / "STATIC/GLOB.FLX"));
+    }
+    // The first item of `shape` on the map whose frame is in `frames`.
+    Item* first(std::uint16_t shape, std::uint32_t frames = ~0u) {
+        ObjId found = 0;
+        w.for_each([&](const Item& item) {
+            if (!found && item.shape == shape && item.frame < 32 && (frames >> item.frame & 1) && !item.off_map &&
+                item.parent == 0 && !(item.flags & (kItemInvisible | kItemContained)))
+                found = item.id;
+        });
+        return found ? w.get(found) : nullptr;
+    }
+    // The lights of `item`, seen from a view centred on it, at `ticks`.
+    std::vector<PointLight> lights(const Item& item, std::uint32_t ticks = 0) {
+        return lights_owned_by(w, shapes, xform, palette, lighting,
+                               {world_from_usecode(item.x), world_from_usecode(item.y), item.z}, item.id, ticks);
+    }
+    // The puffs of the last shade with this noise feature (9: wisps, 14: fire smoke).
+    int puffs(float feature) const {
+        int n = 0;
+        for (const PuffState& p : lighting.puffs_shown()) n += p.feature == feature;
+        return n;
+    }
+};
+
+// Lamps on desks and standing, the blue teleporter, force fields: one light
+// while whole; a lamp shot, none and no smoke.
+void test_reviewed_fixtures(const std::filesystem::path& data) {
+    LightingScene s(data, 1);
+    for (const auto& [shape, frames, broken] :
+         {std::tuple{std::uint16_t{0x406}, 0x0Fu, 4}, std::tuple{std::uint16_t{0x414}, 0x07u, 3}}) {
+        Item* lamp = s.first(shape, frames);
+        CHECK(lamp);
+        if (!lamp) continue;
+        const auto lit = s.lights(*lamp);
+        CHECK(lit.size() == 1);
+        if (lit.size() == 1) CHECK(lit[0].halo > 0 && lit[0].color.x >= lit[0].color.z);
+        lamp->frame = static_cast<std::uint16_t>(broken);
+        CHECK(s.lights(*lamp).empty() && s.puffs(9) == 0);
+    }
+    for (const std::uint16_t shape : {std::uint16_t{0x188}, std::uint16_t{0x329}, std::uint16_t{0x32A}}) {
+        const Item* item = s.first(shape);
+        CHECK(item);
+        if (!item) continue;
+        const auto lit = s.lights(*item);
+        CHECK(lit.size() == 1);
+        if (lit.size() == 1) CHECK(lit[0].color.z > lit[0].color.x);  // blue
+    }
+}
+
+// The transformers' electric arcs (SHOCKEW 0x1C2) light blue and flicker;
+// a fire (0x085, what the class ITEM creates when something burns) lights
+// orange, wavering, and gives off thick smoke.
+void test_arcs_and_fires(const std::filesystem::path& data) {
+    LightingScene s(data, 1);
+    Item* arc = s.first(0x1C2);
+    CHECK(arc);
+    if (arc) {
+        float lo = 1e9f, hi = 0;
+        for (std::uint32_t t = 0; t < 120; t += 4) {
+            const auto lit = s.lights(*arc, t);
+            CHECK(lit.size() == 1);
+            if (lit.size() != 1) break;
+            CHECK(lit[0].color.z > lit[0].color.x);
+            lo = std::min(lo, lit[0].color.z);
+            hi = std::max(hi, lit[0].color.z);
+        }
+        std::printf("electric arc: blue %.2f..%.2f\n", lo, hi);
+        CHECK(hi > 1.5f * lo);
+    }
+    Item* fire = s.first(0x406, 0x0F);  // a desk lamp, made a fire
+    CHECK(fire);
+    if (!fire) return;
+    const int smoke_before = (s.lights(*fire), s.puffs(14));
+    CHECK(smoke_before == 0);
+    fire->shape = 0x085;
+    fire->frame = 2;
+    const auto a = s.lights(*fire, 10), b = s.lights(*fire, 47);
+    CHECK(a.size() == 1 && b.size() == 1);
+    if (a.size() == 1 && b.size() == 1) {
+        std::printf("fire: red %.2f / %.2f, smoke puffs %d\n", a[0].color.x, b[0].color.x, s.puffs(14));
+        CHECK(a[0].color.x > 2 * a[0].color.z && std::abs(a[0].color.x - b[0].color.x) > 0.01f);
+    }
+    CHECK(s.puffs(14) >= 3);
+}
+
+// A wall terminal (0x3AB, map 10): an orange screen (frame 0) lights
+// orange, a blue one (1) blue; broken (4), none, and it smoulders. A console
+// of map 1 (0x37B) broken (frame 1) smoulders too.
+void test_terminals_and_consoles(const std::filesystem::path& data) {
+    {
+        LightingScene s(data, 10);
+        Item* term = s.first(0x3AB, 0x03);
+        CHECK(term);
+        if (term) {
+            term->frame = 0;
+            const auto orange = s.lights(*term);
+            term->frame = 1;
+            const auto blue = s.lights(*term);
+            CHECK(orange.size() == 1 && blue.size() == 1);
+            if (orange.size() == 1) CHECK(orange[0].color.x > orange[0].color.z);
+            if (blue.size() == 1) CHECK(blue[0].color.z > blue[0].color.x);
+            term->frame = 4;
+            CHECK(s.lights(*term, 120).empty() && s.puffs(9) >= 2);
+        }
+    }
+    LightingScene s(data, 1);
+    Item* console = s.first(0x37B, 0x01);
+    CHECK(console);
+    if (!console) return;
+    s.lights(*console, 120);
+    CHECK(s.puffs(9) == 0);
+    console->frame = 1;
+    s.lights(*console, 120);
+    CHECK(s.puffs(9) >= 2);
+}
+
+// The green puddle G_POOL (0x15D, map 13) is a liquid: it lights around it
+// in green and steams.
+void test_green_puddle(const std::filesystem::path& data) {
+    LightingScene s(data, 13);
+    const Item* pool = s.first(0x15D);
+    CHECK(pool);
+    if (!pool) return;
+    std::optional<PointLight> glow;
+    for (std::uint32_t t : {60u, 240u, 600u}) {
+        s.lights(*pool, t);
+        for (const PointLight& l : s.lighting.lights())
+            if (l.liquid) glow = l;
+        if (s.puffs(40) > 0) break;
+    }
+    CHECK(glow && glow->color.y > glow->color.x);
+    CHECK(s.puffs(40) > 0);
+}
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -563,6 +714,10 @@ int main(int argc, char** argv) {
     test_broken_charger_smoulders(data);
     test_vending_machine_lights(data);
     test_alarm_lights(data);
+    test_reviewed_fixtures(data);
+    test_arcs_and_fires(data);
+    test_terminals_and_consoles(data);
+    test_green_puddle(data);
     if (have_test_saves(data)) {
         test_translucent_windows(data);
         test_save_round_trip(data);
