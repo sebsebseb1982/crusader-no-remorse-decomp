@@ -101,9 +101,11 @@ constexpr std::size_t kMaxSteam = 128;
 // they are whole give light, their broken frames none, so that a lamp shot
 // goes out; a shape may have one entry per light colour. `bulb`: the light
 // is at the sprite's brightest pixels (the bulb), else in the middle of the
-// box (screens, whose frame is bright too). `pulse`: the light swells and
-// fades, twice a second (the alarm lights, whose lit frames are those of an
-// alert: set_alert, world_intrinsics.hpp). `halo`: the glow round the bulb
+// box (screens, whose frame is bright too). `pulse`: the alarm lights, whose
+// lit frames are those of an alert (set_alert, world_intrinsics.hpp) and
+// whose red is colour-cycled (entries 8 and 10, two ramps half a cycle apart:
+// palette_cycle.hpp): the light stays at the middle of those pixels and is as
+// bright as they are now, so that it pulses with the sprite. `halo`: the glow round the bulb
 // (PointLight::halo), lamps only: a screen's light comes from its whole face.
 // `face`: a machine lit from inside behind its glass (vending machines, a
 // drinks fridge), its glass on the box's +x (1) or +y (2) face: the light
@@ -1129,7 +1131,7 @@ void WorldLighting::gather_lights(const World& world, const LightingOptions& opt
                     for (int y = 0; y < f.h; ++y) {
                         for (int x = 0; x < f.w; ++x) {
                             const int c = f.color[y * f.w + x];
-                            if (c < 0 || lum_[c] < 0.85f) continue;
+                            if (c < 0 || (fx->pulse ? !glowing(c) : lum_[c] < 0.85f)) continue;
                             su += float(d.mirrored ? f.w - 1 - x : x);
                             sv += float(y);
                             ++bright;
@@ -1160,7 +1162,12 @@ void WorldLighting::gather_lights(const World& world, const LightingOptions& opt
                 float strength = fx->strength * fixture_boost(opt.ambient);
                 if (fx->levels) strength *= fx->levels[d.item->frame];  // lit frames only: 0..2
                 if (fx->flicker != Fixture::kSteady) strength *= flicker_at(*fx, d.item->id, ticks_);
-                if (fx->pulse) strength *= 0.3f + 0.7f * (0.5f + 0.5f * std::sin(ticks_ * (2 * 3.14159265f * 2 / 60)));
+                if (fx->pulse) {
+                    float lit = 0;
+                    for (const auto& [c, k] : f.histogram)
+                        if (glowing(c)) lit += std::max({lin_[c].x, lin_[c].y, lin_[c].z}) * float(k);
+                    strength *= f.glow_pixels > 0 ? lit / float(f.glow_pixels) : 1.0f;
+                }
                 PointLight light{at, fx->colour * strength, fx->radius, d.item->id};
                 light.halo = fx->halo;
                 light.halo_gain = fx->halo_gain;

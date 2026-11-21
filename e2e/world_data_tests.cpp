@@ -430,8 +430,9 @@ void test_broken_charger_smoulders(const std::filesystem::path& data) {
 }
 
 // Port lighting: the alarm light 3868 (shape 0x174) of map 1 is dark until an
-// alert (set_alert: frame 1), then pulses red, its one light in place of the
-// one of its colour-cycled pixels; broken (frame 2), none.
+// alert (set_alert: frame 1), then pulses red with its colour-cycled pixels
+// (entries 8 and 10), its one light in place of theirs, which keeps its place
+// whatever those pixels show (no beacon going round); broken (frame 2), none.
 void test_alarm_lights(const std::filesystem::path& data) {
     constexpr ObjId kAlarm = 3868;
     const auto typeflags = load_typeflags(data / "STATIC/TYPEFLAG.DAT");
@@ -446,20 +447,31 @@ void test_alarm_lights(const std::filesystem::path& data) {
     CHECK(alarm && alarm->shape == 0x174 && alarm->frame == 0);
     if (!alarm) return;
     WorldLighting lighting(shapes, xform);
-    auto lights_at = [&](std::uint32_t ticks) {
-        return lights_owned_by(w, shapes, xform, palette, lighting, {31900, 35400, 0}, kAlarm, ticks);
+    // The cycled reds (palette_cycle.hpp) at a moment of the cycle.
+    auto lights_at = [&](std::uint8_t red8, std::uint8_t red10) {
+        Palette shown = palette;
+        shown.colors[8] = {red8, 0, 0};
+        shown.colors[10] = {red10, 0, 0};
+        return lights_owned_by(w, shapes, xform, shown, lighting, {31900, 35400, 0}, kAlarm);
     };
-    CHECK(lights_at(0).empty());
+    CHECK(lights_at(255, 255).empty());
     set_alert(w, true);
     CHECK(alarm->frame == 1);
-    const auto peak = lights_at(8), low = lights_at(23);  // 2 pulses a second: peak at 7.5, low at 22.5
-    CHECK(peak.size() == 1 && low.size() == 1);
-    if (peak.size() == 1 && low.size() == 1) {
+    const auto peak = lights_at(255, 255), low = lights_at(100, 100), dark = lights_at(0, 0);
+    const auto swap1 = lights_at(255, 0), swap2 = lights_at(0, 255);
+    CHECK(peak.size() == 1 && low.size() == 1 && swap1.size() == 1 && swap2.size() == 1);
+    if (peak.size() == 1 && low.size() == 1 && swap1.size() == 1 && swap2.size() == 1) {
         std::printf("alarm light: red %.2f at its peak, %.2f at its low\n", peak[0].color.x, low[0].color.x);
-        CHECK(peak[0].color.x > 4 * peak[0].color.y && low[0].color.x * 2 < peak[0].color.x);
+        CHECK(peak[0].color.x > 4 * peak[0].color.y && low[0].color.x * 4 < peak[0].color.x);
+        CHECK(dark.empty() || dark[0].color.x < 1e-3f);
+        // Whichever ramp is bright, the light keeps its place.
+        auto same = [](const Vec3& a, const Vec3& b) {
+            return std::abs(a.x - b.x) < 0.01f && std::abs(a.y - b.y) < 0.01f && std::abs(a.z - b.z) < 0.01f;
+        };
+        CHECK(same(swap1[0].pos, swap2[0].pos) && same(peak[0].pos, low[0].pos));
     }
     alarm->frame = 2;
-    CHECK(lights_at(8).empty());
+    CHECK(lights_at(255, 255).empty());
 }
 
 // Port lighting: a shot of a firearm lights a short warm flash at the muzzle,
