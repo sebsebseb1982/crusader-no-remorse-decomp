@@ -12,7 +12,8 @@ namespace crusader {
 
 namespace {
 
-// DS:208B and DS:2093: candidate offsets from the goal's direction.
+// Candidate offsets from the goal's direction: DS:208B (US DS:2029) when +0x4F
+// is set, DS:2093 (US DS:2031) when it is clear.
 constexpr std::array<int, 8> kOffsets = {0, 2, -2, 4, -4, 6, -6, -8};
 constexpr std::array<int, 8> kMirroredOffsets = {0, -2, 2, -4, 4, -6, 6, -8};
 
@@ -77,7 +78,10 @@ int PathfinderProcess::choose_direction(World::Point& pos) {
     std::array<int, 9> candidates{};
     int first = 0;
     if (!wall_) {
-        const auto& offsets = mirror_table_ ? kMirroredOffsets : kOffsets;
+        // The wall following below turns back towards the wall with these
+        // tables; the other way round, it turns away and walks in a square
+        // (GitHub issue #27).
+        const auto& offsets = mirror_table_ ? kOffsets : kMirroredOffsets;
         for (int i = 0; i < 8; ++i) candidates[i] = (d + offsets[i]) & 0xF;
     } else {
         const int turn = (!mirror_table_ == !side_) ? 2 : -2;

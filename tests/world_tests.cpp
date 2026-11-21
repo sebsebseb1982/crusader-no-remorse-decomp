@@ -678,6 +678,76 @@ void test_pathfinder_test_walk() {
     CHECK(dir == 0 || dir == 8);
 }
 
+// ATTACK.C 1118:08E4, GitHub issue #27 (guards pacing in squares behind a
+// wall): the process draws +0x4F at random; set, the candidates are d + DS:208B
+// {0, +2, -2, ...}, clear, d + DS:2093 {0, -2, +2, ...}, and wall following
+// turns back towards the wall first, so the NPC slides along it. The port took
+// the tables the other way round: it stepped aside, then turned away from the
+// wall each time, walking a small square beside it (north, west, south, east).
+// One walk of 12 steps, as the attack process's approach (1110:141B).
+void test_pathfinder_follows_wall() {
+    constexpr std::size_t table = AnimDat::kShapes * 4, action = table + AnimDat::kActions * 4;
+    std::vector<std::uint8_t> bytes(action + 4 + 8 * 4 * 8);
+    auto u32 = [&](std::size_t at, std::size_t value) {
+        for (int k = 0; k < 4; ++k) bytes[at + k] = static_cast<std::uint8_t>(value >> (k * 8));
+    };
+    u32(4, table);
+    u32(table + 4, action);
+    bytes[action] = 4;
+    bytes[action + 1] = 1;
+    bytes[action + 2] = 1;
+    for (std::size_t f = 0; f < 8 * 4; ++f) {
+        bytes[action + 4 + f * 8 + 4] = 4;  // distance 4 * 2 = 8
+        bytes[action + 4 + f * 8 + 5] = 2;  // ground check
+    }
+    const AnimDat anims = AnimDat::parse(bytes);
+    std::vector<ShapeInfo> tf(4);
+    tf[1].flags = ShapeInfo::kSolid | ShapeInfo::kNpc;
+    tf[1].footpad_x = tf[1].footpad_y = tf[1].footpad_z = 1;
+    tf[2].flags = tf[3].flags = ShapeInfo::kSolid | ShapeInfo::kFixed;
+    tf[2].footpad_x = tf[2].footpad_y = 16;  // floor 256 x 256
+    tf[3].footpad_x = 1;                     // wall 16 x 256 x 64
+    tf[3].footpad_y = 16;
+    tf[3].footpad_z = 8;
+    int slid = 0, mirrored = 0;
+    for (std::uint32_t seed = 1; seed <= 8; ++seed) {
+        World w(tf);
+        for (int x : {255, 511}) {
+            for (int y : {255, 511}) {
+                w.create(2, 0);
+                w.pop_to_coords(x, y, 0);
+            }
+        }
+        w.create(3, 0);
+        w.pop_to_coords(255, 255, 0);  // x 240..255, y 0..255
+        Item npc;
+        npc.id = 2;
+        npc.shape = 1;
+        npc.x = npc.y = 160;
+        w.add_with_id(npc);
+        w.set_camera(256, 256, 0);
+        w.state.controlled_npc = 0;
+        w.state.crt_rand_state = seed * 0x10001u;
+        std::uint32_t probe = seed * 0x10001u;
+        const int flag = crt_rand_below(probe, 2);  // the process's draw
+        mirrored += flag;
+        Kernel k;
+        const Pid pid = walk_to(k, w, anims, 2, 0, {340, 160, 0}, 0xC, 0x40, false);
+        for (int f = 0; f < 3000 && k.get(pid); ++f) {
+            k.advance_time(16667);
+            k.run_slice();
+        }
+        // 4 steps to the wall (x 224), the other 8 along it, north or south.
+        const Item* self = w.get(2);
+        const bool along = self && self->x >= 216 && std::abs(self->y - 160) >= 64;
+        std::printf("path finder along a wall: seed %u, flag %d, ends at (%d, %d)\n", seed, flag,
+                    self ? self->x : -1, self ? self->y : -1);
+        slid += along;
+    }
+    CHECK(mirrored > 0 && mirrored < 8);
+    CHECK(slid == 8);
+}
+
 // TYPE_1108_0708, activity 3 (walk): an NPC between two walls, blocked ahead
 // then behind, takes activity 7 for shapes 0x2F5, 0x2F6, 0x2F7, 0x344, 0x597
 // and attacks (5) otherwise. The port had it the other way round.
@@ -1572,6 +1642,7 @@ int main() {
     test_collisions();
     test_walk_alignment();
     test_pathfinder_test_walk();
+    test_pathfinder_follows_wall();
     test_walk_activity_blocked();
     test_scripted_camera();
     test_support_and_fall();

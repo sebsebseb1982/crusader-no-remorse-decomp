@@ -13,10 +13,12 @@
 //   d = 8-direction from p to the goal. When p is closer to the goal (x, y
 //   Chebyshev) than ever before, a test walk towards d is made; if it passes,
 //   wall following stops.
-//   Candidates: d + {0, +2, -2, +4, -4, +6, -6, -8} (or the mirror table
-//   {0, -2, +2, ...}, chosen at random when the process starts). Following a
-//   wall: from the reverse of the last direction, turning by 2 the way of the
-//   chosen side, the candidates 2, 4, 5, 6, 7 of that list.
+//   Candidates: d + {0, +2, -2, +4, -4, +6, -6, -8} when +0x4F (drawn at
+//   random when the process starts) is set, d + {0, -2, +2, ...} when it is
+//   clear. Following a wall: from the reverse of the last direction, turning
+//   by 2 the way of the chosen side, the candidates 2, 4, 5, 6, 7 of that
+//   list: a quarter turn back towards the wall first, then straight on, then
+//   away from it.
 //   The first candidate whose test walk passes is taken. Reaching the goal
 //   item (the test walk blocked first by it, sweep +0x49, when it is a solid
 //   shape with height) or the stop distance ends the walk after this step. When none passes:
@@ -81,7 +83,7 @@ private:
     bool done_ = false;           // +0x4A
     bool final_turn_;             // +0x4B
     bool stance_ = true;          // +0x4C
-    bool mirror_table_ = false;   // +0x4F
+    bool mirror_table_ = false;   // +0x4F: set, candidates d + {0, +2, -2, ...}
 };
 
 }  // namespace crusader
