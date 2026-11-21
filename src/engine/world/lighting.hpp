@@ -237,6 +237,7 @@ private:
     void liquid_lights(std::vector<PointLight>& lights) const;
     void steam(std::vector<PuffState>& out) const;
     void smoulder(std::vector<PuffState>& out) const;
+    std::optional<std::pair<float, float>> hole(std::uint16_t shape, std::uint32_t frame, std::uint32_t whole) const;
     void spawn_smoke();
     bool on_surface(const Vec3& p) const;
     void puff_states(std::vector<PuffState>& out) const;
@@ -297,6 +298,8 @@ private:
     std::vector<SmokePuff> puffs_;
     std::vector<PuffState> puff_now_;  // far to near
     std::unordered_map<ObjId, std::uint16_t> sprites_seen_;  // sprite item -> shape
+    // A leak's hole by shape << 16 | frame << 8 | whole frame (hole()).
+    mutable std::unordered_map<std::uint32_t, std::optional<std::pair<float, float>>> holes_;
     std::unordered_map<ObjId, Vec3> shot_start_;  // projectile -> where it was first seen
     std::uint32_t puff_serial_ = 0;
 

@@ -717,6 +717,15 @@ void test_pierced_pipes_leak(const std::filesystem::path& data) {
     if (!pipe) return;
     s.lights(*pipe, 120);
     const int pierced = s.puffs(7);
+    // Out of the hole, low on this upright pipe: the youngest puff starts
+    // in the lower half of its box, not at its top.
+    float low = 1e9f;
+    for (const PuffState& p : s.lighting.puffs_shown())
+        if (p.feature == 7) low = std::min(low, p.centre.z / kLightZScale);
+    const ShapeInfo* info = s.w.shape_info(pipe->shape);
+    const float mid = pipe->z + (info ? info->footpad_z * kFootpadZ : 0) / 2.0f;
+    std::printf("pipe: lowest steam at z %.1f, the box from %d, its middle %.1f\n", low, pipe->z, mid);
+    CHECK(low < mid);
     pipe->frame = 0;
     s.lights(*pipe, 120);
     const int mended = s.puffs(7);

@@ -245,10 +245,13 @@ enum class Plume : std::uint8_t {
     kHeat,   // a glowing core: a wide, faint haze over its surface
     kSteam,  // a leak: small white puffs, quickly gone
 };
+// `mended`: a leak whose frame less this is the same thing whole (a pierced
+// pipe): the plume comes out of the hole, the pixels that differ.
 struct Smoulder {
     std::uint16_t shape;
     std::uint32_t frames;  // bit n: frame n gives off smoke
     Plume plume = Plume::kWisp;
+    std::uint8_t mended = 0;
 };
 const Smoulder kSmoulders[] = {
     // Screens and computers.
@@ -300,12 +303,12 @@ const Smoulder kSmoulders[] = {
     {0x520, 0x0C, Plume::kSteam}, {0x521, 0x0C, Plume::kSteam},
     // Pierced pipes leak steam, some from the start (placed so on the maps),
     // others once shot: straight pipes (1 pierced) and joints (4..7).
-    {0x02E, 0x02, Plume::kSteam}, {0x02F, 0x02, Plume::kSteam}, {0x03D, 0x02, Plume::kSteam},
-    {0x03E, 0x02, Plume::kSteam}, {0x03F, 0x02, Plume::kSteam}, {0x04C, 0x02, Plume::kSteam},
-    {0x04E, 0x02, Plume::kSteam}, {0x050, 0x02, Plume::kSteam}, {0x051, 0x02, Plume::kSteam},
-    {0x052, 0x02, Plume::kSteam}, {0x053, 0x02, Plume::kSteam}, {0x054, 0x02, Plume::kSteam},
-    {0x03C, 0xF0, Plume::kSteam}, {0x041, 0xF0, Plume::kSteam}, {0x056, 0xF0, Plume::kSteam},
-    {0x057, 0xF0, Plume::kSteam},
+    {0x02E, 0x02, Plume::kSteam, 1}, {0x02F, 0x02, Plume::kSteam, 1}, {0x03D, 0x02, Plume::kSteam, 1},
+    {0x03E, 0x02, Plume::kSteam, 1}, {0x03F, 0x02, Plume::kSteam, 1}, {0x04C, 0x02, Plume::kSteam, 1},
+    {0x04E, 0x02, Plume::kSteam, 1}, {0x050, 0x02, Plume::kSteam, 1}, {0x051, 0x02, Plume::kSteam, 1},
+    {0x052, 0x02, Plume::kSteam, 1}, {0x053, 0x02, Plume::kSteam, 1}, {0x054, 0x02, Plume::kSteam, 1},
+    {0x03C, 0xF0, Plume::kSteam, 4}, {0x041, 0xF0, Plume::kSteam, 4}, {0x056, 0xF0, Plume::kSteam, 4},
+    {0x057, 0xF0, Plume::kSteam, 4},
 };
 constexpr std::size_t kMaxSmoulder = 96;
 
@@ -996,6 +999,38 @@ void WorldLighting::steam(std::vector<PuffState>& out) const {
 // the broken electric things, fires, glowing cores, leaks. As the steam,
 // puffs that need no memory, each slot of an item coming back every few
 // seconds, so that it smokes as soon as it is seen.
+// Where a leak's hole is in `frame` of `shape` (frame coordinates): the
+// middle of its opaque pixels that differ from `whole`, the same thing whole.
+// @orig none: port lighting (smoke)
+std::optional<std::pair<float, float>> WorldLighting::hole(std::uint16_t shape, std::uint32_t frame,
+                                                           std::uint32_t whole) const {
+    const std::uint32_t key = std::uint32_t{shape} << 16 | frame << 8 | whole;
+    if (const auto it = holes_.find(key); it != holes_.end()) return it->second;
+    std::optional<std::pair<float, float>> found;
+    const Shape* s = shapes_.get(shape);
+    if (s && frame < s->frames().size() && whole < s->frames().size()) {
+        const ShapeFrame& a = s->frames()[frame];
+        const ShapeFrame& b = s->frames()[whole];
+        float sx = 0, sy = 0;
+        int n = 0;
+        for (int y = 0; y < a.height; ++y) {
+            for (int x = 0; x < a.width; ++x) {
+                const int c = a.pixel(x, y);
+                if (c < 0) continue;
+                const int bx = x - a.xoff + b.xoff, by = y - a.yoff + b.yoff;
+                const bool inside = bx >= 0 && by >= 0 && bx < b.width && by < b.height;
+                if (inside && b.pixel(bx, by) == c) continue;
+                sx += float(x);
+                sy += float(y);
+                ++n;
+            }
+        }
+        if (n > 0) found = std::pair{sx / n, sy / n};
+    }
+    holes_.emplace(key, found);
+    return found;
+}
+
 // @orig none: port lighting (smoke)
 void WorldLighting::smoulder(std::vector<PuffState>& out) const {
     const float t = ticks_ / 60.0f;
@@ -1014,6 +1049,20 @@ void WorldLighting::smoulder(std::vector<PuffState>& out) const {
             top.z = (d.z + d.z_top) * 0.5f * kLightZScale;
             if (d.x - d.x_left < d.y - d.y_far) top.x = float(d.x) + 10;
             else top.y = float(d.y) + 10;
+        }
+        // A leak: out of the hole, at the box's middle depth (as a lamp's
+        // bulb), just in front of the pipe, blown out towards the viewer.
+        Vec3 blow{};
+        if (kind->mended && item.frame >= kind->mended) {
+            if (const auto at = hole(item.shape, item.frame, item.frame - kind->mended)) {
+                const float u = float(d.mirrored ? d.left + (d.frame->width - 1) - at->first : d.left + at->first) -
+                                float(d.sx);
+                const float v = float(d.top) + at->second - float(d.sy);
+                const float depth = (d.x_left - d.x + d.y_far - d.y) * 0.5f;
+                top = Vec3{d.x + 2 * u + depth * 0.5f, d.y - 2 * u + depth * 0.5f, (d.z - v + depth / 8) * kLightZScale} +
+                      kToViewer * 8.0f;
+                blow = Vec3{kToViewer.x, kToViewer.y, 0} * 30.0f;
+            }
         }
         // Its slots share a period, evenly spaced: a steady thread.
         int slots = 6;
@@ -1074,7 +1123,7 @@ void WorldLighting::smoulder(std::vector<PuffState>& out) const {
             }
             case Plume::kSteam:
                 // White, blown out and quickly gone.
-                s.centre = top + drift * (2.0f * age) + Vec3{0, 0, 2 + 40 * age};
+                s.centre = top + (drift * 2.0f + blow) * age + Vec3{0, 0, 2 + 40 * age};
                 s.radius = 6 + 36 * u;
                 s.density = 0.06f * smoothstep(0.0f, 0.08f, u) * (1 - smoothstep(0.3f, 1.0f, u));
                 s.grey = 0.85f;
