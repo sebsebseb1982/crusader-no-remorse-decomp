@@ -614,6 +614,62 @@ void test_new_game(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
+// Port lighting (smoke): a security camera shot leaves smoke where it was,
+// then smoulders. Save CAM1: camera 7645 (shape 0x1B8, frame 4) on a wall
+// in view. Its explosion sprite is raised over the scene and moved by its
+// shape's offset (sprite_process.hpp); the smoke started under that anchor,
+// some 45 pixels below the camera. Broken (frame 9), the camera keeps a thin
+// wisp rising from it.
+void test_camera_smoke(const std::filesystem::path& data) {
+    constexpr ObjId kCamera = 7645;
+    Game game(data, test_saves(data));
+    game.config().lighting = true;
+    game.config().volumetric_smoke = true;
+    game.load_save_file(test_saves(data) / "camera-cassee-fumee.sav");
+    World& w = game.world();
+    const Item* camera = w.get(kCamera);
+    CHECK(camera && camera->shape == 0x1B8 && camera->frame != 9);
+    if (!camera) return;
+    // Its screen place (lighting space projection, the view's corner aside).
+    const float cx = float(world_from_usecode(camera->x)), cy = float(world_from_usecode(camera->y));
+    const float cam_sx = (cx - cy) * 0.25f, cam_sy = (cx + cy) * 0.125f - float(camera->z);
+    Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+    std::vector<std::uint32_t> argb;
+    auto frame = [&] {
+        game.update(kFrameUs);
+        game.render(screen);
+        game.render_lit(screen, argb);
+    };
+    frame();
+    apply_damage(game.kernel(), w, game.animations(), kCamera, 1, 0, 200, 2);
+    // The blast's smoke, a few frames on: its middle on the screen.
+    float sx = 0, sy = 0;
+    int blast = 0;
+    for (int f = 0; f < 6; ++f) frame();
+    for (const PuffState& p : game.lighting()->puffs_shown()) {
+        if (p.grey != 0.3f) continue;  // the explosion's puffs
+        sx += (p.centre.x - p.centre.y) * 0.25f;
+        sy += (p.centre.x + p.centre.y) * 0.125f - p.centre.z / kLightZScale;
+        ++blast;
+    }
+    if (blast) sx /= blast, sy /= blast;
+    std::printf("camera smoke: %d blast puffs, middle %+.0f %+.0f px from the camera\n", blast, sx - cam_sx,
+                sy - cam_sy);
+    CHECK(blast == 6);
+    CHECK(std::abs(sx - cam_sx) < 20 && sy - cam_sy < -10 && sy - cam_sy > -70);
+    CHECK(w.get(kCamera) && w.get(kCamera)->frame == 9);
+    // Long after: no blast left, a wisp rising from the camera.
+    for (int f = 0; f < 600; ++f) frame();
+    int wisps = 0, blasts = 0;
+    for (const PuffState& p : game.lighting()->puffs_shown()) {
+        if (p.grey == 0.3f) ++blasts;
+        const float px = (p.centre.x - p.centre.y) * 0.25f, py = (p.centre.x + p.centre.y) * 0.125f - p.centre.z / kLightZScale;
+        if (p.feature == 9 && std::abs(px - cam_sx) < 16 && py < cam_sy && py > cam_sy - 80) ++wisps;
+    }
+    std::printf("camera smoke: %d wisp puffs over the broken camera\n", wisps);
+    CHECK(blasts == 0 && wisps >= 2);
+}
+
 // Bug (issue #24): in mission 3, using the computer with the files (0x4FF,
 // item 2580 of the save) showed its schematic MVA03B for a blink only. The
 // key that uses it (Enter or Space of the selection mode) is one of those
@@ -6642,6 +6698,10 @@ int main(int argc, char** argv) {
         test_saved_busy_items(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--camera-smoke") {
+        test_camera_smoke(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--held-use-key-movie") {
         test_movie_ignores_held_use_key(data);
         return failures ? 1 : 0;
@@ -6856,6 +6916,7 @@ int main(int argc, char** argv) {
     test_movies(data);
     test_back_to_base(data);
     test_movie_ignores_held_use_key(data);
+    test_camera_smoke(data);
     test_mission2_final_scene(data);
     test_mission2_npc_teleport(data);
     // The tests that play on the test saves autosave into them (Game::kAutoSave): not kept.

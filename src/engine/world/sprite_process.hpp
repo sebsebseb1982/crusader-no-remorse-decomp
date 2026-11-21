@@ -57,6 +57,12 @@ private:
     int slot_ = -1;
 };
 
+// The usecode offset (dx, dy) a shape drawn over the scene is moved by after
+// being raised to z 240 (SPRITE_1140_0007); false for the other shapes.
+// The point (x - dx, y - dy, 240) projects where the sprite was created
+// (the port's lighting puts an explosion's smoke there).
+bool overlay_offset(std::uint16_t shape, int& dx, int& dy);
+
 // SpriteProcess::I_createSprite (1140:00DE). Returns the pid.
 Pid create_sprite(Kernel& kernel, World& world, std::uint16_t shape, int first, int last, int delay,
                   World::Point at);

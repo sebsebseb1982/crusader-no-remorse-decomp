@@ -71,7 +71,7 @@ struct LightingOptions {
     bool fixture_lights = true;  // lamps and screens give light while whole (not their broken frames)
     bool flash_lights = true;    // flashes, explosions, shots give light
     bool player_lamp = true;     // the Silencer's lamp (item 1): a beam in front of him
-    bool smoke = true;           // explosions and shots leave smoke
+    bool smoke = true;           // explosions and shots leave smoke, broken electric things smoulder
     bool liquids = true;         // liquids glow green and steam (the steam with smoke)
     bool show_normals = false;
     // Turned camera (reproject).
@@ -197,6 +197,8 @@ public:
                     std::uint32_t ticks);
     std::size_t muzzle_flash_count() const { return flashes_.size(); }
     std::size_t puff_count() const { return puffs_.size(); }
+    // The smoke of the last shade (steam, smouldering, puffs), far to near.
+    const std::vector<PuffState>& puffs_shown() const { return puff_now_; }
 
     // Experiment: the captured scene from a turned camera (opt.yaw, opt.pitch)
     // around `centre` (world units), lit as by the last shade. Holes in magenta.
@@ -227,6 +229,7 @@ private:
     void gather_liquids(const World& world);
     void liquid_lights(std::vector<PointLight>& lights) const;
     void steam(std::vector<PuffState>& out) const;
+    void smoulder(std::vector<PuffState>& out) const;
     void spawn_smoke();
     bool on_surface(const Vec3& p) const;
     void puff_states(std::vector<PuffState>& out) const;

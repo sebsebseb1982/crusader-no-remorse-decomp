@@ -39,6 +39,17 @@ void raise_overlay(const World& world, std::uint16_t shape, World::Point& at) {
 
 }  // namespace
 
+// @orig none: port lighting (the offsets of SPRITE_1140_0007)
+bool overlay_offset(std::uint16_t shape, int& dx, int& dy) {
+    for (std::size_t i = 0; i < kOverlayShapes.size(); ++i) {
+        if (kOverlayShapes[i] != shape) continue;
+        dx = kOverlayDx[i];
+        dy = kOverlayDy[i];
+        return true;
+    }
+    return false;
+}
+
 SpriteProcess::SpriteProcess(World& world, std::uint16_t shape, int first, int last, int delay, World::Point at)
     : world_(world), shape_(shape), first_(first), last_(last), frame_(first), delay_(delay), at_(at) {
     set_type(kType);

@@ -1,6 +1,7 @@
 #include "engine/world/lighting.hpp"
 
 #include "engine/world/projectile.hpp"
+#include "engine/world/sprite_process.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -128,6 +129,28 @@ const Fixture kFixtures[] = {
     {0x271, 0x02, kAlarmLight, 1.4f, 520, true, true},
     {0x477, 0x0C, kAlarmLight, 0.8f, 320, true, true},  // alarm box: 2, 3 its frames 0, 1 on
 };
+
+// Broken electric things (SHAPES.FLX, the frames once shot): they smoulder,
+// a thin wisp rising from them for good. Lamps and screens (their broken
+// frames, kFixtures) and the security cameras (their last frame).
+struct Smoulder {
+    std::uint16_t shape;
+    std::uint32_t frames;  // bit n: frame n is broken
+};
+const Smoulder kSmoulders[] = {
+    {0x2A0, 0xF0},  {0x4EB, 0x0C}, {0x519, 0x0C}, {0x102, 0x0C}, {0x165, 0x0C},
+    {0x130, 0x02},  {0x1A3, 0x02}, {0x0BC, 0xFC0}, {0x021, 0x04}, {0x049, 0x04},
+    {0x174, 0x04},  {0x271, 0x04},
+    {0x1B6, 0x20},  {0x1B8, 0x200}, {0x1D7, 0x200},  // cameras (CAMERACO, CAMERANS, CAMERAEW)
+};
+constexpr std::size_t kMaxSmoulder = 48;
+
+// @orig none: port lighting (smoke)
+bool smoulders(std::uint16_t shape, std::uint32_t frame) {
+    for (const Smoulder& s : kSmoulders)
+        if (s.shape == shape && frame < 32 && (s.frames >> frame & 1)) return true;
+    return false;
+}
 
 // @orig none: port lighting (light fixtures)
 const Fixture* fixture(std::uint16_t shape, std::uint32_t frame) {
@@ -560,10 +583,19 @@ void WorldLighting::spawn_smoke() {
         }
         {
             if (!fresh) continue;
-            // Over the surface drawn under the anchor (these sprites are
-            // moved up over the scene, sprite_process.hpp).
+            // Over the surface drawn where the sprite was created: these
+            // sprites are raised to z 240 at the same screen place, then moved
+            // by their shape's offset (sprite_process.hpp), which takes their
+            // anchor tens of pixels lower on the screen. Without the offset
+            // the point projects where it was created: a camera on its wall,
+            // the floor under a grenade.
+            int ox = 0, oy = 0;
+            overlay_offset(shape, ox, oy);
+            const float x0 = float(world_from_usecode(d.item->x - ox)), y0 = float(world_from_usecode(d.item->y - oy));
+            const int px = static_cast<int>(std::floor((x0 - y0) * 0.25f)) - view_left_;
+            const int py = static_cast<int>(std::floor((x0 + y0) * 0.125f - float(d.item->z))) - view_top_;
             std::optional<Vec3> at;
-            for (int dy = 0; dy < 24 && !at; dy += 4) at = surface_at(d.sx, d.sy - dy);
+            for (int dy = 0; dy < 24 && !at; dy += 4) at = surface_at(px, py - dy);
             if (!at) at = Vec3{(d.x + d.x_left) * 0.5f, (d.y + d.y_far) * 0.5f, float(d.z) * kLightZScale};
             // Big shapes are explosions, small ones flashes and impacts.
             int area = 0;
@@ -615,7 +647,7 @@ void WorldLighting::add_puff(const Vec3& at, SmokePuff::Kind kind, float scale, 
             p.radius1 = (140 + rnd(70 + i) * 80) * scale;
             // Thinner the bigger, so that a big blast is no thicker to see
             // through than a small one: what happens in it stays visible.
-            p.density = 0.02f / scale;
+            p.density = 0.010f / scale;
             p.life = 4.5f + rnd(80 + i) * 2;
             p.feature = 45;
             break;
@@ -627,7 +659,7 @@ void WorldLighting::add_puff(const Vec3& at, SmokePuff::Kind kind, float scale, 
             p.rise = 8;
             p.radius0 = 9;
             p.radius1 = 28 + 8 * i;
-            p.density = 0.08f;
+            p.density = 0.06f;
             p.life = 0.7f + 0.2f * i;
             p.feature = 12;
             break;
@@ -638,7 +670,7 @@ void WorldLighting::add_puff(const Vec3& at, SmokePuff::Kind kind, float scale, 
             p.rise = 12;
             p.radius0 = 8 * scale;
             p.radius1 = 30 * scale;
-            p.density = 0.05f;
+            p.density = 0.035f;
             p.life = 1.1f * scale;
             p.feature = 14;
             break;
@@ -648,7 +680,7 @@ void WorldLighting::add_puff(const Vec3& at, SmokePuff::Kind kind, float scale, 
             p.rise = 14;
             p.radius0 = 10;
             p.radius1 = 34;
-            p.density = 0.02f;
+            p.density = 0.015f;
             p.life = 1.0f;
             p.feature = 16;
             break;
@@ -759,11 +791,52 @@ void WorldLighting::steam(std::vector<PuffState>& out) const {
     }
 }
 
+// Thin smoke rising from the broken electric things in view (kSmoulders):
+// as the steam, puffs that need no memory, each slot of an item coming back
+// every few seconds, so that it smoulders as soon as it is seen.
+// @orig none: port lighting (smoke)
+void WorldLighting::smoulder(std::vector<PuffState>& out) const {
+    const float t = ticks_ / 60.0f;
+    std::size_t count = 0;
+    for (const DrawItem& d : list_) {
+        if (count >= kMaxSmoulder) break;
+        const Item& item = *d.item;
+        if (item.sprite_only || !smoulders(item.shape, item.frame)) continue;
+        // From the top of the thing, in the middle of its box.
+        const Vec3 top{(d.x + d.x_left) * 0.5f, (d.y + d.y_far) * 0.5f, float(d.z_top) * kLightZScale};
+        // Its slots share a period, evenly spaced: a steady thread.
+        constexpr int kSlots = 6;
+        const std::uint32_t own = hash32(item.id * 2654435761u);
+        const float period = 2.6f + 0.8f * puff_random(own, 1);
+        for (int k = 0; k < kSlots && count < kMaxSmoulder; ++k) {
+            const std::uint32_t serial = hash32(own ^ static_cast<std::uint32_t>(k) * 83492791u);
+            const float phase = t / period + puff_random(own, 2) + (k + 0.4f * puff_random(serial, 2)) / kSlots;
+            const float cycle = std::floor(phase), u = phase - cycle;
+            const std::uint32_t round = serial + static_cast<std::uint32_t>(cycle) * 0x9E3779B9u;
+            const float age = u * period;
+            PuffState s;
+            const Vec3 drift{(puff_random(round, 5) * 2 - 1) * 6, (puff_random(round, 6) * 2 - 1) * 6, 0};
+            s.centre = top + drift * age + Vec3{0, 0, 4 + 30 * age};
+            s.radius = 5 + 20 * u;
+            s.density = 0.02f * smoothstep(0.0f, 0.15f, u) * (1 - smoothstep(0.4f, 1.0f, u));
+            if (s.density <= 1e-5f) continue;
+            s.heat = 0;
+            s.grey = 0.5f;
+            s.seed = puff_random(round, 8) * 100.0f;
+            s.time = age;
+            s.feature = 9;
+            out.push_back(s);
+            ++count;
+        }
+    }
+}
+
 // The puffs now, far to near.
 // @orig none: port lighting (smoke)
 void WorldLighting::puff_states(std::vector<PuffState>& out) const {
     out.clear();
     steam(out);
+    smoulder(out);
     for (const SmokePuff& p : puffs_) {
         const float age = (ticks_ - p.born) / 60.0f;
         const float u = std::clamp(age / p.life, 0.0f, 1.0f);

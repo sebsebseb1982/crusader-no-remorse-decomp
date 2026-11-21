@@ -152,6 +152,8 @@ public:
     bool render_lit(const Surface8& screen, std::vector<std::uint32_t>& argb);
     // The GPU that shades the lighting (null: the processor). Kept by the caller.
     void set_lighting_gpu(LightingGpu* gpu);
+    // The 3D lighting (null until first switched on), for the tests.
+    const WorldLighting* lighting() const { return lighting_.get(); }
     // Where the 640 x 480 area starts in the last rendered screen; the mouse
     // coordinates the game takes are relative to it.
     int ui_x() const { return ui_x_; }

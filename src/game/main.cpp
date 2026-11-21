@@ -1,13 +1,14 @@
 // crusader: runs the game from a saved game (milestone 1: the world runs, the
 // camera moves with the arrow keys).
 //
-//   crusader [data | game.iso | GAME.GOG] [--mod DIR] [--save N | --new-game | --map N [--egg E]] [-laurie] [--fullscreen] [--auto-save-names]  (neither: the start-up movies, then the menu) [--movie NAME | --movie-overlay NAME] [--frames N [--scroll DX DY] [--walk] [--fire] [--use ID] [--menu | --menu-load | --menu-credits | --menu-options | --menu-gamepad | --menu-display | --menu-new] --png out.png [--wav out.wav]]
+//   crusader [data | game.iso | GAME.GOG] [--mod DIR] [--save N | --new-game | --map N [--egg E]] [-laurie] [--fullscreen] [--auto-save-names]  (neither: the start-up movies, then the menu) [--movie NAME | --movie-overlay NAME] [--frames N [--scroll DX DY] [--walk] [--fire] [--use ID] [--hit ID] [--menu | --menu-load | --menu-credits | --menu-options | --menu-gamepad | --menu-display | --menu-new] --png out.png [--wav out.wav]]
 //
 // With --png, runs N frames of 1/60 s without a window, moving the camera by
 // (DX, DY) usecode units per frame or making the player walk, and writes the
 // last frame; --wav also writes the sound mixed meanwhile. --new-game starts
 // the first mission instead of loading a saved game. --use uses an item
-// (as Enter on the selected item) before the first frame. --movie plays a
+// (as Enter on the selected item) before the first frame, --hit shoots
+// one (200 damage of fire type 2, from the player). --movie plays a
 // cutscene (FLICS/NAME.AVI, as MovieGump::I_playMovieCutscene) right away,
 // --movie-overlay as I_playMovieOverlay.
 // --mod loads a folder made by the level editor (crusader-no-remorse-editor): its
@@ -28,6 +29,7 @@
 #include "crusader_version.hpp"
 #include "engine/ui/christmas_hat.hpp"
 #include "engine/world/inventory.hpp"
+#include "engine/world/projectile.hpp"
 #include "game/game.hpp"
 #include "platform/real_shift.hpp"
 #include "platform/sdl_audio.hpp"
@@ -120,6 +122,7 @@ int main(int argc, char** argv) {
          menu_new = false;
     std::string png, wav, movie;
     int use = 0;
+    int hit = 0;  // --hit ID: the item shot (200 damage of fire type 2, from the player) before the frames
     MovieKind movie_kind = MovieKind::kCutscene;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--version") == 0) {
@@ -152,6 +155,7 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--lighting") == 0) lighting = true;
         else if (std::strcmp(argv[i], "--cpu-lighting") == 0) cpu_lighting = true;
         else if (std::strcmp(argv[i], "--use") == 0 && i + 1 < argc) use = std::stoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--hit") == 0 && i + 1 < argc) hit = std::stoi(argv[++i]);
         else if (std::strcmp(argv[i], "--menu") == 0) menu = true;
         else if (std::strcmp(argv[i], "--menu-load") == 0) menu = menu_load = true;
         else if (std::strcmp(argv[i], "--menu-credits") == 0) menu = menu_credits = true;
@@ -233,6 +237,7 @@ int main(int argc, char** argv) {
             if (walk) game.key(0x48, true, true, 0);
             game.capture_sound(!wav.empty());
             if (use) use_item(game.world(), static_cast<ObjId>(use));
+            if (hit) apply_damage(game.kernel(), game.world(), game.animations(), static_cast<ObjId>(hit), 1, 0, 200, 2);
             for (int i = 0; i < frames; ++i) {
                 if (scroll_x || scroll_y) game.move_camera(scroll_x, scroll_y);
                 // --fire: space tapped every 40 frames
