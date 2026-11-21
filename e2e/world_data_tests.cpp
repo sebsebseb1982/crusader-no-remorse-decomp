@@ -308,6 +308,86 @@ void test_fixture_lights(const std::filesystem::path& data) {
     CHECK(lamp_lights(on).empty());
 }
 
+// The lights given by item `id` on a 640x480 view centred on `camera`, at
+// game tick `ticks`, with the default lighting options.
+std::vector<PointLight> lights_owned_by(World& w, ShapeCache& shapes, const XformTable& xform, const Palette& palette,
+                                        WorldLighting& lighting, Camera camera, ObjId id, std::uint32_t ticks = 0) {
+    const int left = ((camera.x - camera.y) >> 2) - 320, top = (((camera.x + camera.y) >> 3) - camera.z) - 240;
+    const auto list = build_display_list(w, shapes, View{left, top}, 640, 480);
+    Surface8 screen(640, 480);
+    draw_display_list(screen, list, &xform);
+    const LightingOptions opt;
+    lighting.capture(w, list, screen, left, top, palette, opt, ticks);
+    std::vector<std::uint32_t> argb(640 * 480);
+    lighting.shade(w, screen, palette, opt, {}, argb.data());
+    std::vector<PointLight> out;
+    for (const PointLight& l : lighting.lights())
+        if (l.owner == id) out.push_back(l);
+    return out;
+}
+
+// Port lighting: the wall lamps of shape 0xBC on map 1 (a corridor near the
+// start): the floodlight 7366 (frame 0) gives a white light, the red lantern
+// 7442 (frame 2) a red one; broken (frames 6, 8), none.
+void test_wall_lamp_lights(const std::filesystem::path& data) {
+    constexpr ObjId kFlood = 7366, kLantern = 7442;
+    const auto typeflags = load_typeflags(data / "STATIC/TYPEFLAG.DAT");
+    World w(typeflags);
+    w.load_fixed_map(FlexArchive::open(data / "STATIC/FIXED.DAT"), 1);
+    w.expand_glob_eggs(FlexArchive::open(data / "STATIC/GLOB.FLX"));
+    const auto shapes_flex = FlexArchive::open(data / "STATIC/SHAPES.FLX");
+    ShapeCache shapes(shapes_flex, ShapeLayout::World);
+    const auto xform = XformTable::load(data / "STATIC/XFORMPAL.DAT");
+    const auto palette = Palette::load(data / "STATIC/GAMEPAL.PAL");
+    Item* flood = w.get(kFlood);
+    Item* lantern = w.get(kLantern);
+    CHECK(flood && flood->shape == 0xBC && flood->frame == 0);
+    CHECK(lantern && lantern->shape == 0xBC && lantern->frame == 2);
+    if (!flood || !lantern) return;
+    WorldLighting lighting(shapes, xform);
+    auto lights_of = [&](ObjId id) { return lights_owned_by(w, shapes, xform, palette, lighting, {54800, 61300, 0}, id); };
+    const auto white = lights_of(kFlood), red = lights_of(kLantern);
+    CHECK(white.size() == 1 && red.size() == 1);
+    if (white.size() == 1) CHECK(white[0].color.z >= white[0].color.x);
+    if (red.size() == 1) CHECK(red[0].color.x > 2 * red[0].color.y);
+    flood->frame = 6;
+    lantern->frame = 8;
+    CHECK(lights_of(kFlood).empty() && lights_of(kLantern).empty());
+}
+
+// Port lighting: the alarm light 3868 (shape 0x174) of map 1 is dark until an
+// alert (set_alert: frame 1), then pulses red, its one light in place of the
+// one of its colour-cycled pixels; broken (frame 2), none.
+void test_alarm_lights(const std::filesystem::path& data) {
+    constexpr ObjId kAlarm = 3868;
+    const auto typeflags = load_typeflags(data / "STATIC/TYPEFLAG.DAT");
+    World w(typeflags);
+    w.load_fixed_map(FlexArchive::open(data / "STATIC/FIXED.DAT"), 1);
+    w.expand_glob_eggs(FlexArchive::open(data / "STATIC/GLOB.FLX"));
+    const auto shapes_flex = FlexArchive::open(data / "STATIC/SHAPES.FLX");
+    ShapeCache shapes(shapes_flex, ShapeLayout::World);
+    const auto xform = XformTable::load(data / "STATIC/XFORMPAL.DAT");
+    const auto palette = Palette::load(data / "STATIC/GAMEPAL.PAL");
+    Item* alarm = w.get(kAlarm);
+    CHECK(alarm && alarm->shape == 0x174 && alarm->frame == 0);
+    if (!alarm) return;
+    WorldLighting lighting(shapes, xform);
+    auto lights_at = [&](std::uint32_t ticks) {
+        return lights_owned_by(w, shapes, xform, palette, lighting, {31900, 35400, 0}, kAlarm, ticks);
+    };
+    CHECK(lights_at(0).empty());
+    set_alert(w, true);
+    CHECK(alarm->frame == 1);
+    const auto peak = lights_at(8), low = lights_at(23);  // 2 pulses a second: peak at 7.5, low at 22.5
+    CHECK(peak.size() == 1 && low.size() == 1);
+    if (peak.size() == 1 && low.size() == 1) {
+        std::printf("alarm light: red %.2f at its peak, %.2f at its low\n", peak[0].color.x, low[0].color.x);
+        CHECK(peak[0].color.x > 4 * peak[0].color.y && low[0].color.x * 2 < peak[0].color.x);
+    }
+    alarm->frame = 2;
+    CHECK(lights_at(8).empty());
+}
+
 // Port lighting: a shot of a firearm lights a short warm flash at the muzzle,
 // ahead of it, fading out in 4 ticks; energy weapons (their shot glows) none.
 void test_muzzle_flash(const std::filesystem::path& data) {
@@ -405,6 +485,8 @@ int main(int argc, char** argv) {
     }
     test_original_maps(data);
     test_crate_stack_order(data);
+    test_wall_lamp_lights(data);
+    test_alarm_lights(data);
     if (have_test_saves(data)) {
         test_translucent_windows(data);
         test_save_round_trip(data);

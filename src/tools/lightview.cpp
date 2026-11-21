@@ -6,6 +6,7 @@
 //        lightview [data_dir] --save SAVEGAME_FILE [...]          a saved game, centred on the Silencer
 //        lightview [data_dir] [map] [cx cy] --png out.png [--mouse sx sy] [--drop sx sy]... [--ambient 0-3]
 //                  [--orbit yaw pitch] [--flat] [--no-shadows] [--box-shadows] [--no-bump] [--no-glow] [--no-fixtures]
+//                  [--alert]
 //                  [--no-lamp] [--no-smoke] [--no-liquids] [--fixed-actors] [--no-back-faces] [--normals] [--probe sx sy]...
 //                  [--puff sx sy]... [--puff-scale K] [--rocket sx sy]... [--shot TYPE] [--ticks N] [--cpu] [--size WxH] [--bench N]
 //                                                                 one frame to a PNG
@@ -13,6 +14,7 @@
 //   Left click       drop a light there        Right click  remove the last one
 //   Wheel            light height              C            light colour
 //   S shadows  G shadows cut by sprites  B bump  E lights from glowing pixels  L Silencer's lamp  K lamps and screens
+//   J  alert on / off (alarm lights)
 //   A ambient  N normals view  Tab original picture (unlit)
 //   Q / W  turn the camera  Z / X  tilt it  R  back to the isometric view
 //   T  characters' frames follow the camera  F  far box faces  P  an explosion's smoke at the pointer
@@ -26,6 +28,7 @@
 #include "core/png_writer.hpp"
 #include "core/typeflags.hpp"
 #include "core/xform.hpp"
+#include "engine/usecode/world_intrinsics.hpp"
 #include "engine/world/lighting.hpp"
 #include "engine/world/projectile.hpp"
 #include "engine/world/render.hpp"
@@ -132,6 +135,7 @@ int main(int argc, char** argv) {
     std::string png;
     std::optional<std::pair<int, int>> mouse;
     std::vector<std::pair<int, int>> probes, drops;
+    bool alert = false;
     int bench = 1;
     float puff_scale = 1;  // --puff-scale: an explosion of that size (the game: 0.8 to 2)
     int ticks = 0;  // --ticks: frames of smoke before the picture
@@ -164,6 +168,7 @@ int main(int argc, char** argv) {
         else if (arg("--no-bump")) v.opt.bump = false;
         else if (arg("--no-glow")) v.opt.glow_lights = v.opt.flash_lights = false;
         else if (arg("--no-fixtures")) v.opt.fixture_lights = false;
+        else if (arg("--alert")) alert = true;
         else if (arg("--no-lamp")) v.opt.player_lamp = false;
         else if (arg("--no-smoke")) v.opt.smoke = false;
         else if (arg("--no-liquids")) v.opt.liquids = false;
@@ -231,6 +236,7 @@ int main(int argc, char** argv) {
             camera = map_centre(*world);
         }
         if (forced) camera = *forced;
+        if (alert) set_alert(*world, true);
         std::vector<PointLight> lights;
         std::vector<std::uint32_t> argb;
         float mouse_height = 40;
@@ -328,6 +334,7 @@ int main(int argc, char** argv) {
                     case SDLK_b: v.opt.bump = !v.opt.bump; break;
                     case SDLK_e: v.opt.glow_lights = v.opt.flash_lights = !v.opt.glow_lights; break;
                     case SDLK_k: v.opt.fixture_lights = !v.opt.fixture_lights; break;
+                    case SDLK_j: set_alert(*world, !world->state.alert_active); break;
                     case SDLK_l: v.opt.player_lamp = !v.opt.player_lamp; break;
                     case SDLK_n: v.opt.show_normals = !v.opt.show_normals; break;
                     case SDLK_a: v.ambient = (v.ambient + 1) & 3; break;

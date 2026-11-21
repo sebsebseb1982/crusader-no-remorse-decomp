@@ -91,18 +91,24 @@ constexpr std::size_t kMaxSteam = 128;
 
 // Light fixtures (SHAPES.FLX; no TYPEFLAG bit marks them): the frames where
 // they are whole give light, their broken frames none, so that a lamp shot
-// goes out. `bulb`: the light is at the sprite's brightest pixels (the bulb),
-// else in the middle of the box (screens, whose frame is bright too).
+// goes out; a shape may have one entry per light colour. `bulb`: the light
+// is at the sprite's brightest pixels (the bulb), else in the middle of the
+// box (screens, whose frame is bright too). `pulse`: the light swells and
+// fades, twice a second (the alarm lights, whose lit frames are those of an
+// alert: set_alert, world_intrinsics.hpp).
 struct Fixture {
     std::uint16_t shape;
     std::uint32_t lit_frames;  // bit n: frame n gives light
     Vec3 colour;
     float strength, radius;
     bool bulb;
+    bool pulse = false;
 };
 const Vec3 kWarmLight{1.0f, 0.86f, 0.66f};
 const Vec3 kTubeLight{0.85f, 0.95f, 1.0f};
 const Vec3 kScreenLight{0.55f, 0.75f, 1.0f};
+const Vec3 kRedLight{1.0f, 0.38f, 0.25f};
+const Vec3 kAlarmLight{1.0f, 0.15f, 0.08f};
 const Fixture kFixtures[] = {
     {0x2A0, 0x0F, kWarmLight, 1.3f, 620, true},    // wall lamp, a dome (4..7 broken)
     {0x269, 0x01, kWarmLight, 1.3f, 650, true},    // ceiling lamp
@@ -114,12 +120,19 @@ const Fixture kFixtures[] = {
     {0x165, 0x01, kScreenLight, 0.45f, 300, false},
     {0x130, 0x01, Vec3{1.0f, 0.75f, 0.35f}, 0.6f, 420, false},  // wall screens with the E (1 broken)
     {0x1A3, 0x01, Vec3{1.0f, 0.75f, 0.35f}, 0.6f, 420, false},
+    {0x0BC, 0x09, kTubeLight, 1.2f, 600, true},    // wall lamps: a floodlight (frames 0, 3),
+    {0x0BC, 0x36, kRedLight, 1.4f, 480, true},     // red caged lamps (1, 4) and lanterns (2, 5); 6..11 broken
+    {0x021, 0x02, kAlarmLight, 1.2f, 460, true, true},  // ALERT signs (0 off, 1 on, 2 broken)
+    {0x049, 0x02, kAlarmLight, 1.2f, 460, true, true},
+    {0x174, 0x02, kAlarmLight, 1.4f, 520, true, true},  // alarm lights (0 off, 1 on, 2 broken)
+    {0x271, 0x02, kAlarmLight, 1.4f, 520, true, true},
+    {0x477, 0x0C, kAlarmLight, 0.8f, 320, true, true},  // alarm box: 2, 3 its frames 0, 1 on
 };
 
 // @orig none: port lighting (light fixtures)
 const Fixture* fixture(std::uint16_t shape, std::uint32_t frame) {
     for (const Fixture& f : kFixtures) {
-        if (f.shape == shape) return frame < 32 && (f.lit_frames >> frame & 1) ? &f : nullptr;
+        if (f.shape == shape && frame < 32 && (f.lit_frames >> frame & 1)) return &f;
     }
     return nullptr;
 }
@@ -141,6 +154,7 @@ struct FlashKind {
     float radius;
     std::uint32_t life;  // ticks (60 a second)
 };
+// @orig none: port lighting (muzzle flash)
 std::optional<FlashKind> muzzle_flash(int fire_type) {
     const Vec3 gunfire{1.0f, 0.72f, 0.38f};
     switch (fire_type) {
@@ -867,7 +881,10 @@ void WorldLighting::gather_lights(const World& world, const LightingOptions& opt
                     at = {(d.x + d.x_left) * 0.5f, (d.y + d.y_far) * 0.5f, (d.z + d.z_top) * 0.5f * kLightZScale};
                     at = at + kToViewer * 12.0f;
                 }
-                lights.push_back({at, fx->colour * fx->strength, fx->radius, d.item->id});
+                float strength = fx->strength;
+                if (fx->pulse) strength *= 0.3f + 0.7f * (0.5f + 0.5f * std::sin(ticks_ * (2 * 3.14159265f * 2 / 60)));
+                lights.push_back({at, fx->colour * strength, fx->radius, d.item->id});
+                continue;  // in place of the light of its colour-cycled pixels (the alarms')
             }
         }
         if (!opt.glow_lights || f.glow_pixels < 6) continue;
