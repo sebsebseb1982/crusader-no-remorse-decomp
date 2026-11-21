@@ -6,7 +6,8 @@ A C++20/SDL2 reimplementation of the *Crusader: No Remorse* (Origin, 1995) engin
 
 > **Sister project:** the sequel, *Crusader: No Regret*, is being ported on the same engine in [crusader-no-regret-decomp](https://github.com/sebsebseb1982/crusader-no-regret-decomp) (early work in progress).
 
-![Gameplay screenshot with the 3D lighting: glowing green liquid and its steam, the red glow of a laser barrier, the Silencer's flashlight](docs/images/crusader-no-remorse.gif)
+![Gameplay screenshot with the 3D lighting: glowing green liquid and its steam, the red glow of a laser barrier, the Silencer's flashlight](docs/images/screenshot1.png)
+![Gameplay screenshot with the 3D lighting: glowing green liquid and its steam, the red glow of a laser barrier, the Silencer's flashlight](docs/images/screenshot2.png)
 
 The maintainer has played through the whole game with this port, from start to finish, and fixed every bug met along the way. Other playthroughs may still turn up some: please report them (see [Contribution](#contribution)).
 
