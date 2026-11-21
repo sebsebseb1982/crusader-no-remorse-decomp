@@ -1,7 +1,7 @@
 // crusader: runs the game from a saved game (milestone 1: the world runs, the
 // camera moves with the arrow keys).
 //
-//   crusader [data | game.iso | GAME.GOG] [--mod DIR] [--save N | --new-game | --map N [--egg E]] [-laurie] [--fullscreen] [--auto-save-names]  (neither: the start-up movies, then the menu) [--movie NAME | --movie-overlay NAME] [--frames N [--scroll DX DY] [--walk] [--fire] [--use ID] [--hit ID] [--menu | --menu-load | --menu-credits | --menu-options | --menu-gamepad | --menu-display | --menu-new] --png out.png [--wav out.wav]]
+//   crusader [data | game.iso | GAME.GOG] [--mod DIR] [--save N | --new-game | --map N [--egg E]] [-laurie] [--fullscreen] [--auto-save-names]  (neither: the start-up movies, then the menu) [--movie NAME | --movie-overlay NAME] [--frames N [--scroll DX DY] [--walk] [--fire] [--use ID] [--hit ID] [--menu | --menu-load | --menu-credits | --menu-options | --menu-gamepad | --menu-display | --menu-new] --png out.png [--wav out.wav] [--save-to FILE]]
 //
 // With --png, runs N frames of 1/60 s without a window, moving the camera by
 // (DX, DY) usecode units per frame or making the player walk, and writes the
@@ -10,7 +10,9 @@
 // (as Enter on the selected item) before the first frame, --hit shoots
 // one (200 damage of fire type 2, from the player). --movie plays a
 // cutscene (FLICS/NAME.AVI, as MovieGump::I_playMovieCutscene) right away,
-// --movie-overlay as I_playMovieOverlay.
+// --movie-overlay as I_playMovieOverlay. --save-to writes a saved game of
+// the state after the frames to FILE (named after it), e.g. with --map and
+// --egg to make a save at a teleport egg.
 // --mod loads a folder made by the level editor (crusader-no-remorse-editor): its
 // files replace those of the data. --map starts a new game on that map, on
 // its teleport egg E (frame 1, quality low byte E; 0x1E by default, where
@@ -121,6 +123,7 @@ int main(int argc, char** argv) {
     bool walk = false, fire = false, menu = false, menu_load = false, menu_credits = false, menu_options = false, menu_gamepad = false, menu_display = false,
          menu_new = false;
     std::string png, wav, movie;
+    std::filesystem::path save_to;  // --save-to FILE: the state after the frames, saved there
     int use = 0;
     int hit = 0;  // --hit ID: the item shot (200 damage of fire type 2, from the player) before the frames
     MovieKind movie_kind = MovieKind::kCutscene;
@@ -133,6 +136,7 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc) frames = std::stoi(argv[++i]);
         else if (std::strcmp(argv[i], "--png") == 0 && i + 1 < argc) png = argv[++i];
         else if (std::strcmp(argv[i], "--wav") == 0 && i + 1 < argc) wav = argv[++i];
+        else if (std::strcmp(argv[i], "--save-to") == 0 && i + 1 < argc) save_to = argv[++i];
         else if (std::strcmp(argv[i], "--new-game") == 0) new_game = true;
         else if (std::strcmp(argv[i], "--mod") == 0 && i + 1 < argc) mod = argv[++i];
         else if (std::strcmp(argv[i], "--map") == 0 && i + 1 < argc) start_map = std::stoi(argv[++i], nullptr, 0), new_game = true;
@@ -250,6 +254,18 @@ int main(int argc, char** argv) {
                 if (lighting) game.render(screen, &stats);
             }
             if (!wav.empty()) write_wav(wav, game.captured_sound(), AsylumMixer::kMixRate);
+            if (!save_to.empty()) {
+                // Saved in slot 1 of a scratch folder (the game's own slots
+                // untouched), then moved to FILE.
+                const auto dir = std::filesystem::temp_directory_path() / "crusader-save-to";
+                std::filesystem::remove_all(dir);
+                std::filesystem::create_directories(dir);
+                game.set_save_dir(dir);
+                game.set_save_name(1, save_to.stem().string());
+                game.save_game(1);
+                std::filesystem::copy_file(dir / "SAVEGAME.1", save_to, std::filesystem::copy_options::overwrite_existing);
+                std::filesystem::remove_all(dir);
+            }
             if (menu) {  // --menu: Escape, as pressed in play
                 game.key(0x01, false, true, 0, 0x1B);
                 game.mouse_move(320, 240);
