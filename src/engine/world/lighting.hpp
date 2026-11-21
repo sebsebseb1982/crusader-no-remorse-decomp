@@ -245,7 +245,7 @@ private:
     Vec3 shade_point(int c, const Vec3& p, const Vec3& n, ObjId self, const LightingOptions& opt,
                      const std::vector<std::uint32_t>& tile_lights,
                      const std::vector<std::vector<std::uint32_t>>* tile_boxes, bool liquid = false) const;
-    Vec3 halo_over(Vec3 colour, int px, int py, bool clip, float surface_s, ObjId self,
+    Vec3 halo_over(Vec3 colour, int px, int py, bool clip, float surface_s, ObjId self, bool billboard,
                    const std::vector<std::uint32_t>& ids) const;
     Vec3 smoke_over(Vec3 colour, int px, int py, bool clip, float surface_s, const LightingOptions& opt,
                     const std::vector<std::uint32_t>& puffs) const;

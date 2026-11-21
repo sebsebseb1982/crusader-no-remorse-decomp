@@ -227,7 +227,7 @@ vec3 lightAt(vec3 p) {
 }
 
 // The lamps' glow over a pixel (halo_over in lighting.cpp).
-vec3 haloOver(vec3 colour, ivec2 pix, bool clip, float surfaceS, float self) {
+vec3 haloOver(vec3 colour, ivec2 pix, bool clip, float surfaceS, float self, bool billboard) {
     float sx = float(uViewX + pix.x) + 0.5, sy = float(uViewY + pix.y) + 0.5;
     vec3 A = vec3(2.0 * sx, -2.0 * sx, -sy * K);
     float bb = dot(RAY_STEP, RAY_STEP);
@@ -237,12 +237,17 @@ vec3 haloOver(vec3 colour, ivec2 pix, bool clip, float surfaceS, float self) {
         vec4 L0 = fetchf(uLights, l * 5), L1 = fetchf(uLights, l * 5 + 1);
         vec3 d = A - L0.xyz;
         float mid = -dot(RAY_STEP, d) / bb;
-        if (clip && L1.w != self && mid < surfaceS - HALO_DEPTH) continue;
+        float behind = 1.0;
+        if (clip && L1.w != self && mid < surfaceS - HALO_DEPTH) {
+            if (!billboard) continue;
+            float t = (surfaceS - HALO_DEPTH - mid) * sqrt(bb) / L4.x;
+            behind = exp(-t * t);
+        }
         vec3 e = d + RAY_STEP * mid;
         float k = dot(e, e) / (L4.x * L4.x);
         if (k >= 9.0) continue;
         float edge = 1.0 - k / 9.0;
-        colour += L1.rgb * (HALO_GAIN * L4.y * exp(-k) * edge * edge);
+        colour += L1.rgb * (HALO_GAIN * L4.y * exp(-k) * edge * edge * behind);
     }
     return colour;
 }
@@ -332,7 +337,8 @@ void main() {
         if (c >= 1u && c <= 14u) col += lin(c);
         if (liquid) col += lin(c) * LIQUID_TINT * (LIQUID_GLOW * liquidGlow(p, uTime));
     }
-    col = haloOver(col, pix, lit, p.x + p.y, lit ? fetchf(uItems, int(code) * 4 + 1).w : -1.0);
+    vec4 own = lit ? fetchf(uItems, int(code) * 4 + 1) : vec4(0.0, 0.0, 0.0, -1.0);
+    col = haloOver(col, pix, lit, p.x + p.y, own.w, (int(own.z) & 1) != 0);
     if ((uFlags & SMOKE) != 0 && uPuffCount > 0) col = smokeOver(col, pix, lit, p.x + p.y);
     vec3 o = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
     outColor = vec4(o.b, o.g, o.r, 1.0);

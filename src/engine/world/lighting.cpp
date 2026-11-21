@@ -1357,8 +1357,12 @@ Vec3 WorldLighting::shade_point(int c, const Vec3& p, const Vec3& n, ObjId self,
 // colour `colour`: a soft disc round the light where the pixel's view ray
 // passes by it. With `clip`, only when the light is in front of the pixel's
 // surface (s = x + y of its point) or the pixel is the lamp's own (`self`).
+// A character's surface is a flat billboard through the middle of its box,
+// where the ray passes closest to the light shifts with the pixel's row, and
+// a halo cut there would cross the character in a straight line: over a
+// `billboard`, the glow behind fades with how far behind it is, in halo radii.
 // @orig none: port lighting (halo)
-Vec3 WorldLighting::halo_over(Vec3 colour, int px, int py, bool clip, float surface_s, ObjId self,
+Vec3 WorldLighting::halo_over(Vec3 colour, int px, int py, bool clip, float surface_s, ObjId self, bool billboard,
                               const std::vector<std::uint32_t>& ids) const {
     const float sx = view_left_ + px + 0.5f, sy = view_top_ + py + 0.5f;
     const Vec3 a{2 * sx, -2 * sx, -sy * kLightZScale};
@@ -1367,12 +1371,17 @@ Vec3 WorldLighting::halo_over(Vec3 colour, int px, int py, bool clip, float surf
         const PointLight& L = lights_[id];
         const Vec3 d = a - L.pos;
         const float mid = -dot(kRayStep, d) / bb;  // where the ray passes closest to the light
-        if (clip && L.owner != self && mid < surface_s - kHaloDepth) continue;
+        float behind = 1;
+        if (clip && L.owner != self && mid < surface_s - kHaloDepth) {
+            if (!billboard) continue;
+            const float t = (surface_s - kHaloDepth - mid) * kRayStepLength / L.halo;
+            behind = std::exp(-t * t);
+        }
         const Vec3 e = d + kRayStep * mid;
         const float k = dot(e, e) / (L.halo * L.halo);
         if (k >= 9) continue;
         const float edge = 1 - k / 9;  // down to nothing at 3 radii, without a ring on black
-        colour = colour + L.color * (kHaloGain * L.halo_gain * std::exp(-k) * edge * edge);
+        colour = colour + L.color * (kHaloGain * L.halo_gain * std::exp(-k) * edge * edge * behind);
     }
     return colour;
 }
@@ -1567,7 +1576,8 @@ void WorldLighting::shade_cpu(const Surface8& screen, const LightingOptions& opt
                                       liquid_[owner_[j]] != 0);
                 if (!halos.empty())
                     col = halo_over(col, x, y, lit, lit ? pos_[j].x + pos_[j].y : 0.0f,
-                                    owner_[j] >= 0 ? list_[owner_[j]].item->id : 0, halos);
+                                    owner_[j] >= 0 ? list_[owner_[j]].item->id : 0,
+                                    owner_[j] >= 0 && actor_[owner_[j]], halos);
                 if (!puffs.empty())
                     col = smoke_over(col, x, y, lit, lit ? pos_[j].x + pos_[j].y : 0.0f, opt, puffs);
                 argb[j] = pack(col);
