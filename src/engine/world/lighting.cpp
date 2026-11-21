@@ -88,10 +88,12 @@ bool steams(std::uint16_t shape) {
 // The liquids' radioactive green, and how much of their own colour they glow
 // with (times liquid_glow), so that they show but stay a background.
 const Vec3 kLiquidTint{0.45f, 1.0f, 0.35f};
-constexpr float kLiquidGlow = 0.8f;
+constexpr float kLiquidGlow = 1.4f;
 // Their light on what is around them: one by 1024 x 1024 cell of liquid.
 constexpr float kLiquidCell = 1024;
-constexpr float kLiquidLight = 1.0f;
+constexpr float kLiquidLight = 2.0f;
+// The ambient light near them, at most this much lower (liquid_dim).
+constexpr float kLiquidDim = 0.75f;
 constexpr std::size_t kMaxSteam = 128;
 
 // Light fixtures (SHAPES.FLX; no TYPEFLAG bit marks them): the frames where
@@ -288,6 +290,23 @@ float liquid_glow(const Vec3& p, float t) {
     const float x = p.x / 170.0f + t * 0.06f, y = p.y / 170.0f - t * 0.04f, z = t * 0.12f;
     const float n = 0.65f * value_noise(x, y, z) + 0.35f * value_noise(x * 2.1f + 5.2f, y * 2.1f + 1.3f, z * 1.7f);
     return (0.35f + 0.9f * smoothstep(0.3f, 0.75f, n)) * (0.85f + 0.15f * std::sin(t * 1.1f));
+}
+
+// The ambient light round a liquid is lower, so that the place is lit by its
+// green glow: down to 1 - kLiquidDim over most of the light's reach, back to
+// whole at its edge. The strongest liquid near counts, not their sum.
+// @orig none: port lighting (liquids)
+float liquid_dim(const std::vector<PointLight>& lights, const std::vector<std::uint32_t>* ids, const Vec3& p) {
+    float most = 0;
+    const std::size_t count = ids ? ids->size() : lights.size();
+    for (std::size_t k = 0; k < count; ++k) {
+        const PointLight& L = lights[ids ? (*ids)[k] : k];
+        if (L.dim <= 0) continue;
+        const Vec3 to = L.pos - p;
+        const float f = 1 - dot(to, to) / (L.radius * L.radius);
+        if (f > 0) most = std::max(most, L.dim * smoothstep(0.0f, 0.5f, f));
+    }
+    return 1 - kLiquidDim * most;
 }
 
 // A frame decoded once: colours (-1 transparent), a normal rounded from the
@@ -777,6 +796,7 @@ void WorldLighting::liquid_lights(std::vector<PointLight>& lights) const {
         const Vec3 at{c.x / c.area, c.y / c.area, c.z / c.area + 160 * kLightZScale};
         PointLight light{at, kLiquidTint * (kLiquidLight * share * breathe), 1600, 0};
         light.liquid = true;
+        light.dim = share;
         lights.push_back(light);
     }
 }
@@ -1162,7 +1182,8 @@ bool WorldLighting::occluded(const Vec3& p, const Vec3& n, ObjId self, std::size
 Vec3 WorldLighting::shade_point(int c, const Vec3& p, const Vec3& n, ObjId self, const LightingOptions& opt,
                                 const std::vector<std::uint32_t>& ids,
                                 const std::vector<std::vector<std::uint32_t>>* boxes, bool liquid) const {
-    const float a = opt.ambient;
+    // The liquid itself is the light: its ambient stays.
+    const float a = opt.ambient * (liquid ? 1.0f : liquid_dim(lights_, &ids, p));
     Vec3 light{a, a * 1.02f, a * 1.12f};
     for (std::size_t k = 0; k < ids.size(); ++k) {
         const PointLight& L = lights_[ids[k]];
@@ -1235,7 +1256,8 @@ Vec3 WorldLighting::smoke_over(Vec3 colour, int px, int py, bool clip, float sur
         if (clip) s0 = std::max(s0, surface_s);
         if (s1 <= s0) continue;
         auto light_at = [&](const Vec3& p) {
-            Vec3 light{opt.ambient, opt.ambient * 1.02f, opt.ambient * 1.12f};
+            const float a = opt.ambient * liquid_dim(lights_, nullptr, p);
+            Vec3 light{a, a * 1.02f, a * 1.12f};
             for (const PointLight& L : lights_) {
                 const Vec3 to = L.pos - p;
                 const float d2 = dot(to, to);
@@ -1513,7 +1535,7 @@ bool WorldLighting::shade_gpu(const Surface8& screen, const LightingOptions& opt
         o[8] = float(f.light_boxes.size()), o[9] = float(per_light_[l].size()), o[10] = L.liquid ? 1.0f : 0.0f;
         o[11] = L.cos_inner;
         o[12] = L.dir.x, o[13] = L.dir.y, o[14] = L.dir.z, o[15] = L.cos_outer;
-        o[16] = L.halo, o[17] = L.halo_gain;
+        o[16] = L.halo, o[17] = L.halo_gain, o[18] = L.dim;
         for (std::uint32_t b : per_light_[l]) f.light_boxes.push_back(static_cast<std::int32_t>(b));
     }
     f.puffs.assign(puff_now_.size() * 12, 0.0f);

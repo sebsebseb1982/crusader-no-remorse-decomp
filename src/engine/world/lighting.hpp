@@ -64,6 +64,9 @@ struct PointLight {
     // none), seen over what is behind the light, hidden by what is in front.
     float halo = 0;
     float halo_gain = 1;  // the halo's brightness, times the light's colour
+    // A liquid's: how much (0..1) it lowers the ambient light round it, so
+    // that its glow lights the place (liquid_dim).
+    float dim = 0;
 };
 
 struct LightingOptions {
@@ -134,7 +137,7 @@ struct LitFrame {
     // atlas rectangle (x, y, w, h), frame rectangle (left, top, 0, 0) on screen.
     std::vector<float> items;
     // 20 floats a light: position, radius; colour, owner; first and count of its occluders, liquid,
-    // spot cos_inner; spot direction (zero: all round), cos_outer; halo, halo gain, 0, 0.
+    // spot cos_inner; spot direction (zero: all round), cos_outer; halo, halo gain, dim, 0.
     std::vector<float> lights;
     // 16 floats a box: lo, owner; hi, mirrored; atlas rectangle; sprite left, top, has sprite.
     std::vector<float> boxes;
@@ -330,5 +333,9 @@ float smoke_noise(const Vec3& p, float seed, float t, float feature);
 // How much a liquid glows (about 0.3..1.3) at lighting-space point p at time
 // t (seconds), shared with the shaders: slow patches that drift and breathe.
 float liquid_glow(const Vec3& p, float t);
+
+// How much the liquid lights `ids` (all of `lights` when null) lower the
+// ambient light at lighting-space point p: the factor (kLiquidDim..1) on it.
+float liquid_dim(const std::vector<PointLight>& lights, const std::vector<std::uint32_t>* ids, const Vec3& p);
 
 }  // namespace crusader

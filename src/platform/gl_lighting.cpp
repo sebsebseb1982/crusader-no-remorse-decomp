@@ -68,7 +68,8 @@ const vec3 UP = vec3(-0.3536, -0.3536, 0.8660);
 const vec3 RAY_STEP = vec3(0.5, 0.5, K / 8.0);
 const int SHADOWS = 1, SPRITE_CUT = 2, BUMP = 4, SMOKE = 8;
 const vec3 LIQUID_TINT = vec3(0.45, 1.0, 0.35);
-const float LIQUID_GLOW = 0.8;
+const float LIQUID_GLOW = 1.4;
+const float LIQUID_DIM = 0.75;  // kLiquidDim
 const float HALO_GAIN = 0.1, HALO_DEPTH = 16.0;  // kHaloGain, kHaloDepth
 
 vec4 fetchf(highp sampler2D t, int i) { return texelFetch(t, ivec2(i & 1023, i >> 10), 0); }
@@ -196,8 +197,23 @@ float spotOf(vec4 L2, vec4 L3, vec3 to, float dist) {
     return smoothstep(L3.w, L2.w, -dot(to, L3.xyz) / max(dist, 1e-3));
 }
 
+// The ambient light at p, lowered round the liquids (liquid_dim in lighting.cpp).
+float ambientAt(vec3 p) {
+    float most = 0.0;
+    for (int l = 0; l < uLightCount; ++l) {
+        float dim = fetchf(uLights, l * 5 + 4).z;
+        if (dim <= 0.0) continue;
+        vec4 L0 = fetchf(uLights, l * 5);
+        vec3 to = L0.xyz - p;
+        float f = 1.0 - dot(to, to) / (L0.w * L0.w);
+        if (f > 0.0) most = max(most, dim * smoothstep(0.0, 0.5, f));
+    }
+    return uAmbient * (1.0 - LIQUID_DIM * most);
+}
+
 vec3 lightAt(vec3 p) {
-    vec3 light = vec3(uAmbient, uAmbient * 1.02, uAmbient * 1.12);
+    float a = ambientAt(p);
+    vec3 light = vec3(a, a * 1.02, a * 1.12);
     for (int l = 0; l < uLightCount; ++l) {
         vec4 L0 = fetchf(uLights, l * 5), L1 = fetchf(uLights, l * 5 + 1);
         vec4 L2 = fetchf(uLights, l * 5 + 2), L3 = fetchf(uLights, l * 5 + 3);
@@ -293,7 +309,9 @@ void main() {
         vec4 b = fetchf(uItems, int(code) * 4 + 1);
         float self = b.w;
         bool liquid = (int(b.z) & 4) != 0;
-        vec3 light = vec3(uAmbient, uAmbient * 1.02, uAmbient * 1.12);
+        // The liquid itself is the light: its ambient stays.
+        float a = liquid ? uAmbient : ambientAt(p);
+        vec3 light = vec3(a, a * 1.02, a * 1.12);
         for (int l = 0; l < uLightCount; ++l) {
             vec4 L0 = fetchf(uLights, l * 5), L1 = fetchf(uLights, l * 5 + 1), L2 = fetchf(uLights, l * 5 + 2);
             vec4 L3 = fetchf(uLights, l * 5 + 3);

@@ -4,7 +4,7 @@
 //
 // Usage: lightview [data_dir] [map] [cx cy]                       interactive
 //        lightview [data_dir] --save SAVEGAME_FILE [...]          a saved game, centred on the Silencer
-//        lightview [data_dir] [map] [cx cy] --png out.png [--mouse sx sy] [--drop sx sy]... [--ambient 0-3]
+//        lightview [data_dir] [map] [cx cy] --png out.png [--mouse sx sy] [--drop sx sy]... [--ambient 0-4]
 //                  [--orbit yaw pitch] [--flat] [--no-shadows] [--box-shadows] [--no-bump] [--no-glow] [--no-fixtures]
 //                  [--alert]
 //                  [--no-lamp] [--no-smoke] [--no-liquids] [--fixed-actors] [--no-back-faces] [--normals] [--probe sx sy]...
@@ -55,7 +55,7 @@ namespace {
 int kW = 640;  // --size
 int kH = 480;
 constexpr int kScrollStep = 128;
-constexpr float kAmbient[] = {0.08f, 0.22f, 0.45f, 1.0f};
+constexpr float kAmbient[] = {0.08f, 0.22f, 0.45f, 0.85f, 1.0f};  // 3: the game's default
 const Vec3 kLightColors[] = {{1.0f, 0.85f, 0.65f}, {0.55f, 0.75f, 1.0f}, {1.0f, 0.35f, 0.25f}, {0.4f, 1.0f, 0.5f}};
 
 Vec3 scaled(Vec3 c, float k) { return {c.x * k, c.y * k, c.z * k}; }
@@ -161,7 +161,7 @@ int main(int argc, char** argv) {
         else if (arg("--orbit") && i + 2 < argc) {
             v.opt.yaw = std::stof(argv[++i]);
             v.opt.pitch = std::stof(argv[++i]);
-        } else if (arg("--ambient") && i + 1 < argc) v.ambient = std::stoi(argv[++i]) & 3;
+        } else if (arg("--ambient") && i + 1 < argc) v.ambient = std::clamp(std::stoi(argv[++i]), 0, 4);
         else if (arg("--flat")) v.lit = false;
         else if (arg("--no-shadows")) v.opt.shadows = false;
         else if (arg("--box-shadows")) v.opt.sprite_shadows = false;
@@ -337,7 +337,7 @@ int main(int argc, char** argv) {
                     case SDLK_j: set_alert(*world, !world->state.alert_active); break;
                     case SDLK_l: v.opt.player_lamp = !v.opt.player_lamp; break;
                     case SDLK_n: v.opt.show_normals = !v.opt.show_normals; break;
-                    case SDLK_a: v.ambient = (v.ambient + 1) & 3; break;
+                    case SDLK_a: v.ambient = (v.ambient + 1) % 5; break;
                     case SDLK_c: color = (color + 1) % 4; break;
                     case SDLK_q: v.opt.yaw -= 5; break;
                     case SDLK_w: v.opt.yaw += 5; break;

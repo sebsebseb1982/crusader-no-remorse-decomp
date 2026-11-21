@@ -464,6 +464,7 @@ The original draws flat sprites under a fixed light. With this option the world 
 **Liquids**
 - The green liquids (the pools, their strips and edges, ripples and bubbles: shapes 0x150, 0x59E, 0x227, 0x228, 0x5A2, 0x55A, 0x56D, 0x56E, 0x1D6, 0x539, 0x54C, 0x580; no TYPEFLAG bit marks them) glow a faint radioactive green, in slow patches that drift and breathe.
 - They light what stands around them (walls, rims, floors, machines, pillars, people at the edge) in green, with one light for each 1024 x 1024 cell of liquid, high over it so that it falls on the floors past the rims and reaches 1600 units; it does not light the liquid itself.
+- Around them the ambient light is lower (down to 25 % of it over most of that reach, the strongest liquid near counting, not their sum), so that a room with a pool or a canal is lit by its green glow rather than by the general light. The liquid itself and the lit points away from it keep the ambient light chosen.
 - The pools give off a thin steam: wisps that rise from the surface, drift and fade out over seven to eleven seconds, faintly green. They need no memory (each comes back from the game's clock and the pool's place), so they are there as soon as a pool is in view; they go with the smoke (VOLUMETRIC SMOKE option).
 
 **What is not lit**
