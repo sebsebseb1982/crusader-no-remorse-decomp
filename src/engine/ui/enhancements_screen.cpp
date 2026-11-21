@@ -16,6 +16,8 @@ constexpr int kTitleY = 66, kIconSize = 14, kIconGap = 8;
 constexpr int kRowX0 = 130, kRowX1 = 509, kRowY0 = 90, kRowStep = 26, kRowHeight = 24;
 constexpr int kTextDrop = 17, kRowPad = 18;  // glyphs hang from their baseline
 constexpr std::uint8_t kFrameColour = 0x57, kGreen = 0x0C, kDimGreen = 0x75;
+// A row that does nothing as things are (MISC.PAL): focused, not.
+constexpr std::uint8_t kInactiveFocused = 0x1C, kInactive = 0x7F;
 
 // Text in one colour: drawn on a scratch surface, copied in `tint`.
 // @orig none: screen of the port's enhancements
@@ -127,6 +129,12 @@ std::span<const EnhancementsScreen::Entry> EnhancementsScreen::entries() const {
 }
 
 // @orig none: port-only enhancements window
+bool EnhancementsScreen::inactive(Entry entry) const {
+    // The 3D lighting's own options: without it, nothing of them is drawn.
+    return (entry == Entry::Smoke || entry == Entry::Flashlight || entry == Entry::Ambient) && !config_->lighting;
+}
+
+// @orig none: port-only enhancements window
 int EnhancementsScreen::row_of(Entry entry) const {
     const auto list = entries();
     for (std::size_t i = 0; i < list.size(); ++i)
@@ -167,7 +175,7 @@ void EnhancementsScreen::draw(Surface8& screen) const {
         const Entry entry = list[static_cast<std::size_t>(row)];
         const Rect r = row_rect(row);
         const bool focused = row == focus_;
-        const int tint = focused ? kGreen : kDimGreen;
+        const int tint = inactive(entry) ? (focused ? kInactiveFocused : kInactive) : focused ? kGreen : kDimGreen;
         draw_rounded_box(screen, r.x0, r.y0, r.x1, r.y1, -1, static_cast<std::uint8_t>(tint));
         const TextWriter writer(*fonts_, kFont);
         const std::string label = button_label(entry);
@@ -316,6 +324,7 @@ void EnhancementsScreen::activate(int row) {
     const auto list = entries();
     if (row < 0 || row >= static_cast<int>(list.size())) return;
     focus_ = row;
+    if (inactive(list[static_cast<std::size_t>(row)])) return;
     switch (list[static_cast<std::size_t>(row)]) {
     case Entry::Controls:
     case Entry::Display:
@@ -382,7 +391,7 @@ void EnhancementsScreen::key(std::uint16_t code) {
     }
     if (closed_) return;
     const bool on_intensity = row_of(Entry::VibrationIntensity) == focus_;
-    const bool on_ambient = row_of(Entry::Ambient) == focus_;
+    const bool on_ambient = row_of(Entry::Ambient) == focus_ && !inactive(Entry::Ambient);
     switch (code) {
     case gump_key::kEscape: back(); break;
     case gump_key::kEnter: activate(focus_); break;

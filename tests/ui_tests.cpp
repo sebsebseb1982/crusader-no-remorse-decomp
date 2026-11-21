@@ -150,6 +150,23 @@ void test_vibration_settings() {
     choose(smooth, Entry::Smooth);
     CHECK(config.smooth_scaling);
 
+    // Without the 3D lighting, its smoke, flashlight and ambient light are
+    // greyed and stay as they are.
+    CHECK(!config.lighting && config.volumetric_smoke && config.flashlight);
+    CHECK(smooth.inactive(Entry::Smoke) && smooth.inactive(Entry::Flashlight) && smooth.inactive(Entry::Ambient));
+    CHECK(!smooth.inactive(Entry::Lighting) && !smooth.inactive(Entry::Smooth));
+    choose(smooth, Entry::Smoke);
+    choose(smooth, Entry::Flashlight);
+    choose(smooth, Entry::Ambient);
+    smooth.key(gump_key::kLeft);
+    CHECK(config.volumetric_smoke && config.flashlight && config.ambient_light == 85);
+    choose(smooth, Entry::Lighting);
+    CHECK(config.lighting && !smooth.inactive(Entry::Smoke) && !smooth.inactive(Entry::Ambient));
+    choose(smooth, Entry::Smoke);
+    CHECK(!config.volumetric_smoke);
+    choose(smooth, Entry::Smoke);
+    config.ambient_light = 85;
+
     // The ambient light: Enter adds 5 and wraps after 100, left / right by 5 within 0..100.
     choose(smooth, Entry::Ambient);
     CHECK(config.ambient_light == 90);

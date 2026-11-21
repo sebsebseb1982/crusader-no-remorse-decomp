@@ -106,6 +106,9 @@ public:
     std::span<const Entry> entries() const;
     // The row of `entry` on the page shown, -1 when it is not there.
     int row_of(Entry entry) const;
+    // Whether `entry` is greyed and does nothing: the 3D lighting's options
+    // (smoke, flashlight, ambient light) while it is off.
+    bool inactive(Entry entry) const;
     const GamepadScreen* gamepad() const { return pad_.get(); }
     Rect row_rect(int row) const;
 
