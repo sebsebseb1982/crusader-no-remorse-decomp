@@ -235,6 +235,8 @@ private:
     void gather_occluders(const World& world);
     void gather_liquids(const World& world);
     void liquid_lights(std::vector<PointLight>& lights) const;
+    void gather_jets(const World& world);
+    bool by_jet(const Vec3& p) const;
     void steam(std::vector<PuffState>& out) const;
     void smoulder(std::vector<PuffState>& out) const;
     std::optional<std::pair<float, float>> hole(std::uint16_t shape, std::uint32_t frame, std::uint32_t whole) const;
@@ -293,6 +295,8 @@ private:
         bool steams;
     };
     std::vector<Liquid> liquids_;
+    // The game's jets of steam around the view, open or shut: their boxes.
+    std::vector<std::pair<Vec3, Vec3>> jets_;
 
     // Smoke.
     std::vector<SmokePuff> puffs_;

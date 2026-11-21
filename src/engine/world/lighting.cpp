@@ -312,6 +312,18 @@ const Smoulder kSmoulders[] = {
 };
 constexpr std::size_t kMaxSmoulder = 96;
 
+// The game's own jets of steam (STEAMBOX 0x500, both games): STEAM1 0x4FA
+// and STEAM2 0x511, opening (0x4F9, 0x4FD) and shutting (0x4FB, 0x512), and
+// the marker 0x3A9 of a shut one, which a valve opens again. Each stands in
+// front of the hole of a pierced pipe, its box 64 to 100 units off the pipe:
+// that pipe's steam is the jet's sprite, shut with its valve, not a leak.
+// @orig none: port lighting (smoke)
+bool is_steam_jet(std::uint16_t shape) {
+    return shape == 0x3A9 || shape == 0x4F9 || shape == 0x4FA || shape == 0x4FB || shape == 0x4FD || shape == 0x511 ||
+           shape == 0x512;
+}
+constexpr float kJetReach = 128;  // from the jet's box to the hole, x and y
+
 // @orig none: port lighting (smoke)
 const Smoulder* smoulders(std::uint16_t shape, std::uint32_t frame) {
     for (const Smoulder& s : kSmoulders)
@@ -681,6 +693,8 @@ void WorldLighting::capture(const World& world, const std::vector<DrawItem>& lis
     }
     if (opt.liquids) gather_liquids(world);
     else liquids_.clear();
+    if (opt.smoke) gather_jets(world);
+    else jets_.clear();
     // Which item shows at each pixel, in the order they were drawn, by bands
     // of rows. Translucent items leave it to what is below; flashes and
     // explosions (drawn as sprites) only glow, and so do the fixtures that
@@ -917,6 +931,39 @@ void WorldLighting::gather_liquids(const World& world) {
     });
 }
 
+// The game's jets of steam around the view, open or shut (is_steam_jet):
+// the pierced pipes behind them do not leak.
+// @orig none: port lighting (smoke)
+void WorldLighting::gather_jets(const World& world) {
+    jets_.clear();
+    constexpr float kMargin = 900;
+    const float dlo = 4.0f * view_left_ - kMargin, dhi = 4.0f * (view_left_ + width_) + kMargin;
+    const float slo = 8.0f * view_top_ - kMargin, shi = 8.0f * (view_top_ + height_ + 256) + kMargin;
+    world.for_each([&](const Item& item) {
+        if (!is_steam_jet(item.shape) || item.off_map || item.parent != 0 || (item.flags & kItemContained)) return;
+        const ShapeInfo* info = world.shape_info(item.shape);
+        if (!info) return;
+        const bool mirrored = item.flags & kItemFlipped;
+        const float x = float(world_from_usecode(item.x)), y = float(world_from_usecode(item.y));
+        const float dx = float((mirrored ? info->footpad_y : info->footpad_x) * kFootpadXY);
+        const float dy = float((mirrored ? info->footpad_x : info->footpad_y) * kFootpadXY);
+        if (x - (y - dy) < dlo || (x - dx) - y > dhi || x + y < slo || (x - dx) + (y - dy) > shi) return;
+        const float z = float(item.z), top = float(item.z + info->footpad_z * kFootpadZ);
+        jets_.push_back({{x - dx, y - dy, z * kLightZScale}, {x, y, top * kLightZScale}});
+    });
+}
+
+// Whether `p` (lighting space) is by one of the game's jets of steam.
+// @orig none: port lighting (smoke)
+bool WorldLighting::by_jet(const Vec3& p) const {
+    for (const auto& [lo, hi] : jets_) {
+        if (p.x >= lo.x - kJetReach && p.x <= hi.x + kJetReach && p.y >= lo.y - kJetReach &&
+            p.y <= hi.y + kJetReach && p.z >= lo.z - 32 * kLightZScale && p.z <= hi.z + 32 * kLightZScale)
+            return true;
+    }
+    return false;
+}
+
 // The liquids' glow on what is around them: a green light high over (so that
 // it falls on the floors past the rims) each cell of liquid, breathing with
 // the glow. It does not light the liquids themselves (their glow is their
@@ -1059,8 +1106,10 @@ void WorldLighting::smoulder(std::vector<PuffState>& out) const {
                                 float(d.sx);
                 const float v = float(d.top) + at->second - float(d.sy);
                 const float depth = (d.x_left - d.x + d.y_far - d.y) * 0.5f;
-                top = Vec3{d.x + 2 * u + depth * 0.5f, d.y - 2 * u + depth * 0.5f, (d.z - v + depth / 8) * kLightZScale} +
-                      kToViewer * 8.0f;
+                top = Vec3{d.x + 2 * u + depth * 0.5f, d.y - 2 * u + depth * 0.5f, (d.z - v + depth / 8) * kLightZScale};
+                // The game blows its own steam out of this hole, or will.
+                if (by_jet(top)) continue;
+                top = top + kToViewer * 8.0f;
                 blow = Vec3{kToViewer.x, kToViewer.y, 0} * 30.0f;
             }
         }

@@ -733,6 +733,48 @@ void test_pierced_pipes_leak(const std::filesystem::path& data) {
     CHECK(pierced >= 2 && mended < pierced);
 }
 
+// A pierced pipe by one of the game's jets of steam does not leak, the jet's
+// sprite is its steam (shut with its valve): on map 42, the pipe at 3230,
+// 26782 (0x41, frame 5) by the jet STEAM2 (0x511) at 3454, 26878, and the
+// pipe at 5918, 22142 (0x54, frame 1) by a shut one (the marker 0x3A9) at
+// 6078, 22142. Moved away, the pipes leak (puffs of size 7).
+void test_valve_steam_not_doubled(const std::filesystem::path& data) {
+    struct Leak {
+        std::uint16_t pipe;
+        std::int32_t x, y;
+        std::uint16_t jet;
+        std::int32_t jx, jy;
+    };
+    const Leak leaks[] = {{0x041, 3230, 26782, 0x511, 3454, 26878}, {0x054, 5918, 22142, 0x3A9, 6078, 22142}};
+    for (const Leak& k : leaks) {
+        LightingScene s(data, 42);
+        const auto find = [&](std::uint16_t shape, std::int32_t x, std::int32_t y) {
+            ObjId found = 0;
+            s.w.for_each([&](const Item& i) {
+                if (i.shape == shape && world_from_usecode(i.x) == x && world_from_usecode(i.y) == y && !i.parent)
+                    found = i.id;
+            });
+            return found;
+        };
+        const ObjId pipe = find(k.pipe, k.x, k.y), jet = find(k.jet, k.jx, k.jy);
+        CHECK(pipe != 0 && jet != 0);
+        if (!pipe || !jet) continue;
+        const auto near = [&] {
+            int n = 0;
+            for (const PuffState& p : s.lighting.puffs_shown())
+                n += p.feature == 7 && std::abs(p.centre.x - float(k.x)) < 400 && std::abs(p.centre.y - float(k.y)) < 400;
+            return n;
+        };
+        s.lights(*s.w.get(pipe), 120);
+        const int by_jet = near();
+        s.w.get(jet)->x += 3000;
+        s.lights(*s.w.get(pipe), 120);
+        const int alone = near();
+        std::printf("pipe 0x%X by jet 0x%X: %d puffs of steam, %d without the jet\n", k.pipe, k.jet, by_jet, alone);
+        CHECK(by_jet == 0 && alone >= 2);
+    }
+}
+
 // The green puddle G_POOL (0x15D, map 13) is a liquid: it lights around it
 // in green and steams.
 void test_green_puddle(const std::filesystem::path& data) {
@@ -769,6 +811,7 @@ int main(int argc, char** argv) {
     test_terminals_and_consoles(data);
     test_green_puddle(data);
     test_pierced_pipes_leak(data);
+    test_valve_steam_not_doubled(data);
     if (have_test_saves(data)) {
         test_translucent_windows(data);
         test_save_round_trip(data);
