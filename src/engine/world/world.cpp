@@ -989,6 +989,7 @@ namespace {
 
 // ITEMCACH.C 1D29 on a w x h screen (bounds w - 1, h - 1): how far the screen
 // moves for the target drawn at (sx, sy) on it; false when it stays.
+// @orig 10B0:1D29
 bool camera_shift(int sx, int sy, int w, int h, int& dx, int& dy) {
     if (sy >= 0x8C && sy <= h - 0x46 && sx <= w - 100 && sx >= 100) return false;
     // Where to put the target: away from the edge it came near.
