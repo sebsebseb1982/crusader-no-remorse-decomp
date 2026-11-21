@@ -60,6 +60,10 @@ struct PointLight {
     // full inside cos_inner, nothing outside cos_outer. Zero: all round.
     Vec3 dir;
     float cos_inner = 1, cos_outer = 0;
+    // A lamp's glow in the air round its bulb (radius, lighting space; zero:
+    // none), seen over what is behind the light, hidden by what is in front.
+    float halo = 0;
+    float halo_gain = 1;  // the halo's brightness, times the light's colour
 };
 
 struct LightingOptions {
@@ -129,8 +133,8 @@ struct LitFrame {
     // 16 floats an item: box (x_left, x, y_far, y), (z, z_top, flags, id),
     // atlas rectangle (x, y, w, h), frame rectangle (left, top, 0, 0) on screen.
     std::vector<float> items;
-    // 16 floats a light: position, radius; colour, owner; first and count of its occluders, liquid,
-    // spot cos_inner; spot direction (zero: all round), cos_outer.
+    // 20 floats a light: position, radius; colour, owner; first and count of its occluders, liquid,
+    // spot cos_inner; spot direction (zero: all round), cos_outer; halo, halo gain, 0, 0.
     std::vector<float> lights;
     // 16 floats a box: lo, owner; hi, mirrored; atlas rectangle; sprite left, top, has sprite.
     std::vector<float> boxes;
@@ -238,6 +242,8 @@ private:
     Vec3 shade_point(int c, const Vec3& p, const Vec3& n, ObjId self, const LightingOptions& opt,
                      const std::vector<std::uint32_t>& tile_lights,
                      const std::vector<std::vector<std::uint32_t>>* tile_boxes, bool liquid = false) const;
+    Vec3 halo_over(Vec3 colour, int px, int py, bool clip, float surface_s, ObjId self,
+                   const std::vector<std::uint32_t>& ids) const;
     Vec3 smoke_over(Vec3 colour, int px, int py, bool clip, float surface_s, const LightingOptions& opt,
                     const std::vector<std::uint32_t>& puffs) const;
     void shade_cpu(const Surface8& screen, const LightingOptions& opt, std::uint32_t* argb);

@@ -45,6 +45,10 @@ const float kRayStepLength = std::sqrt(dot(kRayStep, kRayStep));
 constexpr int kTile = 16;
 constexpr int kSmokeSteps = 8;
 constexpr std::size_t kMaxPuffs = 160;
+// A lamp's halo (halo_over): its light times this at its centre, and how far
+// behind a surface the light may be and still glow over it (a lamp's wall).
+constexpr float kHaloGain = 0.1f;
+constexpr float kHaloDepth = 16;
 
 // Colour-cycled palette entries (palette_cycle.hpp): blinking lamps,
 // screens, force fields, lasers.
@@ -96,7 +100,8 @@ constexpr std::size_t kMaxSteam = 128;
 // is at the sprite's brightest pixels (the bulb), else in the middle of the
 // box (screens, whose frame is bright too). `pulse`: the light swells and
 // fades, twice a second (the alarm lights, whose lit frames are those of an
-// alert: set_alert, world_intrinsics.hpp).
+// alert: set_alert, world_intrinsics.hpp). `halo`: the glow round the bulb
+// (PointLight::halo), lamps only: a screen's light comes from its whole face.
 struct Fixture {
     std::uint16_t shape;
     std::uint32_t lit_frames;  // bit n: frame n gives light
@@ -104,6 +109,8 @@ struct Fixture {
     float strength, radius;
     bool bulb;
     bool pulse = false;
+    float halo = 0;
+    float halo_gain = 1;
 };
 const Vec3 kWarmLight{1.0f, 0.86f, 0.66f};
 const Vec3 kTubeLight{0.85f, 0.95f, 1.0f};
@@ -111,45 +118,74 @@ const Vec3 kScreenLight{0.55f, 0.75f, 1.0f};
 const Vec3 kRedLight{1.0f, 0.38f, 0.25f};
 const Vec3 kAlarmLight{1.0f, 0.15f, 0.08f};
 const Fixture kFixtures[] = {
-    {0x2A0, 0x0F, kWarmLight, 1.3f, 620, true},    // wall lamp, a dome (4..7 broken)
-    {0x269, 0x01, kWarmLight, 1.3f, 650, true},    // ceiling lamp
-    {0x4EB, 0x03, kTubeLight, 1.2f, 620, true},    // strip lights (2, 3 broken)
-    {0x519, 0x03, kTubeLight, 1.2f, 620, true},
-    {0x3B7, 0x0F, kWarmLight, 0.9f, 380, true},    // desk lamps (frames 0..3)
-    {0x435, 0x30, kWarmLight, 1.1f, 520, true},    // a globe on a stand (frames 4, 5)
+    {0x2A0, 0x0F, kWarmLight, 1.3f, 620, true, false, 44},  // wall lamp, a dome (4..7 broken)
+    {0x269, 0x01, kWarmLight, 1.3f, 650, true, false, 48},  // ceiling lamp
+    {0x4EB, 0x03, kTubeLight, 1.2f, 620, true, false, 44},  // strip lights (2, 3 broken)
+    {0x519, 0x03, kTubeLight, 1.2f, 620, true, false, 44},
+    {0x3B7, 0x0F, kWarmLight, 0.9f, 380, true, false, 30},  // desk lamps (frames 0..3)
+    {0x435, 0x30, kWarmLight, 1.1f, 520, true, false, 40},  // a globe on a stand (frames 4, 5)
     {0x102, 0x01, kScreenLight, 0.45f, 300, false},  // monitors (1: back, 2, 3 broken)
     {0x165, 0x01, kScreenLight, 0.45f, 300, false},
     {0x130, 0x01, Vec3{1.0f, 0.75f, 0.35f}, 0.6f, 420, false},  // wall screens with the E (1 broken)
     {0x1A3, 0x01, Vec3{1.0f, 0.75f, 0.35f}, 0.6f, 420, false},
-    {0x0BC, 0x09, kTubeLight, 1.2f, 600, true},    // wall lamps: a floodlight (frames 0, 3),
-    {0x0BC, 0x36, kRedLight, 1.4f, 480, true},     // red caged lamps (1, 4) and lanterns (2, 5); 6..11 broken
-    {0x021, 0x02, kAlarmLight, 1.2f, 460, true, true},  // ALERT signs (0 off, 1 on, 2 broken)
-    {0x049, 0x02, kAlarmLight, 1.2f, 460, true, true},
-    {0x174, 0x02, kAlarmLight, 1.4f, 520, true, true},  // alarm lights (0 off, 1 on, 2 broken)
-    {0x271, 0x02, kAlarmLight, 1.4f, 520, true, true},
-    {0x477, 0x0C, kAlarmLight, 0.8f, 320, true, true},  // alarm box: 2, 3 its frames 0, 1 on
+    {0x0BC, 0x09, kTubeLight, 2.6f, 800, true, false, 30, 0.6f},  // wall lamps: a floodlight (frames 0, 3),
+    {0x0BC, 0x36, kRedLight, 1.4f, 520, true, false, 40},   // red caged lamps (1, 4) and lanterns (2, 5); 6..11 broken
+    {0x021, 0x02, kAlarmLight, 1.2f, 460, true, true, 40},  // ALERT signs (0 off, 1 on, 2 broken)
+    {0x049, 0x02, kAlarmLight, 1.2f, 460, true, true, 40},
+    {0x174, 0x02, kAlarmLight, 1.4f, 520, true, true, 44},  // alarm lights (0 off, 1 on, 2 broken)
+    {0x271, 0x02, kAlarmLight, 1.4f, 520, true, true, 44},
+    {0x477, 0x0C, kAlarmLight, 0.8f, 320, true, true, 30},  // alarm box: 2, 3 its frames 0, 1 on
 };
 
-// Broken electric things (SHAPES.FLX, the frames once shot): they smoulder,
-// a thin wisp rising from them for good. Lamps and screens (their broken
-// frames, kFixtures) and the security cameras (their last frame).
+// The fixtures' light against the ambient light (LightingOptions::ambient):
+// tuned dark, they would hardly show in the game's bright default (85 %).
+float fixture_boost(float ambient) { return 1 + 1.2f * std::clamp(ambient, 0.0f, 1.0f); }
+
+// Broken machines (SHAPES.FLX, their frames once shot, as the usecode or
+// DAMAGE.FLX leave them): they smoulder, a thin wisp rising from them for
+// good. Electronics only: a lamp has none, nor a tank or a desk.
 struct Smoulder {
     std::uint16_t shape;
     std::uint32_t frames;  // bit n: frame n is broken
+    bool motor = false;    // a fan: a thicker smoke from its hub, in the middle of its face
 };
 const Smoulder kSmoulders[] = {
-    {0x2A0, 0xF0},  {0x4EB, 0x0C}, {0x519, 0x0C}, {0x102, 0x0C}, {0x165, 0x0C},
-    {0x130, 0x02},  {0x1A3, 0x02}, {0x0BC, 0xFC0}, {0x021, 0x04}, {0x049, 0x04},
-    {0x174, 0x04},  {0x271, 0x04},
-    {0x1B6, 0x20},  {0x1B8, 0x200}, {0x1D7, 0x200},  // cameras (CAMERACO, CAMERANS, CAMERAEW)
+    // Screens and computers.
+    {0x102, 0x0C}, {0x165, 0x0C},  // monitors
+    {0x130, 0x02}, {0x1A3, 0x02},  // wall screens with the E
+    {0x370, 0x02},                 // a small screen
+    {0x3DE, 0xF0}, {0x3DF, 0xF0}, {0x3E0, 0xF0},  // small monitors and sets
+    {0x131, 0x0C}, {0x13A, 0x0C}, {0x182, 0x0C},  // computers
+    {0x0E8, 0x0C}, {0x185, 0x0C}, {0x3D9, 0x38}, {0x446, 0x38},  // electronic boxes
+    {0x257, 0x08}, {0x258, 0x08},  // BIGCOMNS, BIGCOMEW
+    {0x1B0, 0x08}, {0x1B1, 0x08}, {0x1B2, 0x02}, {0x1B3, 0x02},  // consoles
+    {0x1EF, 0x30}, {0x1F8, 0x30},  // control desks
+    {0x25B, 0x60}, {0x25C, 0x60}, {0x25D, 0x02}, {0x25E, 0x02},
+    {0x26A, 0x02}, {0x26B, 0x02},  // racks
+    {0x3BF, 0xF0}, {0x3C0, 0xF0},  // cabinets
+    {0x431, 0xFFFF00},             // server cabinets (8..23)
+    {0x409, 0xF0},                 // arcade cabinets
+    {0x39F, 0x01}, {0x3A0, 0x01},  // vending machines, broken (PEPSIEW, PEPSINS replaced)
+    // Fans: shot, they are replaced by these shapes, frame 0.
+    {0x3CE, 0x01, true}, {0x3D3, 0x01, true},  // RFANBADE, RFANBADN (RFANEW, RFANNS)
+    {0x32C, 0x03, true}, {0x32D, 0x03, true},  // MFAN_EW, MFAN_NS broken
+    {0x3E7, 0x0C}, {0x3E8, 0x0C},  // wall vents (WVENTNS, WVENTEW)
+    // Power: chargers, generators, transformers.
+    {0x136, 0x30}, {0x158, 0x30},  // chargers (RECHAGNS, RECHAGEW: both parts)
+    {0x3C1, 0x3C},                 // GENERATR
+    {0x3C2, 0x0C}, {0x3C3, 0x0C},  // generator cabinets
+    {0x1BF, 0x02},                 // TRANSFOR
+    {0x073, 0x02}, {0x0C8, 0x02}, {0x0FF, 0x02}, {0x21C, 0x02}, {0x2A5, 0x02},  // power units
+    {0x4F6, 0x0C}, {0x55C, 0x0C},
+    {0x1B6, 0x20}, {0x1B8, 0x200}, {0x1D7, 0x200},  // cameras (CAMERACO, CAMERANS, CAMERAEW)
 };
-constexpr std::size_t kMaxSmoulder = 48;
+constexpr std::size_t kMaxSmoulder = 64;
 
 // @orig none: port lighting (smoke)
-bool smoulders(std::uint16_t shape, std::uint32_t frame) {
+const Smoulder* smoulders(std::uint16_t shape, std::uint32_t frame) {
     for (const Smoulder& s : kSmoulders)
-        if (s.shape == shape && frame < 32 && (s.frames >> frame & 1)) return true;
-    return false;
+        if (s.shape == shape && frame < 32 && (s.frames >> frame & 1)) return &s;
+    return nullptr;
 }
 
 // @orig none: port lighting (light fixtures)
@@ -801,27 +837,44 @@ void WorldLighting::smoulder(std::vector<PuffState>& out) const {
     for (const DrawItem& d : list_) {
         if (count >= kMaxSmoulder) break;
         const Item& item = *d.item;
-        if (item.sprite_only || !smoulders(item.shape, item.frame)) continue;
-        // From the top of the thing, in the middle of its box.
-        const Vec3 top{(d.x + d.x_left) * 0.5f, (d.y + d.y_far) * 0.5f, float(d.z_top) * kLightZScale};
+        const Smoulder* kind = item.sprite_only ? nullptr : smoulders(item.shape, item.frame);
+        if (!kind) continue;
+        const bool motor = kind->motor;
+        // From the top of the thing, in the middle of its box. A fan's motor:
+        // the middle of its face (the box's middle, on its near side along
+        // its thin axis), a little out of it.
+        Vec3 top{(d.x + d.x_left) * 0.5f, (d.y + d.y_far) * 0.5f, float(d.z_top) * kLightZScale};
+        if (motor) {
+            top.z = (d.z + d.z_top) * 0.5f * kLightZScale;
+            if (d.x - d.x_left < d.y - d.y_far) top.x = float(d.x) + 10;
+            else top.y = float(d.y) + 10;
+        }
         // Its slots share a period, evenly spaced: a steady thread.
-        constexpr int kSlots = 6;
+        const int slots = motor ? 8 : 6;
         const std::uint32_t own = hash32(item.id * 2654435761u);
-        const float period = 2.6f + 0.8f * puff_random(own, 1);
-        for (int k = 0; k < kSlots && count < kMaxSmoulder; ++k) {
+        const float period = (motor ? 3.4f : 2.6f) + 0.8f * puff_random(own, 1);
+        for (int k = 0; k < slots && count < kMaxSmoulder; ++k) {
             const std::uint32_t serial = hash32(own ^ static_cast<std::uint32_t>(k) * 83492791u);
-            const float phase = t / period + puff_random(own, 2) + (k + 0.4f * puff_random(serial, 2)) / kSlots;
+            const float phase = t / period + puff_random(own, 2) + (k + 0.4f * puff_random(serial, 2)) / slots;
             const float cycle = std::floor(phase), u = phase - cycle;
             const std::uint32_t round = serial + static_cast<std::uint32_t>(cycle) * 0x9E3779B9u;
             const float age = u * period;
             PuffState s;
             const Vec3 drift{(puff_random(round, 5) * 2 - 1) * 6, (puff_random(round, 6) * 2 - 1) * 6, 0};
-            s.centre = top + drift * age + Vec3{0, 0, 4 + 30 * age};
-            s.radius = 5 + 20 * u;
-            s.density = 0.02f * smoothstep(0.0f, 0.15f, u) * (1 - smoothstep(0.4f, 1.0f, u));
+            if (motor) {
+                // Thick and dark, pushed out of the face, then rising.
+                s.centre = top + drift * age + Vec3{0, 0, 2 + 48 * age};
+                s.radius = 12 + 48 * u;
+                s.density = 0.04f * smoothstep(0.0f, 0.1f, u) * (1 - smoothstep(0.4f, 1.0f, u));
+                s.grey = 0.2f;
+            } else {
+                s.centre = top + drift * age + Vec3{0, 0, 4 + 30 * age};
+                s.radius = 5 + 20 * u;
+                s.density = 0.02f * smoothstep(0.0f, 0.15f, u) * (1 - smoothstep(0.4f, 1.0f, u));
+                s.grey = 0.5f;
+            }
             if (s.density <= 1e-5f) continue;
             s.heat = 0;
-            s.grey = 0.5f;
             s.seed = puff_random(round, 8) * 100.0f;
             s.time = age;
             s.feature = 9;
@@ -954,9 +1007,12 @@ void WorldLighting::gather_lights(const World& world, const LightingOptions& opt
                     at = {(d.x + d.x_left) * 0.5f, (d.y + d.y_far) * 0.5f, (d.z + d.z_top) * 0.5f * kLightZScale};
                     at = at + kToViewer * 12.0f;
                 }
-                float strength = fx->strength;
+                float strength = fx->strength * fixture_boost(opt.ambient);
                 if (fx->pulse) strength *= 0.3f + 0.7f * (0.5f + 0.5f * std::sin(ticks_ * (2 * 3.14159265f * 2 / 60)));
-                lights.push_back({at, fx->colour * strength, fx->radius, d.item->id});
+                PointLight light{at, fx->colour * strength, fx->radius, d.item->id};
+                light.halo = fx->halo;
+                light.halo_gain = fx->halo_gain;
+                lights.push_back(light);
                 continue;  // in place of the light of its colour-cycled pixels (the alarms')
             }
         }
@@ -1132,6 +1188,30 @@ Vec3 WorldLighting::shade_point(int c, const Vec3& p, const Vec3& n, ObjId self,
     return col;
 }
 
+// The glow of the lamps `ids` (PointLight::halo) over a pixel of linear
+// colour `colour`: a soft disc round the light where the pixel's view ray
+// passes by it. With `clip`, only when the light is in front of the pixel's
+// surface (s = x + y of its point) or the pixel is the lamp's own (`self`).
+// @orig none: port lighting (halo)
+Vec3 WorldLighting::halo_over(Vec3 colour, int px, int py, bool clip, float surface_s, ObjId self,
+                              const std::vector<std::uint32_t>& ids) const {
+    const float sx = view_left_ + px + 0.5f, sy = view_top_ + py + 0.5f;
+    const Vec3 a{2 * sx, -2 * sx, -sy * kLightZScale};
+    const float bb = dot(kRayStep, kRayStep);
+    for (std::uint32_t id : ids) {
+        const PointLight& L = lights_[id];
+        const Vec3 d = a - L.pos;
+        const float mid = -dot(kRayStep, d) / bb;  // where the ray passes closest to the light
+        if (clip && L.owner != self && mid < surface_s - kHaloDepth) continue;
+        const Vec3 e = d + kRayStep * mid;
+        const float k = dot(e, e) / (L.halo * L.halo);
+        if (k >= 9) continue;
+        const float edge = 1 - k / 9;  // down to nothing at 3 radii, without a ring on black
+        colour = colour + L.color * (kHaloGain * L.halo_gain * std::exp(-k) * edge * edge);
+    }
+    return colour;
+}
+
 // The puffs `ids` (far to near) over a pixel of linear colour `colour`;
 // with `clip`, only in front of its surface (s = x + y of its point).
 // @orig none: port lighting (smoke)
@@ -1236,6 +1316,12 @@ void WorldLighting::shade_cpu(const Surface8& screen, const LightingOptions& opt
         const float x = p.centre.x, y = p.centre.y, z = p.centre.z / kLightZScale;
         discs.push_back({(x - y) * 0.25f, (x + y) * 0.125f - z, p.radius * kPixelScale});
     }
+    // The lamps' halos, by light (radius 0: none); exp(-9) at 3 halo radii.
+    std::vector<Disc> halo_discs;
+    for (const PointLight& L : lights_) {
+        const float x = L.pos.x, y = L.pos.y, z = L.pos.z / kLightZScale;
+        halo_discs.push_back({(x - y) * 0.25f, (x + y) * 0.125f - z, L.halo * 3 * kPixelScale});
+    }
     const int tiles_x = (width_ + kTile - 1) / kTile, tiles_y = (height_ + kTile - 1) / kTile;
     pool_->run(static_cast<std::size_t>(tiles_x) * tiles_y, [&](std::size_t t) {
         const int x0 = static_cast<int>(t % tiles_x) * kTile, y0 = static_cast<int>(t / tiles_x) * kTile;
@@ -1283,6 +1369,14 @@ void WorldLighting::shade_cpu(const Surface8& screen, const LightingOptions& opt
             const float cx = std::clamp(d.x, tx0, tx1), cy = std::clamp(d.y, ty0, ty1);
             if ((cx - d.x) * (cx - d.x) + (cy - d.y) * (cy - d.y) < d.r * d.r) puffs.push_back(i);
         }
+        // The lamps' halos over the tile.
+        std::vector<std::uint32_t> halos;
+        for (std::uint32_t i = 0; i < halo_discs.size(); ++i) {
+            const Disc& d = halo_discs[i];
+            if (d.r <= 0) continue;
+            const float cx = std::clamp(d.x, tx0, tx1), cy = std::clamp(d.y, ty0, ty1);
+            if ((cx - d.x) * (cx - d.x) + (cy - d.y) * (cy - d.y) < d.r * d.r) halos.push_back(i);
+        }
         for (int y = y0; y < y1; ++y)
             for (int x = x0; x < x1; ++x) {
                 const std::size_t j = static_cast<std::size_t>(y) * width_ + x;
@@ -1305,6 +1399,9 @@ void WorldLighting::shade_cpu(const Surface8& screen, const LightingOptions& opt
                 else
                     col = shade_point(c, pos_[j], nrm_[j], list_[owner_[j]].item->id, opt, ids, &boxes,
                                       liquid_[owner_[j]] != 0);
+                if (!halos.empty())
+                    col = halo_over(col, x, y, lit, lit ? pos_[j].x + pos_[j].y : 0.0f,
+                                    owner_[j] >= 0 ? list_[owner_[j]].item->id : 0, halos);
                 if (!puffs.empty())
                     col = smoke_over(col, x, y, lit, lit ? pos_[j].x + pos_[j].y : 0.0f, opt, puffs);
                 argb[j] = pack(col);
@@ -1406,16 +1503,17 @@ bool WorldLighting::shade_gpu(const Surface8& screen, const LightingOptions& opt
             else f.code[j] = static_cast<std::uint16_t>(owner_[j]);
         }
     });
-    f.lights.assign(lights_.size() * 16, 0.0f);
+    f.lights.assign(lights_.size() * 20, 0.0f);
     f.light_boxes.clear();
     for (std::size_t l = 0; l < lights_.size(); ++l) {
         const PointLight& L = lights_[l];
-        float* o = &f.lights[l * 16];
+        float* o = &f.lights[l * 20];
         o[0] = L.pos.x, o[1] = L.pos.y, o[2] = L.pos.z, o[3] = L.radius;
         o[4] = L.color.x, o[5] = L.color.y, o[6] = L.color.z, o[7] = float(L.owner);
         o[8] = float(f.light_boxes.size()), o[9] = float(per_light_[l].size()), o[10] = L.liquid ? 1.0f : 0.0f;
         o[11] = L.cos_inner;
         o[12] = L.dir.x, o[13] = L.dir.y, o[14] = L.dir.z, o[15] = L.cos_outer;
+        o[16] = L.halo, o[17] = L.halo_gain;
         for (std::uint32_t b : per_light_[l]) f.light_boxes.push_back(static_cast<std::int32_t>(b));
     }
     f.puffs.assign(puff_now_.size() * 12, 0.0f);

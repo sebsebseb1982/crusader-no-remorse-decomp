@@ -69,6 +69,7 @@ const vec3 RAY_STEP = vec3(0.5, 0.5, K / 8.0);
 const int SHADOWS = 1, SPRITE_CUT = 2, BUMP = 4, SMOKE = 8;
 const vec3 LIQUID_TINT = vec3(0.45, 1.0, 0.35);
 const float LIQUID_GLOW = 0.8;
+const float HALO_GAIN = 0.1, HALO_DEPTH = 16.0;  // kHaloGain, kHaloDepth
 
 vec4 fetchf(highp sampler2D t, int i) { return texelFetch(t, ivec2(i & 1023, i >> 10), 0); }
 vec3 srgb(uint c) { return texelFetch(uPalette, ivec2(int(c), 0), 0).bgr; }
@@ -198,8 +199,8 @@ float spotOf(vec4 L2, vec4 L3, vec3 to, float dist) {
 vec3 lightAt(vec3 p) {
     vec3 light = vec3(uAmbient, uAmbient * 1.02, uAmbient * 1.12);
     for (int l = 0; l < uLightCount; ++l) {
-        vec4 L0 = fetchf(uLights, l * 4), L1 = fetchf(uLights, l * 4 + 1);
-        vec4 L2 = fetchf(uLights, l * 4 + 2), L3 = fetchf(uLights, l * 4 + 3);
+        vec4 L0 = fetchf(uLights, l * 5), L1 = fetchf(uLights, l * 5 + 1);
+        vec4 L2 = fetchf(uLights, l * 5 + 2), L3 = fetchf(uLights, l * 5 + 3);
         vec3 to = L0.xyz - p;
         float d2 = dot(to, to), r2 = L0.w * L0.w;
         if (d2 >= r2) continue;
@@ -207,6 +208,27 @@ vec3 lightAt(vec3 p) {
         light += L1.rgb * (f * f * 0.8 * spotOf(L2, L3, to, sqrt(d2)));
     }
     return light;
+}
+
+// The lamps' glow over a pixel (halo_over in lighting.cpp).
+vec3 haloOver(vec3 colour, ivec2 pix, bool clip, float surfaceS, float self) {
+    float sx = float(uViewX + pix.x) + 0.5, sy = float(uViewY + pix.y) + 0.5;
+    vec3 A = vec3(2.0 * sx, -2.0 * sx, -sy * K);
+    float bb = dot(RAY_STEP, RAY_STEP);
+    for (int l = 0; l < uLightCount; ++l) {
+        vec4 L4 = fetchf(uLights, l * 5 + 4);
+        if (L4.x <= 0.0) continue;
+        vec4 L0 = fetchf(uLights, l * 5), L1 = fetchf(uLights, l * 5 + 1);
+        vec3 d = A - L0.xyz;
+        float mid = -dot(RAY_STEP, d) / bb;
+        if (clip && L1.w != self && mid < surfaceS - HALO_DEPTH) continue;
+        vec3 e = d + RAY_STEP * mid;
+        float k = dot(e, e) / (L4.x * L4.x);
+        if (k >= 9.0) continue;
+        float edge = 1.0 - k / 9.0;
+        colour += L1.rgb * (HALO_GAIN * L4.y * exp(-k) * edge * edge);
+    }
+    return colour;
 }
 
 // The puffs (far to near) over a pixel; with clip, only in front of its surface.
@@ -273,8 +295,8 @@ void main() {
         bool liquid = (int(b.z) & 4) != 0;
         vec3 light = vec3(uAmbient, uAmbient * 1.02, uAmbient * 1.12);
         for (int l = 0; l < uLightCount; ++l) {
-            vec4 L0 = fetchf(uLights, l * 4), L1 = fetchf(uLights, l * 4 + 1), L2 = fetchf(uLights, l * 4 + 2);
-            vec4 L3 = fetchf(uLights, l * 4 + 3);
+            vec4 L0 = fetchf(uLights, l * 5), L1 = fetchf(uLights, l * 5 + 1), L2 = fetchf(uLights, l * 5 + 2);
+            vec4 L3 = fetchf(uLights, l * 5 + 3);
             if (liquid && L2.z > 0.5) continue;
             vec3 to = L0.xyz - p;
             float d2 = dot(to, to), r2 = L0.w * L0.w;
@@ -292,6 +314,7 @@ void main() {
         if (c >= 1u && c <= 14u) col += lin(c);
         if (liquid) col += lin(c) * LIQUID_TINT * (LIQUID_GLOW * liquidGlow(p, uTime));
     }
+    col = haloOver(col, pix, lit, p.x + p.y, lit ? fetchf(uItems, int(code) * 4 + 1).w : -1.0);
     if ((uFlags & SMOKE) != 0 && uPuffCount > 0) col = smokeOver(col, pix, lit, p.x + p.y);
     vec3 o = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
     outColor = vec4(o.b, o.g, o.r, 1.0);
@@ -597,7 +620,7 @@ bool GlLighting::shade(const LitFrame& f, std::uint32_t* argb) {
     g.Uniform1i(g.u_view_y, f.view_top);
     g.Uniform1i(g.u_width, f.width);
     g.Uniform1i(g.u_height, f.height);
-    g.Uniform1i(g.u_lights, static_cast<GLint>(f.lights.size() / 16));
+    g.Uniform1i(g.u_lights, static_cast<GLint>(f.lights.size() / 20));
     g.Uniform1i(g.u_puffs, static_cast<GLint>(f.puffs.size() / 12));
     g.Uniform1i(g.u_flags, (o.shadows ? 1 : 0) | (o.sprite_shadows ? 2 : 0) | (o.bump ? 4 : 0) | (o.smoke ? 8 : 0));
     g.Uniform1f(g.u_ambient, o.ambient);

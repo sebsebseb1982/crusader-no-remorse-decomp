@@ -348,11 +348,45 @@ void test_wall_lamp_lights(const std::filesystem::path& data) {
     auto lights_of = [&](ObjId id) { return lights_owned_by(w, shapes, xform, palette, lighting, {54800, 61300, 0}, id); };
     const auto white = lights_of(kFlood), red = lights_of(kLantern);
     CHECK(white.size() == 1 && red.size() == 1);
-    if (white.size() == 1) CHECK(white[0].color.z >= white[0].color.x);
-    if (red.size() == 1) CHECK(red[0].color.x > 2 * red[0].color.y);
+    if (white.size() == 1) CHECK(white[0].color.z >= white[0].color.x && white[0].halo > 0);
+    if (red.size() == 1) CHECK(red[0].color.x > 2 * red[0].color.y && red[0].halo > 0);
     flood->frame = 6;
     lantern->frame = 8;
     CHECK(lights_of(kFlood).empty() && lights_of(kLantern).empty());
+    // Broken, a lamp does not smoulder: it has no electronics.
+    int wisps = 0;
+    for (const PuffState& p : lighting.puffs_shown()) wisps += p.feature == 9;
+    CHECK(wisps == 0);
+}
+
+// Port lighting (smoke): broken machines smoulder, a lamp does not. The
+// charger 5744 (RECHAGNS, shape 0x136) of map 1, shot (frame 0 -> 4, its
+// usecode), keeps a wisp rising from it.
+void test_broken_charger_smoulders(const std::filesystem::path& data) {
+    constexpr ObjId kCharger = 5744;
+    const auto typeflags = load_typeflags(data / "STATIC/TYPEFLAG.DAT");
+    World w(typeflags);
+    w.load_fixed_map(FlexArchive::open(data / "STATIC/FIXED.DAT"), 1);
+    w.expand_glob_eggs(FlexArchive::open(data / "STATIC/GLOB.FLX"));
+    const auto shapes_flex = FlexArchive::open(data / "STATIC/SHAPES.FLX");
+    ShapeCache shapes(shapes_flex, ShapeLayout::World);
+    const auto xform = XformTable::load(data / "STATIC/XFORMPAL.DAT");
+    const auto palette = Palette::load(data / "STATIC/GAMEPAL.PAL");
+    Item* charger = w.get(kCharger);
+    CHECK(charger && charger->shape == 0x136 && charger->frame == 0);
+    if (!charger) return;
+    WorldLighting lighting(shapes, xform);
+    auto wisps = [&] {
+        lights_owned_by(w, shapes, xform, palette, lighting, {56926, 48350, 0}, kCharger, 120);
+        int n = 0;
+        for (const PuffState& p : lighting.puffs_shown()) n += p.feature == 9;
+        return n;
+    };
+    CHECK(wisps() == 0);
+    charger->frame = 4;
+    const int broken = wisps();
+    std::printf("broken charger: %d wisp puffs\n", broken);
+    CHECK(broken >= 2);
 }
 
 // Port lighting: the alarm light 3868 (shape 0x174) of map 1 is dark until an
@@ -486,6 +520,7 @@ int main(int argc, char** argv) {
     test_original_maps(data);
     test_crate_stack_order(data);
     test_wall_lamp_lights(data);
+    test_broken_charger_smoulders(data);
     test_alarm_lights(data);
     if (have_test_saves(data)) {
         test_translucent_windows(data);
