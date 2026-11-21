@@ -272,6 +272,7 @@ private:
     std::vector<std::int32_t> owner_;     // index in list_, -1 none
     std::vector<std::uint8_t> actor_;     // per list_ item: a character (billboard)
     std::vector<std::uint8_t> liquid_;    // per list_ item: a liquid's surface (glows)
+    std::vector<std::uint8_t> glows_;     // per list_ item: a light itself (an arc), drawn as it is
     std::vector<std::uint8_t> emissive_;  // flash / explosion pixel
     std::vector<Vec3> pos_, nrm_;         // CPU shading only
 

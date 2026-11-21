@@ -628,8 +628,9 @@ void test_reviewed_fixtures(const std::filesystem::path& data) {
     }
 }
 
-// The transformers' electric arcs (SHOCKEW 0x1C2) light blue and flicker;
-// a fire (0x085, what the class ITEM creates when something burns) lights
+// The transformers' electric arcs (SHOCKEW 0x1C2) light blue with a wide
+// halo and flicker, but not their empty frame 6, and so would a wall
+// shocker's arcs (SHOCKNS1 0x459, SHOCKEW1 0x45A) in their place; a fire (0x085, what the class ITEM creates when something burns) lights
 // orange, wavering, and gives off thick smoke.
 void test_arcs_and_fires(const std::filesystem::path& data) {
     LightingScene s(data, 1);
@@ -647,6 +648,18 @@ void test_arcs_and_fires(const std::filesystem::path& data) {
         }
         std::printf("electric arc: blue %.2f..%.2f\n", lo, hi);
         CHECK(hi > 1.5f * lo);
+        for (const std::uint16_t shape : {std::uint16_t{0x1C2}, std::uint16_t{0x1C9}, std::uint16_t{0x459}, std::uint16_t{0x45A}}) {
+            arc->shape = shape;
+            arc->frame = 0;
+            const auto lit = s.lights(*arc);
+            arc->frame = 6;
+            const auto off = s.lights(*arc);
+            std::printf("arc 0x%X: %zu light(s), %zu in its empty frame\n", shape, lit.size(), off.size());
+            CHECK(lit.size() == 1 && off.empty());
+            if (lit.size() == 1) CHECK(lit[0].radius >= 700 && lit[0].halo >= 96 && lit[0].halo_gain >= 2.5f);
+        }
+        arc->shape = 0x1C2;
+        arc->frame = 0;
     }
     Item* fire = s.first(0x406, 0x0F);  // a desk lamp, made a fire
     CHECK(fire);
@@ -695,6 +708,22 @@ void test_terminals_and_consoles(const std::filesystem::path& data) {
     CHECK(s.puffs(9) >= 2);
 }
 
+// Pierced pipes leak steam (puffs of size 7), whole ones do not: a pierced
+// pipe of map 1 (0x053, frame 1), then mended (frame 0).
+void test_pierced_pipes_leak(const std::filesystem::path& data) {
+    LightingScene s(data, 1);
+    Item* pipe = s.first(0x053, 0x02);
+    CHECK(pipe);
+    if (!pipe) return;
+    s.lights(*pipe, 120);
+    const int pierced = s.puffs(7);
+    pipe->frame = 0;
+    s.lights(*pipe, 120);
+    const int mended = s.puffs(7);
+    std::printf("pipe: %d puffs of steam pierced, %d mended\n", pierced, mended);
+    CHECK(pierced >= 2 && mended < pierced);
+}
+
 // The green puddle G_POOL (0x15D, map 13) is a liquid: it lights around it
 // in green and steams.
 void test_green_puddle(const std::filesystem::path& data) {
@@ -730,6 +759,7 @@ int main(int argc, char** argv) {
     test_arcs_and_fires(data);
     test_terminals_and_consoles(data);
     test_green_puddle(data);
+    test_pierced_pipes_leak(data);
     if (have_test_saves(data)) {
         test_translucent_windows(data);
         test_save_round_trip(data);
