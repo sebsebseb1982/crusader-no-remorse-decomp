@@ -1152,9 +1152,9 @@ void test_on_screen() {
     CHECK(w.is_partly_in_combat_zone(*w.get(edge)));
 
     // A 1720 x 720 view (21:9), classic scrolling: the controlled NPC walks
-    // right from the camera point. The original screen (540..1179) scrolls
-    // as the original would, the view only near its own edges, and the NPC
-    // stays in the combat zone.
+    // right from the camera point. The original screen (540..1179) stays
+    // centred on the NPC, the view scrolls only near its own edges, and the
+    // NPC stays in the combat zone.
     w.set_original_combat_zone(true);
     w.set_view_size(1720, 720);
     w.set_camera(4000, 4000, 0);
@@ -1164,14 +1164,19 @@ void test_on_screen() {
     };
     CHECK(zone_is(540, 120));
     const std::int16_t left = w.state.view_left;
-    // 300 pixels right (x - y up by 600): 620 on the original screen, past
-    // 539. It puts the NPC at 120 (and y 280): the zone moves 500 right.
+    // 300 pixels right (x - y up by 600): the zone moves 300 right with the
+    // NPC. (The original rule would have put the NPC at 120 of the original
+    // screen, 520 pixels from its right edge but only 120 from its left.)
     w.track_camera_target(4300, 3700, 0);
-    CHECK(w.state.view_left == left && zone_is(1040, 140));
-    // 740 pixels right: 560 on the original screen moves it 440 more, but it
-    // stops at the view's right edge.
+    CHECK(w.state.view_left == left && zone_is(840, 120));
+    // 740 pixels right: the zone stops at the view's right edge.
     w.track_camera_target(4740, 3260, 0);
-    CHECK(w.state.view_left == left && zone_is(1080, 140));
+    CHECK(w.state.view_left == left && zone_is(1080, 120));
+    // Back 400 pixels left (the original rule: no jump, the NPC 160 pixels
+    // from the zone's left edge): centred on the NPC again, with as much
+    // room on either side.
+    w.track_camera_target(4340, 3660, 0);
+    CHECK(w.state.view_left == left && zone_is(880, 120));
     // 790 pixels right: 1650, past the view's own margin (1619). The view
     // scrolls and the zone stays whole inside it, around the NPC.
     w.track_camera_target(4790, 3210, 0);

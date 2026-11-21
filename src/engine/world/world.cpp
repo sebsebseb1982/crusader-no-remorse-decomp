@@ -878,7 +878,10 @@ void World::set_camera_view(std::int32_t x, std::int32_t y, std::int32_t z, int 
     }
     update_fast_area(ux, uy);
     if (audio_) audio_->sources.update_volumes(*this);
-    clamp_original_screen();
+    // The view moved: a zone centred on the target is centred again (the
+    // view following the target may have held it aside), else kept inside.
+    if (zone_centred_) centre_original_screen();
+    else clamp_original_screen();
 }
 
 // 640 x 480: 0x140 and 300.
@@ -1017,14 +1020,25 @@ void World::track_camera_target(std::int32_t x, std::int32_t y, std::int32_t z) 
     const auto ux = static_cast<std::int16_t>(x), uy = static_cast<std::int16_t>(y);
     const int sx = static_cast<std::int16_t>(((ux - uy) >> 1) - state.view_left);
     const int sy = static_cast<std::int16_t>((static_cast<std::uint16_t>(ux + uy) >> 2) - state.view_top - (z & 0xFF));
-    // Port addition: the original screen of the combat zone scrolls as the
-    // original would, whatever the larger view does.
+    // Port addition: in a larger view the original screen of the combat zone
+    // stays centred on the target, as when the camera is placed. Scrolled by
+    // the original rules, it left the target 120 pixels from its edge on one
+    // side: a camera or a gun drawn just beyond, in plain sight, neither saw
+    // the player nor could be aimed at until a load centred the zone again.
     int dx = 0, dy = 0;
-    const int in_x = original_left_ - state.view_left, in_y = original_top_ - state.view_top;
-    if (camera_shift(sx - in_x, sy - in_y, 639, 479, dx, dy)) {
-        original_left_ += dx;
-        original_top_ += dy;
-        clamp_original_screen();
+    if (state.screen_right + 1 > 640 || state.screen_bottom + 1 > 480) {
+        const std::uint16_t cx = static_cast<std::uint16_t>(x), cy = static_cast<std::uint16_t>(y);
+        zone_centre_x_ = (cx >> 1) - (cy >> 1);
+        zone_centre_y_ = (cx >> 2) + (cy >> 2) - (z & 0xFF);
+        zone_centred_ = true;
+        centre_original_screen();
+    } else {
+        const int in_x = original_left_ - state.view_left, in_y = original_top_ - state.view_top;
+        if (camera_shift(sx - in_x, sy - in_y, 639, 479, dx, dy)) {
+            original_left_ += dx;
+            original_top_ += dy;
+            clamp_original_screen();
+        }
     }
     if (follow_player_) {
         const Item* target = get(state.camera_target);
@@ -1113,6 +1127,15 @@ void World::reset_original_screen() {
     // The camera point is at (320, 300) of the original screen.
     original_left_ = state.view_left + view_origin_x() - 320;
     original_top_ = state.view_top + view_origin_y() - 300;
+    zone_centred_ = false;
+    clamp_original_screen();
+}
+
+// @orig none: port-only native resolution
+void World::centre_original_screen() {
+    // The target at the camera point's place, (320, 300) of the original screen.
+    original_left_ = zone_centre_x_ - 320;
+    original_top_ = zone_centre_y_ - 300;
     clamp_original_screen();
 }
 
