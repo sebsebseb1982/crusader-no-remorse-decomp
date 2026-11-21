@@ -614,6 +614,51 @@ void test_new_game(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
+// Two transformers of map 1 broken together (TRANSFOR at 23295, 14959 and
+// 23503, 14959): each one's gotHit fades the screen in from black, waits for
+// the fade, then destroys the arcs within 160 of it. Remorse runs both fades
+// (1440:0000 activates every one; No Regret's second one ends at once), so the
+// arc only the second one reaches (SHOCKEW at 23599, 14911) goes too.
+void test_transformers_broken_together(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.set_start(1, 0x1E);
+    game.new_game(0);
+    // The mission's movie freezes the game: skipped.
+    for (int f = 0; f < 120; ++f) {
+        game.update(kFrameUs);
+        if (!game.movie()) continue;
+        game.key(0x01, false, true, 0, 0x1B);
+        game.update(kFrameUs);
+        game.key(0x01, false, false, 0);
+    }
+    CHECK(!game.movie());
+    World& w = game.world();
+    const auto find = [&w](std::uint16_t shape, std::int32_t x, std::int32_t y) {
+        ObjId found = 0;
+        w.for_each([&](const Item& i) {
+            if (i.shape == shape && i.x == x && i.y == y && !i.parent) found = i.id;
+        });
+        return found;
+    };
+    const ObjId a = find(0x1BF, 23295, 14959), b = find(0x1BF, 23503, 14959);
+    CHECK(a && b && find(0x1C2, 23391, 14911) && find(0x1C2, 23599, 14911));
+    if (!a || !b) return;
+    // One blow of 200 each (fire type 5: bullets do a third of their damage
+    // to items). The second one breaks a frame later, while the first one's
+    // fade runs.
+    apply_damage(game.kernel(), w, game.animations(), a, 1, 0, 200, 5);
+    game.update(kFrameUs);
+    apply_damage(game.kernel(), w, game.animations(), b, 1, 0, 200, 5);
+    for (int f = 0; f < 240; ++f) game.update(kFrameUs);
+    const bool broken = w.get(a) && w.get(a)->frame == 1 && w.get(b) && w.get(b)->frame == 1;
+    // By place: a destroyed item's id is soon another item's.
+    const bool shared_stays = find(0x1C2, 23391, 14911) != 0, far_stays = find(0x1C2, 23599, 14911) != 0;
+    std::printf("transformers broken together: %s, shared arc %s, far arc %s\n", broken ? "both broken" : "not both",
+                shared_stays ? "stays" : "gone", far_stays ? "stays" : "gone");
+    CHECK(broken);
+    CHECK(!shared_stays && !far_stays);
+}
+
 // Port lighting (smoke): a security camera shot leaves smoke where it was,
 // then smoulders. Save CAM1: camera 7645 (shape 0x1B8, frame 4) on a wall
 // in view. Its explosion sprite is raised over the scene and moved by its
@@ -6916,6 +6961,7 @@ int main(int argc, char** argv) {
     test_movies(data);
     test_back_to_base(data);
     test_movie_ignores_held_use_key(data);
+    test_transformers_broken_together(data);
     test_camera_smoke(data);
     test_mission2_final_scene(data);
     test_mission2_npc_teleport(data);
