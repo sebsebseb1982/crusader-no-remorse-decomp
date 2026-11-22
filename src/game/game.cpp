@@ -504,8 +504,9 @@ void Game::reset_world() {
 }
 
 // Port addition (leaking barrels): the leaks and fires go on with the game's
-// clock, and whoever stands in a fire burns (fire type 0xC, the game's own
-// fire: a human it kills burns and runs).
+// clock, whoever stands in a fire burns (fire type 0xC, the game's own
+// fire: a human it kills burns and runs), and a fuel barrel that stood in
+// one long enough blows up.
 // @orig none: port-only barrel leaks
 void Game::burn_in_fires() {
     barrel_leaks_.advance(*world_, kernel_->ticks());
@@ -515,6 +516,13 @@ void Game::burn_in_fires() {
         const World::Point at = world_->location(*victim);
         apply_damage(*kernel_, *world_, anims_, id, 0, 0x10, BarrelLeaks::kBurnDamage, BarrelLeaks::kBurnFireType,
                      &at);
+    }
+    // A fuel barrel that stood long enough in a fire blows up.
+    for (ObjId id : barrel_leaks_.take_cook_offs()) {
+        const Item* barrel = world_->get(id);
+        if (!barrel) continue;
+        const World::Point at = world_->location(*barrel);
+        apply_damage(*kernel_, *world_, anims_, id, 0, 0, BarrelLeaks::kCookDamage, BarrelLeaks::kBurnFireType, &at);
     }
 }
 

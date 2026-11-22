@@ -4746,6 +4746,105 @@ void test_barrel_leaks(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
 }
 
+// Port addition (barrel_leaks.hpp): barrel 5070 of SAVEGAME.3, pierced
+// twice, its pool set alight (a blast's reach, the hook only: no damage).
+// The barrel stands in the fire: it heats up and blows up after kCookMin to
+// kCookMin + kCookMore ticks in it. TRAIL_SHOTS=<folder>: pictures of it.
+void test_barrel_cook_off(const std::filesystem::path& data) {
+    constexpr ObjId kBarrel = 5070;
+    Game game(data, test_saves(data));
+    game.config().barrel_leaks = true;
+    game.load_save(3);
+    World& w = game.world();
+    w.state.difficulty = 3;
+    const Item* barrel = w.get(kBarrel);
+    CHECK(barrel && barrel->shape == 0xAA);
+    if (!barrel) return;
+    const ShapeInfo* info = w.shape_info(barrel->shape);
+    CHECK(info != nullptr);
+    if (!info) return;
+    // Out on the open floor a little way off the Silencer, in sight.
+    const World::Point me = w.location(*w.get(1));
+    World::Point spot{};
+    bool open = false;
+    for (int ring = 256; ring <= 1024 && !open; ring += 32) {
+        for (int k = 0; k < 16 && !open; ++k) {
+            const World::Point at{me.x + kDirectionDx[k] * ring / 2, me.y + kDirectionDy[k] * ring / 2, me.z};
+            open = position_free(w, barrel->shape, at, nullptr, kBarrel) &&
+                   !position_free(w, barrel->shape, {at.x, at.y, at.z - 1}, nullptr, kBarrel);
+            for (int j = 0; j < 16 && open; j += 2) {
+                for (int d = 32; d <= 128 && open; d += 32) {
+                    const World::Point by{at.x + kDirectionDx[j] * d / 2, at.y + kDirectionDy[j] * d / 2, at.z};
+                    open = position_free(w, barrel->shape, by, nullptr, kBarrel) &&
+                           !position_free(w, barrel->shape, {by.x, by.y, by.z - 1}, nullptr, kBarrel);
+                }
+            }
+            if (open) spot = at;
+        }
+    }
+    CHECK(open);
+    if (!open) return;
+    w.move_item(kBarrel, spot.x, spot.y, spot.z);
+    const double cx = spot.x - info->footpad_x * 8.0, cy = spot.y - info->footpad_y * 8.0;
+    Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+    const char* shots = std::getenv("TRAIL_SHOTS");
+    const auto run = [&](int frames) {
+        for (int f = 0; f < frames; ++f) {
+            game.update(kFrameUs);
+            game.render(screen);
+        }
+    };
+    const auto hit = [&](int dx, int dy, int dz) {
+        apply_damage(game.kernel(), w, game.animations(), kBarrel, 1, 0, 30, 2);
+        if (w.hooks().shot_landed) w.hooks().shot_landed(kBarrel, spot.x + dx, spot.y + dy, spot.z + dz, 2);
+    };
+    const BarrelLeaks& leaks = game.barrel_leaks();
+    hit(8, 8, 20);
+    run(90);
+    hit(20, 2, 10);
+    run(300);
+    CHECK(leaks.pools().size() == 1 && leaks.heating().empty());
+    if (leaks.pools().size() != 1) return;
+    // Lit at its lobe farthest from the barrel.
+    const BarrelLeaks::Pool& pool = leaks.pools()[0];
+    const BarrelLeaks::Lobe* lit = nullptr;
+    for (const BarrelLeaks::Lobe& l : pool.lobes)
+        if (l.r > 0 && (!lit || std::hypot(l.x - cx, l.y - cy) > std::hypot(lit->x - cx, lit->y - cy))) lit = &l;
+    CHECK(lit != nullptr);
+    if (!lit) return;
+    w.hooks().shot_landed(0, static_cast<std::int32_t>(lit->x), static_cast<std::int32_t>(lit->y), pool.z, 4);
+    const std::uint32_t lit_at = game.kernel().ticks();
+    CHECK(leaks.pools()[0].burning);
+    std::uint32_t heated = 0, blown = 0;
+    float most = 0;
+    bool shot = false;
+    for (int f = 0; f < 2400 && !blown; ++f) {
+        run(1);
+        const std::uint32_t now = game.kernel().ticks();
+        for (const BarrelLeaks::Heating& h : leaks.heating()) {
+            if (h.id != kBarrel) continue;
+            if (!heated) heated = now;
+            most = std::max(most, h.heat / h.fuse);
+            if (shots && !shot && h.heat > 0.8f * h.fuse) {
+                write_png(std::filesystem::path(shots) / "cook-off-heating.png", screen, game.palette());
+                shot = true;
+            }
+        }
+        const Item* b = w.get(kBarrel);
+        if (!b || b->shape != 0xAA) blown = now;
+    }
+    if (shots) {
+        run(6);
+        write_png(std::filesystem::path(shots) / "cook-off-blast.png", screen, game.palette());
+    }
+    std::printf("barrel cook-off: lit at tick %u, the barrel heating from %u, blown up at %u (%u ticks in the fire, "
+                "%.0f%% of its fuse seen)\n",
+                lit_at, heated, blown, blown && heated ? blown - heated : 0, most * 100);
+    CHECK(heated && blown && blown - heated >= BarrelLeaks::kCookMin &&
+          blown - heated <= BarrelLeaks::kCookMin + BarrelLeaks::kCookMore + 30);
+    CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
+}
+
 // Port addition (barrel_leaks.hpp): barrel 5070 of SAVEGAME.3, whole,
 // blown up at once. Part of its fuel runs out where it stood, in a pool
 // that spreads out over kSpreadTicks (no longer at its full size at once);
@@ -7325,6 +7424,10 @@ int main(int argc, char** argv) {
         test_rolling_barrel_trail(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--barrel-cook-off") {
+        test_barrel_cook_off(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--barrel-splash") {
         test_barrel_splash(data);
         return failures ? 1 : 0;
@@ -7341,6 +7444,7 @@ int main(int argc, char** argv) {
         test_barrels(data);
         test_barrel_leaks(data);
         test_barrel_splash(data);
+        test_barrel_cook_off(data);
         test_barrel_trail(data);
         test_rolling_barrel_trail(data);
         test_stacked_barrel_leak(data);
@@ -7536,6 +7640,7 @@ int main(int argc, char** argv) {
     test_barrels(data);
     test_barrel_leaks(data);
     test_barrel_splash(data);
+    test_barrel_cook_off(data);
     test_barrel_trail(data);
     test_rolling_barrel_trail(data);
     test_stacked_barrel_leak(data);

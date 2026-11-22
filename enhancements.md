@@ -99,7 +99,7 @@ The original has nothing like it. This screen gathers every option the port adds
 | IMPACT MARKS / IMPACTS | Shots leave marks on the scenery | `impactmarks` |
 | BLOOD / SANG | Cycles OFF → ON (the wounded bleed on the scenery) → GORE (much more blood) | `bloodmarks`, `goremode` |
 | CASINGS / DOUILLES | Firearms eject casings that stay on the floor (section 7c) | `casings` |
-| LEAKING BARRELS / FUITES DES BARILS | Explosive barrels take more bullets; each pierces them, their fuel makes a pool that catches fire when they blow up and burns whoever stands in it (section 7e) | `barrelleaks` |
+| LEAKING BARRELS / FUITES DES BARILS | Explosive barrels take more bullets; each pierces them, their fuel makes a pool that catches fire when they blow up and burns whoever stands in it; a barrel left in the fire blows up (section 7e) | `barrelleaks` |
 
 *GAME / JEU*
 
@@ -537,10 +537,15 @@ The explosive barrels (BARRELUP 0xAA upright, BARRELS to BARRELSE 0x151..0x155 l
 - Whoever stands in a burning part of a pool (their feet, or 6 units around them, where it burns at a quarter of its strength or more, up to 16 above the floor) catches fire, the Silencer as much as the others.
 - Someone on fire takes 5 damage of fire type 0xC, the game's own fire, at once then every quarter of a second, changed by the difficulty as any hit. A human it kills burns and runs, as in the game. It goes on for a second after they leave the fire.
 - They are drawn in flames: patches of fire over their body, rising off it, weaker once out of the fire; with the 3D lighting they carry an orange light.
-- Only pools and people catch from a fire: the scenery does not burn.
+- Only pools, people and fuel barrels catch from a fire: the rest of the scenery does not burn.
+
+**Barrels in the fire**
+- A fuel barrel (BARRELUP, BARRELS to BARRELSE; not the rolling ones) standing in a burning part of a pool (the floor at its sides or corners, a few units out, where it burns at a quarter of its strength or more, up to 16 above the floor) heats up: whole or pierced, whether the pool is its own or not.
+- After 3 to 5 seconds in the fire (180 to 300 ticks, its own number), it blows up: the game deals it 250 damage of fire type 0xC, enough for its class to explode, which then throws its fuel as any barrel blowing up (above) and may light, or blow up, the barrels around it. Out of the fire, it cools off at half the pace it heated up.
+- From a third of the way there, flames climb its sides, higher and stronger as it nears blowing up; with the 3D lighting it glows orange.
 
 **Rules**
-- Leaks use their own numbers, never the game's random generators. Only the barrels' damage and the burns change the game.
+- Leaks use their own numbers, never the game's random generators. Only the barrels' damage, the burns and the barrels blowing up in a fire change the game.
 - They follow the game's clock (they stop with it) and are not saved: a load or a map change forgets them, and so does switching the option off. At most 32 barrels, 96 pools, 160 drops in flight and 96 fires on walls are followed; past that the oldest go.
 
 ---

@@ -42,6 +42,10 @@
 //   over their body, and damage of fire type 0xC (the game's own fire: a
 //   human it kills burns and runs) every kBurnEvery ticks, until kAfterBurn
 //   ticks after they left it (take_burns: the game applies them).
+// - A fuel barrel standing in the fire heats up: flames rise up its sides,
+//   higher and higher, and after kCookMin to kCookMin + kCookMore ticks in
+//   it (it cools off at half that pace out of it) it blows up (take_cook_offs:
+//   the game deals it kCookDamage of the fire's type).
 // - With the 3D lighting, the fire lights the scene, its flames glow and
 //   give off a dark smoke.
 //
@@ -101,6 +105,10 @@ public:
     // blast.
     static constexpr double kLeft = 0.2, kThrown = 0.35;
     static constexpr std::uint32_t kSpreadTicks = 12; // ticks a blown up barrel's pool takes to spread out
+    // A fuel barrel in a fire blows up after kCookMin to kCookMin + kCookMore
+    // ticks in it (its own number), dealt kCookDamage of kBurnFireType.
+    static constexpr std::uint32_t kCookMin = 180, kCookMore = 120;
+    static constexpr int kCookDamage = 250;
 
     // Scenery: a box, usecode units.
     struct Solid {
@@ -213,6 +221,15 @@ public:
         std::uint32_t from = 0;
     };
 
+    // A fuel barrel heating up in a fire.
+    struct Heating {
+        ObjId id = 0;
+        std::uint16_t shape = 0;
+        float heat = 0;          // ticks in the fire, less half the ticks out of it since
+        float fuse = 0;          // the heat at which it blows up
+        std::uint32_t seen = 0;  // the last tick it stood in the fire
+    };
+
     // Someone on fire.
     struct Burning {
         ObjId id = 0;
@@ -235,6 +252,9 @@ public:
     void advance(const World& world, std::uint32_t now);
     // The burns due since the last call, one per burn (the NPC).
     std::vector<ObjId> take_burns();
+    // The fuel barrels that have stood long enough in a fire since the last
+    // call: they blow up (kCookDamage).
+    std::vector<ObjId> take_cook_offs();
 
     // Once per frame, before draw: the colours of the game palette, where
     // each patch of fire comes in the draw order of `list`, the view's corner.
@@ -265,6 +285,7 @@ public:
     const std::vector<Drop>& drops() const { return drops_; }
     const std::vector<WallFire>& wall_fires() const { return wall_fires_; }
     const std::vector<Burning>& burning() const { return burning_; }
+    const std::vector<Heating>& heating() const { return heating_; }
     const std::vector<Spread>& spreads() const { return spreads_; }
     const Pool* pool(std::uint32_t serial) const;
     bool on_fire(ObjId id) const;
@@ -319,6 +340,14 @@ private:
     void draw_patch(Surface8& screen, const Pool& p, std::pair<int, int> patch);
     void draw_wall_fire(Surface8& screen, const DrawItem& d, const WallFire& w);
     void draw_person(Surface8& screen, const DrawItem& d, const Burning& b);
+    void draw_heating(Surface8& screen, const DrawItem& d, const Heating& h);
+    // Flames over the body drawn by `d`, here and there, of `strength`,
+    // rising off it up to `height` pixels; only on its lowest `reach` (of
+    // its height, 0..1).
+    void body_fire(Surface8& screen, const DrawItem& d, float strength, float height, float reach,
+                   std::uint32_t seed);
+    void heat_barrel(const Item& item, std::uint32_t tick);
+    void step_heating(const World& world, std::uint32_t tick);
     void reflect(Surface8& screen);
     // One column of fire at screen x `px`: `base[k]` is how strongly the
     // row `bottom - k` burns; flames rise from it up to `height` pixels.
@@ -332,6 +361,8 @@ private:
     std::vector<Drop> drops_;
     std::vector<WallFire> wall_fires_;
     std::vector<Burning> burning_;
+    std::vector<Heating> heating_;
+    std::vector<ObjId> cook_offs_;
     std::vector<Spread> spreads_;
     std::vector<ObjId> burns_;
     int map_ = -1;

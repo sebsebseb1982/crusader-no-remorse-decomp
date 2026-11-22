@@ -630,6 +630,7 @@ void BarrelLeaks::step(const World& world, std::uint32_t tick) {
             }
         }
     }
+    step_heating(world, tick);
     // The fires on walls whose wall went.
     std::erase_if(wall_fires_, [&](const WallFire& w) {
         const Item* host = world.get(w.host);
@@ -764,7 +765,8 @@ void BarrelLeaks::splash_wall(const World& world, const Drop& d, const Solid& s,
     wall_fires_.push_back(w);
 }
 
-// Whoever stands in the fire of `p` catches fire.
+// Whoever stands in the fire of `p` catches fire; a fuel barrel standing
+// in it heats up.
 // @orig none: port-only barrel leaks
 void BarrelLeaks::catch_fire(const World& world, const Pool& p, std::uint32_t tick) {
     // The fire's cells, and the feet round them.
@@ -773,15 +775,27 @@ void BarrelLeaks::catch_fire(const World& world, const Pool& p, std::uint32_t ti
     const auto x1 = static_cast<std::int32_t>(p.grid_x + p.grid_w * kGrid) + 8;
     const auto y1 = static_cast<std::int32_t>(p.grid_y + p.grid_h * kGrid) + 8;
     for (ObjId id : world.rect_search(x0, y0, x1 + kPad, y1 + kPad)) {
-        if (!is_npc_id(id)) continue;
+        const bool npc = is_npc_id(id);
         const Item* item = world.get(id);
-        if (!item || item->off_map || item->parent != 0 || world.is_dead(id)) continue;
+        if (!item || item->off_map || item->parent != 0) continue;
+        const bool barrel = !npc && is_fuel_barrel(item->shape) && !(item->flags & kItemExploded);
+        if ((!npc && !barrel) || (npc && world.is_dead(id))) continue;
         if (item->z < p.z - kHeight || item->z > p.z + 16) continue;
         const ShapeInfo* info = world.shape_info(item->shape);
-        const double cx = item->x - (info ? info->footpad_x : 0) * 8.0;
-        const double cy = item->y - (info ? info->footpad_y : 0) * 8.0;
-        // The feet: the middle and four points around it.
+        const double half_x = (info ? info->footpad_x : 0) * 8.0, half_y = (info ? info->footpad_y : 0) * 8.0;
+        const double cx = item->x - half_x, cy = item->y - half_y;
+        // The feet: the middle and four points around it. A barrel's foot:
+        // the floor round it (none lies under it), at its sides and corners.
         double hottest = fire_at(p, cx, cy, tick);
+        if (barrel) {
+            static constexpr int kSides[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+            for (const auto& a : kSides) {
+                const double out = a[0] && a[1] ? 2 : 4;
+                hottest = std::max(hottest, fire_at(p, cx + a[0] * (half_x + out), cy + a[1] * (half_y + out), tick));
+            }
+            if (hottest >= 0.25) heat_barrel(*item, tick);
+            continue;
+        }
         static constexpr int kAround[4][2] = {{6, 0}, {-6, 0}, {0, 6}, {0, -6}};
         for (const auto& a : kAround) hottest = std::max(hottest, fire_at(p, cx + a[0], cy + a[1], tick));
         if (hottest < 0.25) continue;
@@ -789,6 +803,52 @@ void BarrelLeaks::catch_fire(const World& world, const Pool& p, std::uint32_t ti
         if (found == burning_.end()) burning_.push_back({id, tick + kAfterBurn, tick + 4});
         else found->until = std::max(found->until, tick + kAfterBurn);
     }
+}
+
+// Fuel barrel `item` stands in a fire at game tick `tick`.
+// @orig none: port-only barrel leaks
+void BarrelLeaks::heat_barrel(const Item& item, std::uint32_t tick) {
+    auto found = std::find_if(heating_.begin(), heating_.end(),
+                              [&](const Heating& h) { return h.id == item.id && h.shape == item.shape; });
+    if (found == heating_.end()) {
+        if (heating_.size() >= kMaxBarrels) heating_.erase(heating_.begin());
+        Heating h;
+        h.id = item.id;
+        h.shape = item.shape;
+        h.fuse = static_cast<float>(kCookMin + unit(mix(next_seed_, static_cast<int>(item.id), 11)) * kCookMore);
+        heating_.push_back(h);
+        found = heating_.end() - 1;
+    }
+    found->seen = tick;
+}
+
+// The barrels in a fire heat up (one tick of heat a tick, however many
+// fires), those out of it cool off at half that pace; one hot enough blows
+// up.
+// @orig none: port-only barrel leaks
+void BarrelLeaks::step_heating(const World& world, std::uint32_t tick) {
+    for (std::size_t i = 0; i < heating_.size();) {
+        Heating& h = heating_[i];
+        const Item* item = world.get(h.id);
+        bool gone = !item || item->shape != h.shape || (item->flags & kItemExploded);
+        if (!gone) {
+            h.heat += h.seen == tick ? 1.0f : -0.5f;
+            if (h.heat >= h.fuse) {
+                cook_offs_.push_back(h.id);
+                gone = true;
+            }
+            gone = gone || h.heat <= 0;
+        }
+        if (gone) heating_.erase(heating_.begin() + static_cast<std::ptrdiff_t>(i));
+        else ++i;
+    }
+}
+
+// @orig none: port-only barrel leaks
+std::vector<ObjId> BarrelLeaks::take_cook_offs() {
+    std::vector<ObjId> out;
+    out.swap(cook_offs_);
+    return out;
 }
 
 // The pool barrel `b` spills into: its own, or a new one at the level of
@@ -1231,6 +1291,8 @@ void BarrelLeaks::draw(Surface8& screen, const DrawItem& d, std::size_t index) {
     if (leaks_fuel(item.shape)) {
         for (const Barrel& b : barrels_)
             if (b.id == item.id && b.shape == item.shape) draw_barrel(screen, d, b);
+        for (const Heating& h : heating_)
+            if (h.id == item.id && h.shape == item.shape) draw_heating(screen, d, h);
     } else if (is_npc_id(item.id)) {
         for (const Burning& b : burning_)
             if (b.id == item.id) draw_person(screen, d, b);
@@ -1526,14 +1588,30 @@ void BarrelLeaks::draw_person(Surface8& screen, const DrawItem& d, const Burning
     if (item.shape == 0x576 || item.shape == 0x58F) return;  // the game's own burning and burnt
     const float left = b.until > now_ ? static_cast<float>(b.until - now_) / kAfterBurn : 0.0f;
     const float strength = 0.35f + 0.65f * std::min(1.0f, left * 1.5f);
+    body_fire(screen, d, strength, 16 * strength, 1, mix(item.id));
+}
+
+// A barrel heating up in a fire: past a third of its fuse, flames climb its
+// sides, higher and stronger as it nears blowing up.
+// @orig none: port-only barrel leaks
+void BarrelLeaks::draw_heating(Surface8& screen, const DrawItem& d, const Heating& h) {
+    const float u = std::clamp((h.heat / h.fuse - 0.33f) / 0.67f, 0.0f, 1.0f);
+    if (u <= 0) return;
+    const float strength = 0.3f + 0.7f * u;
+    body_fire(screen, d, strength, 6 + 18 * u, 0.3f + 0.7f * u, mix(d.item->id, 0, 17));
+}
+
+// @orig none: port-only barrel leaks
+void BarrelLeaks::body_fire(Surface8& screen, const DrawItem& d, float strength, float height, float reach,
+                            std::uint32_t seed) {
     const float t = static_cast<float>(now_);
     const int rows = d.bottom - d.top;
-    const std::uint32_t seed = mix(item.id);
     for (int px = std::max(d.left, 0); px < std::min(d.right, screen.width); ++px) {
         column_.assign(static_cast<std::size_t>(rows), 0.0f);
         bool any = false;
         for (int k = 0; k < rows; ++k) {
             const int py = d.bottom - 1 - k;
+            if (k > rows * reach) break;
             if (!opaque(d, px, py)) continue;
             const float patchy = fast_noise((px + view_left_) / 3.0f, (py + view_top_ + t * 1.2f) / 4.0f, seed);
             if (patchy < 0.45f) continue;
@@ -1541,7 +1619,7 @@ void BarrelLeaks::draw_person(Surface8& screen, const DrawItem& d, const Burning
             column_[static_cast<std::size_t>(k)] = low * strength;
             any = true;
         }
-        if (any) fire_column(screen, px, d.bottom - 1, column_, 16 * strength, seed);
+        if (any) fire_column(screen, px, d.bottom - 1, column_, height, seed);
     }
 }
 
@@ -1653,6 +1731,19 @@ std::vector<PointLight> BarrelLeaks::lights(const World& world) const {
         l.owner = b.id;
         out.push_back(l);
     }
+    for (const Heating& h : heating_) {
+        const Item* item = world.get(h.id);
+        const float u = std::clamp((h.heat / h.fuse - 0.33f) / 0.67f, 0.0f, 1.0f);
+        if (!item || u <= 0) continue;
+        const float glow = u * (0.8f + 0.2f * std::sin(t * 0.9f + h.id));
+        PointLight l;
+        l.pos = {float(world_from_usecode(item->x)) - 16, float(world_from_usecode(item->y)) - 16,
+                 (item->z + 24) * kLightZScale};
+        l.color = Vec3{0.9f * glow, 0.45f * glow, 0.14f * glow};
+        l.radius = 240;
+        l.owner = h.id;
+        out.push_back(l);
+    }
     return out;
 }
 
@@ -1697,6 +1788,8 @@ void BarrelLeaks::clear() {
     drops_.clear();
     wall_fires_.clear();
     burning_.clear();
+    heating_.clear();
+    cook_offs_.clear();
     spreads_.clear();
     burns_.clear();
     fire_after_.clear();
