@@ -907,7 +907,7 @@ void BarrelLeaks::heat_barrel(const Item& item, std::uint32_t tick) {
         Heating h;
         h.id = item.id;
         h.shape = item.shape;
-        h.fuse = static_cast<float>(kCookMin + unit(mix(next_seed_, static_cast<int>(item.id), 11)) * kCookMore);
+        h.fuse = static_cast<float>(kCookMin + unit(mix(0xC00Cu, static_cast<int>(item.id), 11)) * kCookMore);
         heating_.push_back(h);
         found = heating_.end() - 1;
     }
@@ -915,8 +915,8 @@ void BarrelLeaks::heat_barrel(const Item& item, std::uint32_t tick) {
 }
 
 // The barrels in a fire heat up (one tick of heat a tick, however many
-// fires), those out of it cool off at half that pace; one hot enough blows
-// up.
+// fires), those out of it cool off at kCoolRate of that pace; one hot
+// enough blows up.
 // @orig none: port-only barrel leaks
 void BarrelLeaks::step_heating(const World& world, std::uint32_t tick) {
     for (std::size_t i = 0; i < heating_.size();) {
@@ -924,7 +924,7 @@ void BarrelLeaks::step_heating(const World& world, std::uint32_t tick) {
         const Item* item = world.get(h.id);
         bool gone = !item || item->shape != h.shape || (item->flags & kItemExploded);
         if (!gone) {
-            h.heat += h.seen == tick ? 1.0f : -0.5f;
+            h.heat += h.seen == tick ? 1.0f : -kCoolRate;
             if (h.heat >= h.fuse) {
                 cook_offs_.push_back(h.id);
                 gone = true;

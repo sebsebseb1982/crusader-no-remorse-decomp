@@ -542,7 +542,7 @@ The explosive barrels (BARRELUP 0xAA upright, BARRELS to BARRELSE 0x151..0x155 l
 
 **Barrels in the fire**
 - A fuel barrel (BARRELUP, BARRELS to BARRELSE; not the rolling ones) standing in a burning part of a pool (the floor at its sides or corners, a few units out, where it burns at a quarter of its strength or more, up to 16 above the floor) heats up: whole or pierced, whether the pool is its own or not.
-- After 3 to 5 seconds in the fire (180 to 300 ticks, its own number), it blows up: the game deals it 250 damage of fire type 0xC, enough for its class to explode, which then throws its fuel as any barrel blowing up (above) and may light, or blow up, the barrels around it. Out of the fire, it cools off at half the pace it heated up.
+- After 1 to 2 seconds in the fire (60 to 120 ticks, its own number, kept if it cools off and heats up again: short of what the fire of a splash lasts by it), it blows up: the game deals it 250 damage of fire type 0xC, enough for its class to explode, which then throws its fuel as any barrel blowing up (above) and may light, or blow up, the barrels around it. Out of the fire, it cools off at a fifth of the pace it heated up.
 - From a third of the way there, flames climb its sides, higher and stronger as it nears blowing up; with the 3D lighting it glows orange.
 
 **Rules**

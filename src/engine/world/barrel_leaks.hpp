@@ -44,7 +44,7 @@
 //   ticks after they left it (take_burns: the game applies them).
 // - A fuel barrel standing in the fire heats up: flames rise up its sides,
 //   higher and higher, and after kCookMin to kCookMin + kCookMore ticks in
-//   it (it cools off at half that pace out of it) it blows up (take_cook_offs:
+//   it (it cools off at a fifth of that pace out of it) it blows up (take_cook_offs:
 //   the game deals it kCookDamage of the fire's type).
 // - With the 3D lighting, the fire lights the scene, its flames glow and
 //   give off a dark smoke.
@@ -106,8 +106,13 @@ public:
     static constexpr double kLeft = 0.2, kThrown = 0.35;
     static constexpr std::uint32_t kSpreadTicks = 12; // ticks a blown up barrel's pool takes to spread out
     // A fuel barrel in a fire blows up after kCookMin to kCookMin + kCookMore
-    // ticks in it (its own number), dealt kCookDamage of kBurnFireType.
-    static constexpr std::uint32_t kCookMin = 180, kCookMore = 120;
+    // ticks in it (its own number, from its id: the same if it cooled off
+    // and heats up again), dealt kCookDamage of kBurnFireType.
+    // Short of what a splash's fire lasts by a barrel (about 150 ticks).
+    static constexpr std::uint32_t kCookMin = 60, kCookMore = 60;
+    // Out of the fire it cools off at this part of the pace it heated up:
+    // the patchy fire of the splashes round it still sets it off.
+    static constexpr float kCoolRate = 0.2f;
     static constexpr int kCookDamage = 250;
 
     // Scenery: a box, usecode units.
