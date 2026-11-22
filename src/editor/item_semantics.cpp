@@ -150,8 +150,55 @@ const char* activity_name(int activity) {
         case 10: return tr("combat (variante 10)", "combat (variant 10)");
         case 11: return tr("combat (variante 11)", "combat (variant 11)");
         case 12: return tr("combat (variante 12)", "combat (variant 12)");
+        case 13: return tr("roule, tire et revient (No Regret)", "roll, fire and roll back (No Regret)");
         default: return "?";
     }
+}
+
+MonsterPair read_monster_pair(const LevelItem& place, const LevelItem& kind) {
+    MonsterPair m;
+    m.npc_type = kind.npc_number;
+    m.direction = place.npc_number & 0xF;
+    m.record_12 = place.npc_number >> 4;
+    m.min_difficulty = (place.map_number & 3) + 1;
+    m.other_weapon = (place.map_number & 4) != 0;
+    m.on_enter = (place.map_number & 8) != 0;
+    m.activity[0] = kind.quality_high();
+    m.activity[1] = place.quality_high();
+    m.activity[2] = kind.map_number;
+    return m;
+}
+
+void write_monster_pair(LevelItem& place, LevelItem& kind, const MonsterPair& m) {
+    kind.npc_number = static_cast<std::uint8_t>(m.npc_type);
+    place.npc_number = static_cast<std::uint8_t>((m.record_12 & 0xF) << 4 | (m.direction & 0xF));
+    place.map_number = static_cast<std::uint8_t>((place.map_number & ~0xF) | ((m.min_difficulty - 1) & 3) |
+                                                   (m.other_weapon ? 4 : 0) | (m.on_enter ? 8 : 0));
+    kind.quality = static_cast<std::uint16_t>((m.activity[0] & 0xFF) << 8 | kind.quality_low());
+    place.quality = static_cast<std::uint16_t>((m.activity[1] & 0xFF) << 8 | place.quality_low());
+    kind.map_number = static_cast<std::uint8_t>(m.activity[2]);
+}
+
+std::pair<LevelItem, LevelItem> make_monster_pair(std::int32_t x, std::int32_t y, std::int32_t z, int npc_type,
+                                                  std::uint8_t link) {
+    LevelItem place, kind;
+    for (LevelItem* i : {&place, &kind}) {
+        i->uid = new_uid();
+        i->shape = kShapeMonster;
+        i->x = x;
+        i->y = y;
+        i->z = z;
+        i->quality = link;
+    }
+    kind.frame = 1;
+    MonsterPair m;
+    m.npc_type = npc_type;
+    m.direction = 2;      // the most common in the original maps
+    m.activity[0] = 8;    // guard
+    m.activity[1] = 5;    // attack on seeing the player
+    m.activity[2] = 5;    // and when shot at
+    write_monster_pair(place, kind, m);
+    return {place, kind};
 }
 
 std::string describe(const LevelItem& item, std::uint8_t family, const std::string& class_name) {
@@ -179,6 +226,16 @@ std::string describe(const LevelItem& item, std::uint8_t family, const std::stri
         }
         default:
             break;
+    }
+    if (item.shape == kShapeMonster && class_name == "MONSTER") {
+        if (item.frame == 1) {
+            std::snprintf(buf, sizeof buf, "%s %u (MONSTER, %s 0x%02X)", tr("PNJ type", "NPC type"), item.npc_number,
+                          tr("lien", "link"), item.quality_low());
+        } else {
+            std::snprintf(buf, sizeof buf, "%s (MONSTER, %s 0x%02X)", tr("place de PNJ", "NPC place"),
+                          tr("lien", "link"), item.quality_low());
+        }
+        return buf;
     }
     if (item.shape == kShapeMarker) {
         const MarkerTarget t = read_marker(item);

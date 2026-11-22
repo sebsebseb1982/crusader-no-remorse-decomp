@@ -47,11 +47,18 @@ std::uint8_t free_link_quality(const Level& level, const LevelInfo& info);
 // `target_map`): each quality low that links pasted items and that the target
 // already uses gets a free number (the same new number for every pasted item
 // that had it, trigger egg parameters included), so the pasted group stays
-// linked within itself and apart from the map's own links. Pasted arrivals
+// linked within itself and apart from the map's own links. On its own map, a
+// link carried by a single pasted item is kept: a door copied beside another
+// still answers the same switch. Pasted arrivals
 // whose id the target uses get a free id, and pasted departures that aimed at
 // them follow. Returns the number of renumbered links and ids.
 int relink_pasted(std::vector<LevelItem>& items, const Level& target, const LevelInfo& info, int source_map,
                   int target_map);
+
+// The other object of a MONSTER pair: for a place (frame 0), the nearest kind
+// (frame 1) of its quality low within kMonsterRange; for a kind, the nearest
+// place that has it in range. Null when there is none (or no MONSTER class).
+const LevelItem* monster_partner(const Level& level, const LevelItem& item, const LevelInfo& info);
 
 enum class Severity { Error, Warning, Note };
 

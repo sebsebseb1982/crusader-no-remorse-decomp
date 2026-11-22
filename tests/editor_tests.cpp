@@ -196,6 +196,37 @@ void check_level_tools() {
     check(paste[2].quality_low() == 3, "pasted arrival gets a free id");
     check(paste[3].quality_low() == 3 && paste[3].map_number == 7, "pasted departure follows its arrival");
     check(paste[4].quality_low() == 2 && paste[4].map_number == 5, "other departure unchanged");
+    // A door alone keeps its switch on its own map, not on another one.
+    std::vector<LevelItem> door = {level.items[4]};
+    check(relink_pasted(door, level, info, 5, 5) == 0 && door[0].quality_low() == 1, "lone door keeps its link");
+    check(relink_pasted(door, level, info, 5, 7) == 1 && door[0].quality_low() == 3, "lone door renumbered elsewhere");
+
+    // MONSTER pairs: the bytes of the NPC, split between place and kind point.
+    auto [place, kind] = make_monster_pair(100, 200, 8, 6, 0x21);
+    check(place.frame == 0 && kind.frame == 1 && place.quality_low() == 0x21 && kind.quality_low() == 0x21,
+          "monster pair linked");
+    MonsterPair mp = read_monster_pair(place, kind);
+    check(mp.npc_type == 6 && mp.on_enter && mp.min_difficulty == 1, "monster pair defaults");
+    mp.direction = 5;
+    mp.min_difficulty = 3;
+    mp.other_weapon = true;
+    mp.on_enter = false;
+    mp.activity[0] = 1;
+    mp.activity[1] = 13;
+    mp.activity[2] = 9;
+    write_monster_pair(place, kind, mp);
+    check(place.npc_number == 5 && place.map_number == 6 && place.quality == 0x0D21, "monster place bytes");
+    check(kind.npc_number == 6 && kind.quality == 0x0121 && kind.map_number == 9, "monster kind point bytes");
+    LevelInfo minfo = info;
+    minfo.has_class = [](std::uint16_t cid) { return cid == kShapeMonster; };
+    Level npcs;
+    npcs.items = {place, kind};
+    LevelItem far = kind;
+    far.uid = new_uid();
+    far.x += 65;
+    npcs.items.push_back(far);
+    check(monster_partner(npcs, npcs.items[0], minfo) == &npcs.items[1], "nearest kind point");
+    check(monster_partner(npcs, npcs.items[2], minfo) == nullptr, "kind point out of range");
 
     // Problems.
     CheckContext context;

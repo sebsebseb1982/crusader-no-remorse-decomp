@@ -812,6 +812,7 @@ void EditorApp::draw_overlays() {
             if (brush_.kind == BrushKind::TeleportDeparture) shape = kShapeTeleportEgg, frame = 0;
             if (brush_.kind == BrushKind::MonsterEgg) shape = kShapeMonsterEgg, frame = 0;
             if (brush_.kind == BrushKind::MissionStart) shape = kShapeTeleportEgg, frame = 1;
+            if (brush_.kind == BrushKind::MonsterPair) shape = kShapeMonster, frame = 0;
             const LevelItem* pending = level_.find(pair_departure_);
             if (brush_.kind == BrushKind::TeleportPair) shape = kShapeTeleportEgg, frame = pending ? 1 : 0;
             if (brush_.kind == BrushKind::TeleportPair && pending) {
@@ -1092,6 +1093,10 @@ void EditorApp::hover_tooltip() {
     ImGui::BeginTooltip();
     ImGui::TextUnformatted(describe(*i, fam, class_name(usecode_class_of(*i, fam))).c_str());
     ImGui::TextDisabled("%s %s  (%d, %d, %d)", hex(i->shape, 3).c_str(), family_name(fam), i->x, i->y, i->z);
+    if (i->shape == kShapeMonster && i->frame == 1 && npc_types_ && i->npc_number < dtable::NpcTypes::kRecords) {
+        const std::uint16_t s = npc_types_->word(i->npc_number, 0x3E);
+        ImGui::Text("%s %s", hex(s, 3).c_str(), shape_name(s).c_str());
+    }
     if (is_departure(*i, fam)) {
         ImGui::Text("→ %s %u, %s %s", tr("carte", "map"), i->map_number, tr("œuf", "egg"), hex(i->quality_low(), 2).c_str());
     } else if (links_by_quality(*i) && i->quality_low() != 0) {
@@ -1144,6 +1149,24 @@ void EditorApp::place_brush(std::int32_t x, std::int32_t y) {
         }
         brush_ = {};
         level_dirty_ = world_dirty_ = true;
+        return;
+    }
+    if (brush_.kind == BrushKind::MonsterPair) {
+        const std::uint8_t link = free_link_quality(level_, level_info());
+        if (link == 0) {
+            message(tr("Plus de qualité basse libre sur cette carte.", "No free quality low left on this map."));
+            return;
+        }
+        auto [place, kind] = make_monster_pair(item.x, item.y, item.z, brush_.value, link);
+        push_undo();
+        level_.items.push_back(place);
+        level_.items.push_back(kind);
+        select_only(place.uid);
+        level_dirty_ = world_dirty_ = true;
+        message(tr("PNJ posé (paire MONSTER) : il apparaît ici quand le joueur arrive dans la zone ; réglez-le dans "
+                   "Propriétés.",
+                   "NPC placed (MONSTER pair): it appears here when the player comes into the area; set it in "
+                   "Properties."));
         return;
     }
     if (brush_.kind == BrushKind::TeleportPair) {
@@ -1210,6 +1233,7 @@ void EditorApp::place_brush(std::int32_t x, std::int32_t y) {
         case BrushKind::None:
         case BrushKind::MissionStart:
         case BrushKind::TeleportPair:
+        case BrushKind::MonsterPair:
             return;
     }
     push_undo();
@@ -1243,6 +1267,7 @@ void EditorApp::duplicate_selection() {
         copies.push_back(std::move(c));
     }
     if (copies.empty()) return;
+    if (paste_relinks_) relink_pasted(copies, level_, level_info(), map_, map_);
     push_undo();
     selection_.clear();
     for (LevelItem& c : copies) {
@@ -1917,16 +1942,28 @@ void EditorApp::tab_eggs() {
     }
     ImGui::EndChild();
 
-    ImGui::SeparatorText(tr("PNJ (œufs de monstres, types de DTABLE.FLX)", "NPCs (monster eggs, DTABLE.FLX types)"));
+    // NPCs: MONSTER pairs, as most NPCs of the original maps, or monster eggs.
+    ImGui::SeparatorText(tr("PNJ (types de DTABLE.FLX)", "NPCs (DTABLE.FLX types)"));
+    static bool use_eggs = false;
+    {
+        ImGui::Checkbox(tr("En œuf de monstre", "As a monster egg"), &use_eggs);
+        help_marker(tr("Par défaut, un PNJ est une paire MONSTER (sa place et son type, liés), comme la "
+                       "plupart des PNJ des cartes d'origine ; un œuf de monstre (forme 0x24F) le fait apparaître "
+                       "quand le joueur arrive dans la zone.",
+                       "By default an NPC is a MONSTER pair (its place and its kind, linked), as most NPCs of the "
+                       "original maps; a monster egg (shape 0x24F) makes it when the player comes near."));
+    }
+    ImGui::TextDisabled("%s", tr("Cliquez un type, puis dans la vue.", "Click a type, then in the view."));
+    const BrushKind npc_brush = use_eggs ? BrushKind::MonsterEgg : BrushKind::MonsterPair;
     ImGui::BeginChild("npcs", ImVec2(0, 0), ImGuiChildFlags_Borders);
     for (int t = 0; t < dtable::NpcTypes::kRecords; ++t) {
         const std::uint16_t shape = npc_types_->word(t, 0x3E);
         if (shape == 0) continue;
         char label[96];
-        std::snprintf(label, sizeof label, "%2d  %s %s  (%u PV)", t, hex(shape, 3).c_str(), shape_name(shape).c_str(),
-                      npc_types_->max_hp(t));
-        if (ImGui::Selectable(label, brush_.kind == BrushKind::MonsterEgg && brush_.value == t)) {
-            brush_ = {BrushKind::MonsterEgg, 0, 0, static_cast<std::uint16_t>(t)};
+        std::snprintf(label, sizeof label, "%2d  %s %s  (%u %s)", t, hex(shape, 3).c_str(), shape_name(shape).c_str(),
+                      npc_types_->max_hp(t), tr("PV", "HP"));
+        if (ImGui::Selectable(label, brush_.kind == npc_brush && brush_.value == t)) {
+            brush_ = {npc_brush, 0, 0, static_cast<std::uint16_t>(t)};
         }
         if (ImGui::BeginItemTooltip()) {
             shape_thumbnail(shape, 0, 96);
@@ -2024,6 +2061,15 @@ void EditorApp::right_panel() {
         }
     } else if (LevelItem* p = level_.find(primary_ ? primary_ : *selection_.begin())) {
         properties(*p);
+    }
+    if (!deferred_items_.empty()) {
+        push_undo();
+        for (LevelItem& i : deferred_items_) {
+            selection_.insert(i.uid);
+            level_.items.push_back(std::move(i));
+        }
+        deferred_items_.clear();
+        level_dirty_ = world_dirty_ = true;
     }
     ImGui::End();
 }
@@ -2254,6 +2300,10 @@ void EditorApp::semantic_properties(LevelItem& item, std::uint8_t fam) {
             ImGui::PopID();
         }
         if (changed) write_monster_egg(item, m);
+    } else if (item.shape == kShapeMonster && item.frame <= 1 && class_name(kShapeMonster) == "MONSTER") {
+        ImGui::PopItemWidth();
+        monster_pair_properties(item);
+        return;
     } else if (item.shape == kShapeMarker) {
         MarkerTarget t = read_marker(item);
         ImGui::TextWrapped("%s", tr("Marqueur : objet que donne le coffre de même qualité basse (à moins de 384 unités), "
@@ -2274,10 +2324,10 @@ void EditorApp::semantic_properties(LevelItem& item, std::uint8_t fam) {
                                     "items are framed in cyan."));
         if (ImGui::Button(tr("Lier en cliquant (L)", "Link by clicking (L)"))) start_link_mode(item.uid);
         help_marker(tr("Cliquez ensuite dans la vue les objets sur lesquels celui-ci agit (portes, champs de force, "
-                       "vapeur, points d'apparition...) : ils prennent sa qualité basse (une libre s'il n'en a pas). "
+                       "vapeur, PNJ...) : ils prennent sa qualité basse (une libre s'il n'en a pas). "
                        "Un objet déjà lié se délie ; Échap pour terminer.",
-                       "Then click in the view the items this one acts on (doors, force fields, steam, spawn "
-                       "points...): they take its quality low (a free one if it has none). A linked item unlinks; "
+                       "Then click in the view the items this one acts on (doors, force fields, steam, NPCs...): "
+                       "they take its quality low (a free one if it has none). A linked item unlinks; "
                        "Esc when done."));
         if (item.quality_low() != 0 && links_by_quality(item)) {
             ImGui::SameLine();
@@ -2300,6 +2350,140 @@ void EditorApp::semantic_properties(LevelItem& item, std::uint8_t fam) {
     ImGui::PopItemWidth();
     if (changed) note_change(before);
     if (goto_map >= 0) go_to_arrival(goto_map, goto_id);
+}
+
+bool EditorApp::npc_type_combo(const char* label, int& type) {
+    bool changed = false;
+    const auto valid = [&](int t) { return t >= 0 && t < dtable::NpcTypes::kRecords; };
+    const std::uint16_t shape = valid(type) ? npc_types_->word(type, 0x3E) : 0;
+    const std::string current = std::to_string(type) + " " + hex(shape, 3) + " " + shape_name(shape);
+    if (ImGui::BeginCombo(label, current.c_str())) {
+        for (int t = 0; t < dtable::NpcTypes::kRecords; ++t) {
+            const std::uint16_t s = npc_types_->word(t, 0x3E);
+            if (!s) continue;
+            char row[96];
+            std::snprintf(row, sizeof row, "%2d  %s %s  (%u %s)", t, hex(s, 3).c_str(), shape_name(s).c_str(),
+                          npc_types_->max_hp(t), tr("PV", "HP"));
+            if (ImGui::Selectable(row, t == type)) {
+                type = t;
+                changed = true;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    return changed;
+}
+
+bool EditorApp::activity_combo(const char* label, int& activity) {
+    bool changed = false;
+    if (ImGui::BeginCombo(label, (std::to_string(activity) + " " + activity_name(activity)).c_str())) {
+        for (int v : {0, 1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13}) {
+            if (v == 13) continue;  // No Regret's
+            if (ImGui::Selectable((std::to_string(v) + " " + activity_name(v)).c_str(), v == activity)) {
+                activity = v;
+                changed = true;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    return changed;
+}
+
+void EditorApp::monster_pair_properties(LevelItem& item) {
+    ImGui::TextWrapped("%s", item.frame == 0
+                                 ? tr("Place d'un PNJ : le PNJ apparaît ici, du type que donne l'objet MONSTER image 1 "
+                                      "de même lien à moins de 64 unités.",
+                                      "An NPC's place: the NPC appears here, of the kind the MONSTER frame 1 object of "
+                                      "the same link within 64 units gives.")
+                                 : tr("Type d'un PNJ : il donne le type et les activités du PNJ qui apparaît sur la "
+                                      "place (MONSTER image 0 de même lien, à moins de 64 unités).",
+                                      "An NPC's kind: it gives the type and activities of the NPC that appears on its "
+                                      "place (MONSTER frame 0 of the same link, within 64 units)."));
+    const LevelItem* found = monster_partner(level_, item, level_info());
+    LevelItem* partner = found ? level_.find(found->uid) : nullptr;
+    if (!partner) {
+        ImGui::TextColored(kTextWarning, "%s",
+                           item.frame == 1 ? tr("Aucune place : il ne sert à rien.", "No place: it is of no use.")
+                                           : tr("Aucun type : aucun PNJ n'apparaîtra.", "No kind: no NPC will appear."));
+        if (ImGui::Button(tr("Créer l'autre objet de la paire ici", "Make the pair's other object here"))) {
+            // Added once the panel is drawn: `item` would move.
+            LevelItem other = item;
+            assign_uids(other);
+            other.frame = item.frame == 1 ? 0 : 1;
+            deferred_items_.push_back(std::move(other));
+        }
+        return;
+    }
+    LevelItem& place = item.frame == 0 ? item : *partner;
+    LevelItem& kind = item.frame == 1 ? item : *partner;
+    MonsterPair m = read_monster_pair(place, kind);
+    bool changed = false;
+    ImGui::PushItemWidth(170);
+    changed |= npc_type_combo(tr("Type de PNJ", "NPC type"), m.npc_type);
+    if (m.npc_type < dtable::NpcTypes::kRecords) {
+        if (const std::uint16_t s = npc_types_->word(m.npc_type, 0x3E)) shape_thumbnail(s, 0, 96);
+    }
+    changed |= ImGui::SliderInt(tr("Direction", "Direction"), &m.direction, 0, 7);
+    changed |= ImGui::SliderInt(tr("Difficulté minimale", "Lowest difficulty"), &m.min_difficulty, 1, 4);
+    changed |= ImGui::Checkbox(tr("Autre arme", "Other weapon"), &m.other_weapon);
+    changed |= ImGui::Checkbox(tr("Apparaît quand le joueur arrive dans la zone", "Appears when the player comes near"),
+                               &m.on_enter);
+    help_marker(tr("Sinon, seulement quand un script le déclenche (renforts, PNJ qui sortent d'une porte...).",
+                   "Otherwise only when a script triggers it (reinforcements, NPCs coming out of a door...)."));
+    // No Regret's MHATCHER egg (usecode 0x905): when it hatches, it triggers
+    // every MONSTER within 3200 units whose quality low is its id.
+    int hatcher = -1;
+    for (int t = 0; t < 0x100 && hatcher < 0; ++t) {
+        if (class_name(static_cast<std::uint16_t>(kClassEggs + t)) == "MHATCHER") hatcher = t;
+    }
+    if (!m.on_enter && hatcher >= 0) {
+        const std::uint8_t link = place.quality_low();
+        int eggs = 0;
+        for (const LevelItem& i : level_.items) {
+            eggs += family_of(i.shape) == kFamTriggerEgg && i.quality_low() == hatcher && i.map_number == link &&
+                    std::max(std::abs(i.x - place.x), std::abs(i.y - place.y)) <= 3200;
+        }
+        if (eggs) {
+            ImGui::TextDisabled("%d %s %s.", eggs, tr("œuf(s) MHATCHER le déclenche(nt), id", "MHATCHER egg(s) trigger it, id"),
+                                hex(link, 2).c_str());
+        } else {
+            ImGui::TextColored(kTextWarning, "%s %s : %s",
+                               tr("Aucun œuf MHATCHER d'id", "No MHATCHER egg with id"), hex(link, 2).c_str(),
+                               tr("seul un autre script peut le déclencher.", "only another script can trigger it."));
+            if (ImGui::Button(tr("Ajouter un œuf MHATCHER ici", "Add a MHATCHER egg here"))) {
+                // Its zone: where the player sets the NPC off; move it there.
+                LevelItem egg;
+                egg.uid = new_uid();
+                egg.shape = kShapeTriggerEgg;
+                egg.x = place.x;
+                egg.y = place.y;
+                egg.z = place.z;
+                egg.quality = static_cast<std::uint16_t>(hatcher);
+                egg.map_number = link;
+                set_hatch_zone(egg, 4, 4);
+                deferred_items_.push_back(egg);
+                message(tr("Œuf MHATCHER ajouté : déplacez-le où le joueur doit déclencher le PNJ.",
+                           "MHATCHER egg added: move it where the player should set the NPC off."));
+            }
+        }
+    }
+    changed |= activity_combo(tr("Activité au départ", "Starting activity"), m.activity[0]);
+    changed |= activity_combo(tr("Activité en voyant le joueur", "Activity on seeing the player"), m.activity[1]);
+    changed |= activity_combo(tr("Activité quand on tire", "Activity when shot at"), m.activity[2]);
+    changed |= ImGui::SliderInt(tr("Fiche +0x12", "Record +0x12"), &m.record_12, 0, 15);
+    ImGui::PopItemWidth();
+    if (changed) {
+        if (!edit_open_) {
+            push_undo();
+            edit_open_ = true;
+        }
+        write_monster_pair(place, kind, m);
+        level_dirty_ = world_dirty_ = true;
+    }
+    if (ImGui::Button(tr("Sélectionner la paire", "Select the pair"))) {
+        selection_ = {place.uid, kind.uid};
+        primary_ = item.uid;
+    }
 }
 
 void EditorApp::script_properties(const LevelItem& item, std::uint8_t fam) {

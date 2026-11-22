@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <set>
 
 namespace crusader::editor {
@@ -74,9 +75,14 @@ int relink_pasted(std::vector<LevelItem>& items, const Level& target, const Leve
     int changed = 0;
     // Links.
     std::set<std::uint8_t> used = used_link_qualities(target, info);
+    std::map<std::uint8_t, int> carried;
+    for (const LevelItem& i : items) {
+        if (is_linked_item(i, info)) ++carried[i.quality_low()];
+    }
     std::map<std::uint8_t, std::uint8_t> links;
     for (const LevelItem& i : items) {
         if (!is_linked_item(i, info) || links.count(i.quality_low()) || !used.count(i.quality_low())) continue;
+        if (source_map == target_map && carried[i.quality_low()] < 2) continue;
         const std::uint8_t q = first_free(used, 0);
         if (q == 0) break;
         used.insert(q);
@@ -126,6 +132,20 @@ std::size_t busiest_map_records(const std::vector<std::vector<std::uint8_t>>& en
     std::size_t most = 0;
     for (const auto& e : entries) most = std::max(most, e.size() / kRecordSize);
     return most;
+}
+
+const LevelItem* monster_partner(const Level& level, const LevelItem& item, const LevelInfo& info) {
+    if (item.shape != kShapeMonster || item.frame > 1 || !info.has_class(kShapeMonster)) return nullptr;
+    const LevelItem* best = nullptr;
+    std::int32_t best_d = 0;
+    for (const LevelItem& i : level.items) {
+        if (i.shape != kShapeMonster || i.frame + item.frame != 1 || i.quality_low() != item.quality_low()) continue;
+        const std::int32_t d = std::max(std::abs(i.x - item.x), std::abs(i.y - item.y));
+        if (d > kMonsterRange || (best && d >= best_d)) continue;
+        best = &i;
+        best_d = d;
+    }
+    return best;
 }
 
 std::vector<Problem> check_level(const Level& level, const CheckContext& context) {
@@ -189,6 +209,18 @@ std::vector<Problem> check_level(const Level& level, const CheckContext& context
                     std::string(tr("Œuf de glob vide (glob ", "Empty glob egg (glob ")) + std::to_string(i.quality) +
                         tr(") : il ne pose rien.", "): it places nothing."));
             }
+        } else if (i.shape == kShapeMonster && i.frame <= 1 && info.has_class(kShapeMonster) &&
+                   !monster_partner(level, i, info)) {
+            add(Severity::Warning, i.uid,
+                i.frame == 1
+                    ? tr("Type de PNJ (MONSTER image 1) sans place (MONSTER image 0) de même lien à moins de 64 "
+                         "unités : il ne sert à rien.",
+                         "NPC kind (MONSTER frame 1) without a place (MONSTER frame 0) of the same link within 64 "
+                         "units: it is of no use.")
+                    : tr("Place de PNJ (MONSTER image 0) sans type (MONSTER image 1) de même lien à moins de 64 "
+                         "unités : aucun PNJ n'y apparaît.",
+                         "NPC place (MONSTER frame 0) without a kind (MONSTER frame 1) of the same link within 64 "
+                         "units: no NPC appears there."));
         } else if (fam == kFamMonsterEgg) {
             if (i.contents.empty() || i.contents.front().shape != kShapeNpcTemplate) {
                 add(Severity::Error, i.uid,

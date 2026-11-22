@@ -66,6 +66,7 @@ private:
         MonsterEgg,
         MissionStart,
         TeleportPair,
+        MonsterPair,  // a MONSTER trigger and its spawn point (value: NPC type)
     };
     struct Brush {
         BrushKind kind = BrushKind::None;
@@ -140,6 +141,10 @@ private:
     void semantic_properties(LevelItem& item, std::uint8_t family);
     void script_properties(const LevelItem& item, std::uint8_t family);
     void contents_editor(LevelItem& item);
+    void monster_pair_properties(LevelItem& item);
+    // The NPC types of DTABLE.FLX as a combo; true when `type` changed.
+    bool npc_type_combo(const char* label, int& type);
+    bool activity_combo(const char* label, int& activity);
     void glob_window();
     void modal_popups();
     void problems_window();
@@ -232,6 +237,7 @@ private:
 
     // Clipboard.
     std::vector<LevelItem> clipboard_;
+    std::vector<LevelItem> deferred_items_;  // made in the properties panel, added after it
     Point3 clipboard_anchor_{};
     int clipboard_map_ = 0;
     bool paste_relinks_ = true;
