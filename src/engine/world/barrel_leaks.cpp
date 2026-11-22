@@ -328,12 +328,15 @@ BarrelLeaks::Pool* BarrelLeaks::pool_of(std::uint32_t serial) {
     return nullptr;
 }
 
-// A new, empty pool at level z (the oldest that does not burn goes past
-// kMaxPools). The other pools may move.
+// A new, empty pool at level z (past kMaxPools, the oldest burnt stain
+// goes, else the oldest that does not burn). The other pools may move.
 // @orig none: port-only barrel leaks
 BarrelLeaks::Pool& BarrelLeaks::new_pool(std::int32_t z) {
     if (pools_.size() >= kMaxPools) {
-        auto old = std::find_if(pools_.begin(), pools_.end(), [](const Pool& q) { return !q.burning; });
+        // A burnt stain first, then fuel that does not burn.
+        auto old = std::find_if(pools_.begin(), pools_.end(), [](const Pool& q) { return q.burnt; });
+        if (old == pools_.end())
+            old = std::find_if(pools_.begin(), pools_.end(), [](const Pool& q) { return !q.burning; });
         pools_.erase(old != pools_.end() ? old : pools_.begin());
     }
     Pool fresh;
@@ -443,8 +446,10 @@ void BarrelLeaks::exploded(const World& world, ObjId id, std::uint32_t now) {
     blow_up(world, b, now);
 }
 
-// The barrel blew up: what was left in it splashes where it stood, its
-// pool catches fire from there, and burning drops fly all round.
+// The barrel blew up: of what was left in it, most burns in the blast, some
+// (kLeft) runs out where it stood (spreading out over kSpreadTicks) and its
+// pool catches fire from there, some (kThrown) flies all round in burning
+// drops, which splash where they land.
 // @orig none: port-only barrel leaks
 void BarrelLeaks::blow_up(const World& world, const Barrel& b, std::uint32_t tick) {
     const double cx = b.x - b.length_x / 2, cy = b.y - b.length_y / 2;
@@ -461,11 +466,18 @@ void BarrelLeaks::blow_up(const World& world, const Barrel& b, std::uint32_t tic
     const std::uint32_t seed = mix(p->seed, static_cast<int>(b.id), static_cast<int>(tick));
     if (b.level > 1) {
         const int anchor = static_cast<int>(p->lobes.size());
-        p->lobes.push_back({cx, cy, std::min(kMaxLeft, 0.6 * std::sqrt(area * b.level / kThickness))});
+        const double to = std::min(kMaxLeft, 0.6 * std::sqrt(area * b.level * kLeft / kThickness));
+        p->lobes.push_back({cx, cy, to});
         add_fingers(*p, anchor, 4, 0, kPi, seed);
         follow_fingers(*p);
+        // The fire laid over all it will cover (its front never overtakes
+        // the fuel spreading out), the pool drawn small at first.
+        ignite(world, *p, cx, cy, tick);
+        spreads_.push_back({p->serial, static_cast<std::size_t>(anchor), to, tick});
+        spread(world, tick);
+    } else {
+        ignite(world, *p, cx, cy, tick);
     }
-    ignite(world, *p, cx, cy, tick);
     // Its trail at other levels catches too, from its end nearest the barrel.
     for (std::uint32_t serial : trail) {
         Pool* q = pool_of(serial);
@@ -478,16 +490,24 @@ void BarrelLeaks::blow_up(const World& world, const Barrel& b, std::uint32_t tic
         }
         ignite(world, *q, near->x, near->y, tick);
     }
-    // The drops: more the fuller the barrel.
+    // The drops: more the fuller the barrel, all round (a turn shared out
+    // among them, give or take), sharing what it throws by their size.
     if (b.height <= 0) return;
     const auto solids = std::make_shared<const std::vector<Solid>>(
         solids_around(world, static_cast<std::int32_t>(cx) - 320, static_cast<std::int32_t>(cy) - 320,
                       static_cast<std::int32_t>(cx) + 320, static_cast<std::int32_t>(cy) + 320));
-    const int count = 10 + static_cast<int>(16 * std::clamp(b.level / b.height, 0.0, 1.0));
+    const int count = 12 + static_cast<int>(20 * std::clamp(b.level / b.height, 0.0, 1.0));
+    double weights = 0;
+    for (int k = 0; k < count; ++k) {
+        const double size = 0.5 + 0.9 * unit(mix(mix(seed, k, 31), 2, 2));
+        weights += size * size;
+    }
+    const double thrown = b.level > 1 ? area * b.level * kThrown : 0;
+    const double turn = unit(mix(seed, 7, 7)) * 2 * kPi;
     for (int k = 0; k < count; ++k) {
         const std::uint32_t h = mix(seed, k, 31);
-        const double angle = unit(h) * 2 * kPi;
-        const double speed = 1.6 + 4.4 * unit(h >> 8);
+        const double angle = turn + (k + 0.8 * (unit(h) - 0.5)) * 2 * kPi / count;
+        const double speed = 1.2 + 4.4 * unit(h >> 8);
         Drop d;
         d.x = cx;
         d.y = cy;
@@ -498,6 +518,7 @@ void BarrelLeaks::blow_up(const World& world, const Barrel& b, std::uint32_t tic
         d.born = tick;
         d.seed = mix(h);
         d.size = static_cast<float>(0.5 + 0.9 * unit(mix(h, 2, 2)));
+        d.fuel = weights > 0 ? thrown * d.size * d.size / weights : 0;
         d.solids = solids;
         if (drops_.size() >= kMaxDrops) drops_.erase(drops_.begin());
         drops_.push_back(d);
@@ -580,6 +601,7 @@ void BarrelLeaks::step(const World& world, std::uint32_t tick) {
         grow(b);
         ++i;
     }
+    spread(world, tick);
     step_drops(world, tick);
     for (Pool& p : pools_) {
         if (!p.burning) continue;
@@ -683,8 +705,9 @@ void BarrelLeaks::step_drops(const World& world, std::uint32_t tick) {
     }
 }
 
-// A drop lands on a floor: a pool there catches; elsewhere it makes a
-// little pool of its own, burning.
+// A drop lands on a floor: a pool there catches; elsewhere what it carries
+// splashes in a little pool of its own, burning: a blot, drawn out ahead
+// along its way the faster it flew, droplets round it.
 // @orig none: port-only barrel leaks
 void BarrelLeaks::splash_floor(const World& world, const Drop& d, double x, double y, std::int32_t z,
                                std::uint32_t tick) {
@@ -694,8 +717,23 @@ void BarrelLeaks::splash_floor(const World& world, const Drop& d, double x, doub
         return;
     }
     Pool& p = new_pool(z);
-    p.lobes.push_back({x, y, 5 + 9.0 * d.size});
-    add_fingers(p, 0, 2, unit(d.seed) * 2 * kPi, kPi, d.seed);
+    const double r = d.fuel > 0 ? std::clamp(0.6 * std::sqrt(d.fuel / kThickness), 5.0, 34.0) : 5 + 9.0 * d.size;
+    p.lobes.push_back({x, y, r});
+    const double run = std::hypot(d.vx, d.vy);
+    if (run > 0.5) {
+        const double ux = d.vx / run, uy = d.vy / run;
+        const int streak = std::min(3, 1 + static_cast<int>(run / 1.8));
+        double along = 0, size = r;
+        for (int k = 0; k < streak; ++k) {
+            along += 0.85 * size;
+            size *= 0.68;
+            const double sway = (unit(mix(d.seed, k, 3)) - 0.5) * 0.5 * size;
+            p.lobes.push_back({x + ux * along - uy * sway, y + uy * along + ux * sway, size});
+        }
+        add_fingers(p, 0, 3, std::atan2(uy, ux), 1.2, d.seed);
+    } else {
+        add_fingers(p, 0, 2, unit(d.seed) * 2 * kPi, kPi, d.seed);
+    }
     follow_fingers(p);
     ignite(world, p, x, y, tick);
     p.burn_ticks = std::min<std::uint32_t>(p.burn_ticks, 140 + static_cast<std::uint32_t>(unit(d.seed >> 4) * 160));
@@ -869,6 +907,31 @@ void BarrelLeaks::lay_trail(Barrel& b) {
 }
 
 // The lobes of a barrel's pool, from what ran out of each hole.
+// The pools of the barrels blown up spread out, fast then slower, over the
+// fire laid when they caught: only what is drawn of them grows.
+// @orig none: port-only barrel leaks
+void BarrelLeaks::spread(const World&, std::uint32_t tick) {
+    for (std::size_t i = 0; i < spreads_.size();) {
+        const Spread& s = spreads_[i];
+        Pool* p = pool_of(s.pool);
+        if (!p || p->burnt || s.lobe >= p->lobes.size()) {
+            spreads_.erase(spreads_.begin() + static_cast<std::ptrdiff_t>(i));
+            continue;
+        }
+        // Drawn anew every few ticks: a big pool costs.
+        const double u = std::min(1.0, static_cast<double>(tick - s.from) / kSpreadTicks);
+        if ((tick - s.from) % 3 != 0 && u < 1) {
+            ++i;
+            continue;
+        }
+        p->lobes[s.lobe].r = s.to * (0.25 + 0.75 * (1 - (1 - u) * (1 - u)));
+        follow_fingers(*p);
+        build_field(*p, tick);
+        if (u >= 1) spreads_.erase(spreads_.begin() + static_cast<std::ptrdiff_t>(i));
+        else ++i;
+    }
+}
+
 // @orig none: port-only barrel leaks
 void BarrelLeaks::grow(Barrel& b) {
     Pool* p = pool_of(b.pool);
@@ -1634,6 +1697,7 @@ void BarrelLeaks::clear() {
     drops_.clear();
     wall_fires_.clear();
     burning_.clear();
+    spreads_.clear();
     burns_.clear();
     fire_after_.clear();
     fire_first_.clear();

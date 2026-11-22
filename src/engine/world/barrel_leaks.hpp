@@ -26,9 +26,11 @@
 //   trail goes on from the pool it starts from, in pools that touch: the
 //   fire runs along it from one to the next, lower than over a pool.
 // - Every barrel that blows up (the last bullet, a blast, another barrel)
-//   throws what was left in it: a pool of fire where it stood, and burning
-//   drops flying all round, which set alight the pools, floors, walls and
-//   people they land on. Its own pool catches fire too: the fire spreads
+//   throws what was left in it: most burns in the blast, some (kLeft)
+//   runs out where it stood, in a pool of fire that spreads out within
+//   kSpreadTicks, some (kThrown) flies all round in burning drops, a few
+//   metres, splashing where they land in streaks of fire along their way,
+//   setting alight the pools, floors, walls and people they land on. Its own pool catches fire too: the fire spreads
 //   over it unevenly, burns a few seconds (longer the bigger the pool),
 //   dies down from its edge and leaves a burnt stain. A blast or an energy
 //   shot (laser, plasma, fire...) that ends on a pool sets it alight too,
@@ -81,7 +83,7 @@ class BarrelLeaks {
 public:
     static constexpr std::size_t kMaxBarrels = 32;
     static constexpr std::size_t kMaxHoles = 8;  // per barrel
-    static constexpr std::size_t kMaxPools = 96;
+    static constexpr std::size_t kMaxPools = 160;
     static constexpr std::size_t kMaxDrops = 160;
     static constexpr std::size_t kMaxWallFires = 96;
     static constexpr std::uint32_t kLeakDelay = 6;    // ticks between a hit and its leak
@@ -94,6 +96,11 @@ public:
     static constexpr std::uint32_t kAfterBurn = 60;   // ticks one burns on after leaving the fire
     static constexpr int kBurnDamage = 5;             // fire type 0xC's damage
     static constexpr int kBurnFireType = 0xC;
+    // Of what is left in a barrel that blows up, the share that runs out
+    // where it stood and the share its blast throws; the rest burns in the
+    // blast.
+    static constexpr double kLeft = 0.2, kThrown = 0.35;
+    static constexpr std::uint32_t kSpreadTicks = 12; // ticks a blown up barrel's pool takes to spread out
 
     // Scenery: a box, usecode units.
     struct Solid {
@@ -181,6 +188,7 @@ public:
         std::uint32_t born = 0;
         std::uint32_t seed = 0;
         float size = 1;
+        double fuel = 0;  // what it carries: level units times the barrel's cross-section
         std::shared_ptr<const std::vector<Solid>> solids;  // the scenery around the barrel
     };
 
@@ -194,6 +202,15 @@ public:
         double x = 0, y = 0, z = 0;
         float r = 0;
         std::uint32_t lit_at = 0, burn_ticks = 0, seed = 0;
+    };
+
+    // Lobe `lobe` of pool `pool` (Pool::serial) spreading out from game
+    // tick `from` to radius `to`: the fuel of a barrel blown up runs out.
+    struct Spread {
+        std::uint32_t pool = 0;
+        std::size_t lobe = 0;
+        double to = 0;
+        std::uint32_t from = 0;
     };
 
     // Someone on fire.
@@ -248,6 +265,7 @@ public:
     const std::vector<Drop>& drops() const { return drops_; }
     const std::vector<WallFire>& wall_fires() const { return wall_fires_; }
     const std::vector<Burning>& burning() const { return burning_; }
+    const std::vector<Spread>& spreads() const { return spreads_; }
     const Pool* pool(std::uint32_t serial) const;
     bool on_fire(ObjId id) const;
     // Pool pixels that mirrored something in the last frame drawn.
@@ -283,6 +301,7 @@ private:
     void splash_wall(const World& world, const Drop& d, const Solid& s, int face, double x, double y, double z,
                      std::uint32_t tick);
     void grow(Barrel& b);
+    void spread(const World& world, std::uint32_t tick);
     Pool& pool_for(Barrel& b, bool trail);
     void place_jet(Barrel& b, Hole& h);
     void lay_trail(Barrel& b);
@@ -313,6 +332,7 @@ private:
     std::vector<Drop> drops_;
     std::vector<WallFire> wall_fires_;
     std::vector<Burning> burning_;
+    std::vector<Spread> spreads_;
     std::vector<ObjId> burns_;
     int map_ = -1;
     std::uint32_t now_ = 0;

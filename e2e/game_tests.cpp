@@ -4746,6 +4746,112 @@ void test_barrel_leaks(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
 }
 
+// Port addition (barrel_leaks.hpp): barrel 5070 of SAVEGAME.3, whole,
+// blown up at once. Part of its fuel runs out where it stood, in a pool
+// that spreads out over kSpreadTicks (no longer at its full size at once);
+// the rest (kThrown) flies all round and splashes, burning, a few metres
+// away. TRAIL_SHOTS=<folder>: pictures of the blast.
+void test_barrel_splash(const std::filesystem::path& data) {
+    constexpr ObjId kBarrel = 5070;
+    Game game(data, test_saves(data));
+    game.config().barrel_leaks = true;
+    game.load_save(3);
+    World& w = game.world();
+    w.state.difficulty = 3;
+    const Item* barrel = w.get(kBarrel);
+    CHECK(barrel && barrel->shape == 0xAA);
+    if (!barrel) return;
+    const std::uint16_t shape = barrel->shape;
+    const ShapeInfo* info = w.shape_info(shape);
+    CHECK(info != nullptr);
+    if (!info) return;
+    // Out on the open floor a little way off the Silencer, in sight: free
+    // and held up there, free all round it.
+    const World::Point me = w.location(*w.get(1));
+    World::Point spot{};
+    bool open = false;
+    for (int ring = 256; ring <= 1024 && !open; ring += 32) {
+        for (int k = 0; k < 16 && !open; ++k) {
+            const World::Point at{me.x + kDirectionDx[k] * ring / 2, me.y + kDirectionDy[k] * ring / 2, me.z};
+            open = position_free(w, shape, at, nullptr, kBarrel) &&
+                   !position_free(w, shape, {at.x, at.y, at.z - 1}, nullptr, kBarrel);
+            for (int j = 0; j < 16 && open; j += 2) {
+                for (int d = 32; d <= 160 && open; d += 32) {
+                    const World::Point by{at.x + kDirectionDx[j] * d / 2, at.y + kDirectionDy[j] * d / 2, at.z};
+                    open = position_free(w, shape, by, nullptr, kBarrel) &&
+                           !position_free(w, shape, {by.x, by.y, by.z - 1}, nullptr, kBarrel);
+                }
+            }
+            if (open) spot = at;
+        }
+    }
+    CHECK(open);
+    if (!open) return;
+    std::printf("barrel splash: the barrel at (%d, %d, %d), %d units off the Silencer\n", spot.x, spot.y, spot.z,
+                static_cast<int>(std::hypot(spot.x - me.x, spot.y - me.y)));
+    w.move_item(kBarrel, spot.x, spot.y, spot.z);
+    const double cx = spot.x - info->footpad_x * 8.0, cy = spot.y - info->footpad_y * 8.0;
+    Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+    const char* shots = std::getenv("TRAIL_SHOTS");
+    // On to `ticks` game ticks later.
+    const auto run = [&](std::uint32_t ticks, const char* name = nullptr) {
+        const std::uint32_t until = game.kernel().ticks() + ticks;
+        for (int f = 0; f < 2000 && game.kernel().ticks() < until; ++f) {
+            game.update(kFrameUs);
+            game.render(screen);
+        }
+        if (shots && name) write_png(std::filesystem::path(shots) / name, screen, game.palette());
+    };
+    run(5, "splash-before.png");
+    const BarrelLeaks& leaks = game.barrel_leaks();
+    CHECK(leaks.pools().empty());
+    // A blast (fire type 4): it blows up whole.
+    apply_damage(game.kernel(), w, game.animations(), kBarrel, 1, 0, 250, 4);
+    for (int f = 0; f < 10 && leaks.spreads().empty(); ++f) run(1);
+    CHECK(leaks.spreads().size() == 1);
+    if (leaks.spreads().size() != 1) return;
+    const BarrelLeaks::Spread s = leaks.spreads()[0];
+    const BarrelLeaks::Pool* pool = leaks.pool(s.pool);
+    CHECK(pool && s.lobe < pool->lobes.size());
+    if (!pool || s.lobe >= pool->lobes.size()) return;
+    const double first = pool->lobes[s.lobe].r;
+    // What it held, all of it at once before.
+    const double area = info->footpad_x * 16.0 * info->footpad_y * 16.0 / 3.14159265358979;
+    const double whole = std::min(160.0, 0.6 * std::sqrt(area * info->footpad_z * 8.0 * 0.9 / 0.45));
+    run(4, "splash-0.png");
+    run(BarrelLeaks::kSpreadTicks);
+    pool = leaks.pool(s.pool);
+    CHECK(pool != nullptr);
+    if (!pool) return;
+    const double spread = pool->lobes[s.lobe].r;
+    std::printf("barrel splash: its pool %.1f at first, %.1f spread out (to %.1f; %.1f all at once before)\n", first,
+                spread, s.to, whole);
+    CHECK(first < 0.4 * s.to && leaks.spreads().empty() && std::abs(spread - s.to) < 0.01 && s.to < 0.8 * whole &&
+          pool->burning);
+    // The drops land: splashes all round, burning, a few metres off.
+    run(15, "splash-1.png");
+    run(30, "splash-2.png");
+    int splashes = 0, sectors = 0;
+    double farthest = 0;
+    bool sector[8] = {};
+    for (const BarrelLeaks::Pool& p : leaks.pools()) {
+        if (p.serial == s.pool || p.lobes.empty()) continue;
+        const double dx = p.lobes[0].x - cx, dy = p.lobes[0].y - cy, d = std::hypot(dx, dy);
+        if (d < 24) continue;
+        ++splashes;
+        farthest = std::max(farthest, d);
+        const int k = static_cast<int>(std::floor((std::atan2(dy, dx) + 3.14159265358979) / (2 * 3.14159265358979) * 8)) & 7;
+        if (!sector[k]) ++sectors;
+        sector[k] = true;
+    }
+    std::printf("barrel splash: %d splashes in %d of 8 directions, the farthest %.0f units off, %zu wall fires\n",
+                splashes, sectors, farthest, leaks.wall_fires().size());
+    CHECK(splashes >= 8 && sectors >= 5 && farthest > 60);
+    run(90, "splash-3.png");
+    run(400, "splash-4.png");
+    CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
+}
+
 // Leaking barrels: barrel 5070 of SAVEGAME.3, pierced twice, then thrown
 // along the floor (as a blast throws it, Item::I_hurl, gravity 2) lays a
 // trail of fuel in its pool from where it stood to where it stops; it blows
@@ -7219,6 +7325,10 @@ int main(int argc, char** argv) {
         test_rolling_barrel_trail(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--barrel-splash") {
+        test_barrel_splash(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--barrel-trail") {
         test_barrel_trail(data);
         return failures ? 1 : 0;
@@ -7230,6 +7340,7 @@ int main(int argc, char** argv) {
     if (argc > 2 && std::string(argv[2]) == "--barrels") {
         test_barrels(data);
         test_barrel_leaks(data);
+        test_barrel_splash(data);
         test_barrel_trail(data);
         test_rolling_barrel_trail(data);
         test_stacked_barrel_leak(data);
@@ -7424,6 +7535,7 @@ int main(int argc, char** argv) {
     test_courier_keycard(data);
     test_barrels(data);
     test_barrel_leaks(data);
+    test_barrel_splash(data);
     test_barrel_trail(data);
     test_rolling_barrel_trail(data);
     test_stacked_barrel_leak(data);

@@ -518,9 +518,9 @@ The explosive barrels (BARRELUP 0xAA upright, BARRELS to BARRELSE 0x151..0x155 l
 - It is done on the finished picture, column by column, from what was drawn: a pool mirrors what is on screen up to 120 pixels above it.
 
 **Explosion**
-- Every barrel that blows up, shot or not (its last bullet, a blast, another barrel going off), throws what was left in it: a pool of fire where it stood, the bigger the fuller it was, with four fingers, and 10 to 26 burning drops flying all round, 1.6 to 6 units a tick, up to 6 units a tick upwards. Several barrels going off throw as many sprays.
+- Every barrel that blows up, shot or not (its last bullet, a blast, another barrel going off), throws what was left in it. Most of it (45 %) burns in the blast. A fifth runs out where it stood: a pool of fire, the bigger the fuller the barrel was, with four fingers, that spreads out in 12 ticks, fast then slower, from a quarter of its size (it no longer lies there at its full size at once). The rest (35 %) flies all round in 12 to 32 burning drops, shared out round the barrel (all directions, give or take), 1.2 to 5.6 units a tick, up to 6 units a tick upwards: they land a few metres off (up to some 250 units), each carrying a share of that fuel by its size. Several barrels going off throw as many sprays.
 - A drop flies as a burning blob with a tail along the way it came, drawn over the scene. Where it meets:
-  - a floor or the top of something: a pool there catches fire; elsewhere it makes a little pool of its own, of a radius of 10 to 18 units with two fingers, burning 2 to 5 seconds;
+  - a floor or the top of something: a pool there catches fire; elsewhere what it carries splashes there, burning 2 to 5 seconds: a blot (5 to 34 units, from the fuel it carries as a pool would), drawn out ahead of it along its way the faster it flew (one to three smaller blots), with three droplets round it thrown forwards;
   - a wall the camera sees: the fuel burns on it 2.5 to 5 seconds, flames rising up the wall, and leaves a sooty stain, black in its middle, of a radius of 13 to 22 units, that stays. It is drawn on whatever shows that point of the wall (a door or a panel drawn over it);
   - someone: they catch fire (see below), for two seconds.
 - A drop that meets nothing for 2.5 seconds goes out.
