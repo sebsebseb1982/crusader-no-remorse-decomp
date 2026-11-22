@@ -11,6 +11,8 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -59,6 +61,59 @@ int relink_pasted(std::vector<LevelItem>& items, const Level& target, const Leve
 // (frame 1) of its quality low within kMonsterRange; for a kind, the nearest
 // place that has it in range. Null when there is none (or no MONSTER class).
 const LevelItem* monster_partner(const Level& level, const LevelItem& item, const LevelInfo& info);
+
+// The items that share `item`'s link (its quality low) within `range` units
+// (x and y), `item` first. Empty when it has no link.
+std::vector<std::uint32_t> linked_group(const Level& level, const LevelItem& item, const LevelInfo& info,
+                                        std::int32_t range);
+
+// The shapes whose objects act through TRIGGER on the shape they name
+// (trigger_target): switches pass TRIGGER their state (0 or 1) and it acts
+// on the linked items of that shape, whereas EVENT and others pass values
+// from 0x80 that take other paths, and chests or timers link otherwise. Told
+// apart by the original maps: a shape whose class calls TRIGGER
+// (`calls_trigger`, by class id) and whose linked objects there name a
+// linked item's shape at least 3 times, in 60 % of its uses.
+std::vector<bool> find_trigger_users(const std::vector<Level>& maps, const LevelInfo& info,
+                                     const std::vector<bool>& calls_trigger);
+
+// What a TRIGGER user does to its targets (TRIGGER event 0x20 with the
+// user's state, 0 or 1, then function 0x25 when map bit 2 is set):
+//   map number bits 0-1  action: 0 sets the targets' quality high to the
+//                        argument, 1 their quality low, 2 sends them
+//                        equip(argument) (a MONSTER place: its NPC appears),
+//                        3 turns them off into markers 0x476, or back on;
+//   bit 2                that set of actions (clear: others, e.g. destroy);
+//   bit 3                the state it acts at (0: its first use);
+//   bit 4                once: its link is then cleared;
+//   quality high         the argument.
+// Nothing happens with a map number or a quality low of 0.
+struct TriggerSetting {
+    std::uint8_t quality_high = 0;
+    std::uint8_t flags = 0;  // map number bits 0-4
+    int uses = 0;            // how many users have it
+    int of = 0;              // users acting on that shape
+};
+// The setting the original maps use most, by user shape and target shape
+// (key: user << 16 | target), and by target for any user (user 0xFFFF).
+using TriggerSettings = std::map<std::uint32_t, TriggerSetting>;
+TriggerSettings trigger_settings(const std::vector<Level>& maps, const LevelInfo& info, const std::vector<bool>& users);
+// The user's own setting on that target when the maps have it 3 times, else
+// any user's; null when none.
+const TriggerSetting* find_trigger_setting(const TriggerSettings& settings, std::uint16_t user, std::uint16_t target);
+void apply_trigger_setting(LevelItem& user, const TriggerSetting& setting);
+
+// A prefab: items saved from a map to be placed again (the editor's
+// prefabs folder). File: "CPF1", u16 anchor x, y, z, u16 map it came from,
+// then the items as FIXED.DAT records (contents included).
+struct Prefab {
+    std::int32_t anchor_x = 0, anchor_y = 0, anchor_z = 0;
+    int source_map = 0;
+    std::vector<LevelItem> items;
+    std::vector<std::uint8_t> serialize() const;
+    // Nullopt when the bytes are no prefab.
+    static std::optional<Prefab> parse(std::span<const std::uint8_t> bytes);
+};
 
 enum class Severity { Error, Warning, Note };
 

@@ -228,6 +228,51 @@ void check_level_tools() {
     check(monster_partner(npcs, npcs.items[0], minfo) == &npcs.items[1], "nearest kind point");
     check(monster_partner(npcs, npcs.items[2], minfo) == nullptr, "kind point out of range");
 
+    // Switches (TRIGGER): map bits 5-7 and NPC number name the target shape.
+    LevelItem sw;
+    sw.map_number = 0x1B;  // flags of its own in bits 0-4
+    set_trigger_target(sw, kShapeMonster);
+    check(sw.npc_number == 0xD0 && sw.map_number == 0x9B && trigger_target(sw) == kShapeMonster, "switch target");
+    // Settings: the user's own when the maps have it 3 times, else any user's.
+    TriggerSettings settings;
+    settings[0x061u << 16 | 0x565] = {1, 7, 3, 3};
+    settings[0x1B8u << 16 | 0x565] = {0, 6, 2, 2};
+    settings[0xFFFFu << 16 | 0x565] = {2, 6, 9, 12};
+    check(find_trigger_setting(settings, 0x061, 0x565)->flags == 7, "user's own setting");
+    check(find_trigger_setting(settings, 0x1B8, 0x565)->quality_high == 2, "too few: any user's");
+    check(find_trigger_setting(settings, 0x061, 0x564) == nullptr, "no setting");
+    LevelItem user;
+    user.quality = 0x0033;
+    user.map_number = 0x80;
+    apply_trigger_setting(user, settings[0x061u << 16 | 0x565]);
+    check(user.quality == 0x0133 && user.map_number == 0x87, "setting applied, target kept");
+
+    // call TRIGGER(0xA17) fn 0x21; spawn 4, 2, ITEM(0xA0C) fn 0x2F
+    const std::vector<std::uint8_t> code = {0x5A, 0x02, 0x11, 0x17, 0x0A, 0x21, 0x00,
+                                            0x57, 0x04, 0x02, 0x0C, 0x0A, 0x2F, 0x00, 0x50};
+    check(code_calls_class(code, 0xA17) && code_calls_class(code, 0xA0C) && !code_calls_class(code, 0xA04),
+          "calls found in the bytecode");
+
+    // The switch and the door share link 1; the crate's quality is no link.
+    const auto group = linked_group(level, level.items[3], info, 2048);
+    check(group.size() == 2 && group[0] == level.items[3].uid && group[1] == level.items[4].uid, "linked group");
+    check(linked_group(level, level.items[5], info, 2048).empty(), "no group without a link");
+
+    // Prefabs read back.
+    Prefab prefab;
+    prefab.anchor_x = 1000;
+    prefab.anchor_y = 2000;
+    prefab.anchor_z = 16;
+    prefab.source_map = 5;
+    prefab.items = {level.items[3], level.items[4], make_monster_egg(1010, 2010, 16, 7)};
+    const auto bytes = prefab.serialize();
+    const auto back = Prefab::parse(bytes);
+    check(back && back->anchor_x == 1000 && back->anchor_y == 2000 && back->anchor_z == 16 && back->source_map == 5,
+          "prefab header");
+    check(back && back->items.size() == 3 && back->items[2].contents.size() == 1 && back->items[1].shape == 0x301,
+          "prefab items, contents included");
+    check(!Prefab::parse(std::vector<std::uint8_t>{'X', 'P', 'F', '1', 0, 0, 0, 0, 0, 0, 0, 0}), "not a prefab");
+
     // Problems.
     CheckContext context;
     context.info = info;

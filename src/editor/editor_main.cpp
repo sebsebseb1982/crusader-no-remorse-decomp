@@ -1,6 +1,7 @@
 // crusader-no-remorse-editor: level editor for Crusader: No Remorse maps.
 //
 //   crusader-no-remorse-editor [data | game folder] [--mod DIR] [--map N] [--new-map] [--select-shape S]
+//                               [--prefabs DIR]
 //                              [--screenshot out.bmp [--frames N]]
 //
 // --screenshot writes the window after N frames (60 by default) and quits.
@@ -68,6 +69,7 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshot = argv[++i];
         else if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc) frames = std::stoi(argv[++i]);
         else if (std::strcmp(argv[i], "--new-map") == 0) options.new_map = true;
+        else if (std::strcmp(argv[i], "--prefabs") == 0 && i + 1 < argc) options.prefabs = argv[++i];
         else if (std::strcmp(argv[i], "--select-shape") == 0 && i + 1 < argc) {
             options.select_shape = std::stoi(argv[++i], nullptr, 0);
         }

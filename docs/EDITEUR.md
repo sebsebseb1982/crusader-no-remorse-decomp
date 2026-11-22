@@ -41,6 +41,8 @@ The original levels are made of numbers that must match: a teleporter names the 
 | **Teleport destination** | *Properties* of a departure | Pick the map and the arrival from lists; *Open the arrival's map* goes there. |
 | **Level check** | status bar, *Map > Check the level* | Lists what would not work in the game, updated at each change; *Show* selects the item. |
 | **Tooltip** | pointer over the view | What the item is, where a teleporter leads, its link number. |
+| **Examples from the original maps** | *Properties*, *Edit* menu | Every place where the original maps use the selected object, the ones with the most linked items first. Click a row: the map opens with the object and its linked items selected, ready to copy (Ctrl+C) onto your map. |
+| **Prefabs** | *Edit > Save the selection as a prefab*, *Prefabs* tab | Saves a group of items (a switch and its doors, a guard post...) in the `prefabs` folder (`--prefabs DIR`), to place again on any map, at the work z, with its links renumbered. |
 
 The level check reports:
 
@@ -98,6 +100,23 @@ Many objects answer each other through their **low quality**: switch → energy 
 
 The *Script (usecode)* section gives the object's class and the events it handles (`use`, `gotHit` for slabs and plates, `hatch` for eggs, `equip` for switching on…).
 
+### Switches and what they act on
+
+Switches, panels, valves, pressure plates, cameras, keypads and other objects act through the `TRIGGER` script on the items that share their quality low, but only on **one shape**, written in their own bytes, with an action chosen by their other bits:
+
+| Bytes of the switch | Meaning |
+|---|---|
+| map number bits 5-7 and NPC number | the target shape: (map number & 0xE0) × 8 + NPC number |
+| map number bits 0-1 | the action: 0 sets the targets' quality high to the argument, 1 their quality low, 2 switches them on (`equip(argument)`: a MONSTER place makes its NPC appear), 3 turns them off into markers, or back on |
+| map number bit 2 | those four actions (clear: other ones, such as destroying the targets) |
+| map number bit 3 | the state it acts at (0: its first use) |
+| map number bit 4 | once: its link is then cleared |
+| quality high | the argument |
+
+Nothing happens with a map number or a quality low of 0. **Link by clicking** sets all of this: the clicked item's shape becomes the target, and the action and argument become the setting the original maps use most for that kind of switch on that shape (a switch on energy walls turns them off and on; on a MONSTER place, it makes the NPC appear). *Properties > Acts on* shows the target, the action in words, and the original maps' setting. Which objects work this way is read from the original maps: 17 shapes in No Remorse (`editor_data_tests` lists them); chests, timers and `EVENT` objects use their bytes otherwise.
+
+Checked in the game: on a map made with these functions, a switch linked to an energy wall turns it off, and a switch linked to a MONSTER place makes its NPC appear.
+
 ### NPCs
 
 Most NPCs of the original maps (about 4,600, against 199 monster eggs) are **MONSTER pairs**. A pair is two MONSTER objects (shape 0x4D0) linked by their quality low, like a monster egg and its template:
@@ -105,7 +124,7 @@ Most NPCs of the original maps (about 4,600, against 199 monster eggs) are **MON
 - the **place** (frame 0): the NPC appears where it stands, when the player comes near (its map number has bit 3) or when a script fires it (reinforcements, NPCs coming out of doors);
 - the **kind** (frame 1), within 64 units of the place: the NPC's type and two of its activities.
 
-Once the NPC has appeared, both links are cleared. *Eggs* tab: click an NPC type, then in the view: the editor places a pair with a free link, an NPC that guards, attacks on seeing the player or when shot at, and appears when the player comes near. *As a monster egg* places a monster egg instead. Select either object of the pair: *Properties > Role in the level* edits the NPC on both objects at once:
+Once the NPC has appeared, both links are cleared. A place that does not appear on its own shows the switches that fire it (select the switch, **L**, click the place); a switch's argument is the place's mode: 0 once, 1 each time, 2 and 3 teleported in. *Eggs* tab: click an NPC type, then in the view: the editor places a pair with a free link, an NPC that guards, attacks on seeing the player or when shot at, and appears when the player comes near. *As a monster egg* places a monster egg instead. Select either object of the pair: *Properties > Role in the level* edits the NPC on both objects at once:
 
 | Setting | Stored in |
 |---|---|

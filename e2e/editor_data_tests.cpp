@@ -130,6 +130,45 @@ void check_level_check(const std::filesystem::path& data) {
     check(errors * 500 < items, "few errors in the original maps");
 }
 
+void check_trigger_targets(const std::filesystem::path& data) {
+    // The objects that act through TRIGGER on the shape their map and NPC
+    // numbers name (switches, panels, plates, cameras...), told apart by the
+    // original maps: switches and panels are, chests (their contents) are not.
+    const auto typeflags = load_typeflags(data / "STATIC/TYPEFLAG.DAT");
+    const auto usecode = UsecodeFile::from_flex(FlexArchive::open(data / "USECODE/EUSECODE.FLX"));
+    std::uint16_t trigger = 0;
+    for (std::uint16_t c = 0xA00; c < 0xB00 && !trigger; ++c) {
+        if (usecode.has_class(c) && usecode.class_name(c) == "TRIGGER") trigger = c;
+    }
+    check(trigger != 0, "TRIGGER class");
+    std::vector<bool> calls(0x800, false);
+    for (std::uint16_t c = 0; c < 0x800; ++c) {
+        calls[c] = usecode.has_class(c) && code_calls_class(usecode.code(c), trigger);
+    }
+    LevelInfo info;
+    info.family = [&](std::uint16_t s) -> std::uint8_t { return s < typeflags.size() ? typeflags[s].family : 0; };
+    info.has_class = [&](std::uint16_t cid) { return usecode.has_class(cid); };
+    const FlexEntries fixed = FlexEntries::read((data / "STATIC/FIXED.DAT").string());
+    std::vector<Level> maps;
+    for (std::size_t m = 1; m < fixed.entries.size() && m < 256; ++m) {
+        if (!fixed.entries[m].empty()) maps.push_back(Level::parse(fixed.entries[m]));
+    }
+    const std::vector<bool> users = find_trigger_users(maps, info, calls);
+    std::string names;
+    int count = 0;
+    bool spanel = false, chest = false;
+    for (std::uint16_t c = 0; c < users.size(); ++c) {
+        if (!users[c]) continue;
+        ++count;
+        const std::string n = usecode.class_name(c);
+        names += " " + n;
+        spanel |= n == "SPANEL";
+        chest |= n == "CHEST_NS" || n == "CHEST_EW";
+    }
+    std::printf("TRIGGER (0x%03X): %d classes act on the shape they name:%s\n", trigger, count, names.c_str());
+    check(count >= 15 && spanel && !chest, "switches and panels name their target shape, chests do not");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -143,6 +182,7 @@ int main(int argc, char** argv) {
         check_globs(data);
         check_project(data);
         check_level_check(data);
+        check_trigger_targets(data);
     } catch (const std::exception& e) {
         std::fprintf(stderr, "error: %s\n", e.what());
         return 1;

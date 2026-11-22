@@ -201,6 +201,24 @@ std::pair<LevelItem, LevelItem> make_monster_pair(std::int32_t x, std::int32_t y
     return {place, kind};
 }
 
+std::uint16_t trigger_target(const LevelItem& item) {
+    return static_cast<std::uint16_t>((item.map_number & 0xE0) << 3 | item.npc_number);
+}
+
+void set_trigger_target(LevelItem& item, std::uint16_t shape) {
+    item.map_number = static_cast<std::uint8_t>((item.map_number & 0x1F) | ((shape >> 3) & 0xE0));
+    item.npc_number = static_cast<std::uint8_t>(shape & 0xFF);
+}
+
+bool code_calls_class(std::span<const std::uint8_t> code, std::uint16_t cid) {
+    const auto lo = static_cast<std::uint8_t>(cid), hi = static_cast<std::uint8_t>(cid >> 8);
+    for (std::size_t i = 0; i + 3 <= code.size(); ++i) {
+        if (code[i] == 0x11 && code[i + 1] == lo && code[i + 2] == hi) return true;
+        if (code[i] == 0x57 && i + 5 <= code.size() && code[i + 3] == lo && code[i + 4] == hi) return true;
+    }
+    return false;
+}
+
 std::string describe(const LevelItem& item, std::uint8_t family, const std::string& class_name) {
     char buf[160];
     switch (family) {

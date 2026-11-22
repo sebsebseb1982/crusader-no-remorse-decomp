@@ -8,6 +8,7 @@
 #include "editor/level.hpp"
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -103,6 +104,17 @@ void write_monster_pair(LevelItem& place, LevelItem& kind, const MonsterPair& m)
 // A new pair at one place (the place first), linked by `link`.
 std::pair<LevelItem, LevelItem> make_monster_pair(std::int32_t x, std::int32_t y, std::int32_t z, int npc_type,
                                                   std::uint8_t link);
+
+// Objects that act through the TRIGGER library (switches, panels, pressure
+// plates, cameras, key cards...): their map number (bits 5-7) and NPC number
+// name the shape of the objects they act on, among those of their quality low
+// (TRIGGER event 0x20: (map number & 0xE0) * 8 + NPC number). The other bits
+// of the map number are flags of their own.
+std::uint16_t trigger_target(const LevelItem& item);
+void set_trigger_target(LevelItem& item, std::uint16_t shape);
+// The bytecode calls or spawns a function of class `cid` (opcode 0x11 call
+// cid fn, 0x57 spawn argsize thissize cid fn), by a scan of its bytes.
+bool code_calls_class(std::span<const std::uint8_t> code, std::uint16_t cid);
 
 // Markers 0x476: the object a chest gives, or an object a TRIGGER switched
 // off (docs/usecode.md): shape = map number + (NPC number & 0xE0) * 8,

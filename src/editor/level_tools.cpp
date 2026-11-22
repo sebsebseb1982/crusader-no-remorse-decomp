@@ -148,6 +148,113 @@ const LevelItem* monster_partner(const Level& level, const LevelItem& item, cons
     return best;
 }
 
+std::vector<std::uint32_t> linked_group(const Level& level, const LevelItem& item, const LevelInfo& info,
+                                        std::int32_t range) {
+    std::vector<std::uint32_t> group;
+    if (!is_linked_item(item, info)) return group;
+    group.push_back(item.uid);
+    for (const LevelItem& i : level.items) {
+        if (i.uid == item.uid || i.quality_low() != item.quality_low() || !is_linked_item(i, info)) continue;
+        if (std::abs(i.x - item.x) > range || std::abs(i.y - item.y) > range) continue;
+        group.push_back(i.uid);
+    }
+    return group;
+}
+
+std::vector<bool> find_trigger_users(const std::vector<Level>& maps, const LevelInfo& info,
+                                     const std::vector<bool>& calls_trigger) {
+    std::vector<int> uses(calls_trigger.size(), 0), named(calls_trigger.size(), 0);
+    for (const Level& level : maps) {
+        for (const LevelItem& i : level.items) {
+            if (i.shape >= calls_trigger.size() || !calls_trigger[i.shape]) continue;
+            const auto group = linked_group(level, i, info, 2048);
+            if (group.size() < 2) continue;
+            ++uses[i.shape];
+            for (std::size_t k = 1; k < group.size(); ++k) {
+                if (level.find(group[k])->shape == trigger_target(i)) {
+                    ++named[i.shape];
+                    break;
+                }
+            }
+        }
+    }
+    std::vector<bool> users(calls_trigger.size(), false);
+    for (std::size_t s = 0; s < users.size(); ++s) users[s] = named[s] >= 3 && named[s] * 10 >= uses[s] * 6;
+    return users;
+}
+
+TriggerSettings trigger_settings(const std::vector<Level>& maps, const LevelInfo& info, const std::vector<bool>& users) {
+    std::map<std::uint32_t, std::map<std::pair<std::uint8_t, std::uint8_t>, int>> counts;
+    for (const Level& level : maps) {
+        for (const LevelItem& i : level.items) {
+            if (i.shape >= users.size() || !users[i.shape]) continue;
+            const std::uint16_t target = trigger_target(i);
+            const auto group = linked_group(level, i, info, 2048);
+            for (std::size_t k = 1; k < group.size(); ++k) {
+                if (level.find(group[k])->shape != target) continue;
+                const std::pair<std::uint8_t, std::uint8_t> setting{i.quality_high(),
+                                                                    static_cast<std::uint8_t>(i.map_number & 0x1F)};
+                ++counts[std::uint32_t{i.shape} << 16 | target][setting];
+                ++counts[0xFFFFu << 16 | target][setting];
+                break;
+            }
+        }
+    }
+    TriggerSettings settings;
+    for (const auto& [key, c] : counts) {
+        TriggerSetting best;
+        for (const auto& [setting, n] : c) {
+            best.of += n;
+            if (n > best.uses) best.quality_high = setting.first, best.flags = setting.second, best.uses = n;
+        }
+        settings[key] = best;
+    }
+    return settings;
+}
+
+const TriggerSetting* find_trigger_setting(const TriggerSettings& settings, std::uint16_t user, std::uint16_t target) {
+    if (auto it = settings.find(std::uint32_t{user} << 16 | target); it != settings.end() && it->second.uses >= 3) {
+        return &it->second;
+    }
+    auto it = settings.find(0xFFFFu << 16 | target);
+    return it != settings.end() ? &it->second : nullptr;
+}
+
+void apply_trigger_setting(LevelItem& user, const TriggerSetting& setting) {
+    user.quality = static_cast<std::uint16_t>(setting.quality_high << 8 | user.quality_low());
+    user.map_number = static_cast<std::uint8_t>((user.map_number & 0xE0) | (setting.flags & 0x1F));
+}
+
+std::vector<std::uint8_t> Prefab::serialize() const {
+    std::vector<std::uint8_t> out = {'C', 'P', 'F', '1'};
+    for (const std::int32_t v : {anchor_x, anchor_y, anchor_z, static_cast<std::int32_t>(source_map)}) {
+        out.push_back(static_cast<std::uint8_t>(v));
+        out.push_back(static_cast<std::uint8_t>(v >> 8));
+    }
+    Level level;
+    level.items = items;
+    const auto records = level.serialize();
+    out.insert(out.end(), records.begin(), records.end());
+    return out;
+}
+
+std::optional<Prefab> Prefab::parse(std::span<const std::uint8_t> bytes) {
+    if (bytes.size() < 12 || bytes[0] != 'C' || bytes[1] != 'P' || bytes[2] != 'F' || bytes[3] != '1') {
+        return std::nullopt;
+    }
+    auto u16 = [&](std::size_t at) { return static_cast<std::int32_t>(bytes[at] | bytes[at + 1] << 8); };
+    Prefab p;
+    p.anchor_x = u16(4);
+    p.anchor_y = u16(6);
+    p.anchor_z = u16(8);
+    p.source_map = u16(10);
+    Level level = Level::parse(bytes.subspan(12));
+    for (LevelItem& i : level.items) assign_uids(i);
+    p.items = std::move(level.items);
+    if (p.items.empty()) return std::nullopt;
+    return p;
+}
+
 std::vector<Problem> check_level(const Level& level, const CheckContext& context) {
     const LevelInfo& info = context.info;
     std::vector<Problem> out;

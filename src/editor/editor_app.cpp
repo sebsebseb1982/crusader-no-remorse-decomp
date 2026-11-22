@@ -14,6 +14,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 
 namespace crusader::editor {
 
@@ -122,6 +124,28 @@ void EditorApp::load_resources() {
         UsecodeFile::from_flex(FlexArchive::open(project_->file("USECODE/EUSECODE.FLX"))));
     npc_types_ = dtable::NpcTypes::load(project_->file("STATIC/DTABLE.FLX"));
     busiest_records_ = busiest_map_records(FlexEntries::read((options_.data / "STATIC/FIXED.DAT").string()).entries);
+    trigger_class_ = 0;
+    for (std::uint16_t c = 0xA00; c < 0xB00 && c < usecode_->class_count() && !trigger_class_; ++c) {
+        if (usecode_->has_class(c) && usecode_->class_name(c) == "TRIGGER") trigger_class_ = c;
+    }
+    // The objects that act on the shape they name (find_trigger_users), told
+    // apart by the original maps.
+    std::vector<bool> calls(std::min<std::size_t>(usecode_->class_count(), 0x800), false);
+    for (std::size_t c = 0; trigger_class_ && c < calls.size(); ++c) {
+        const auto cid = static_cast<std::uint16_t>(c);
+        if (usecode_->has_class(cid)) calls[c] = code_calls_class(usecode_->code(cid), trigger_class_);
+    }
+    std::vector<Level> originals;
+    try {
+        const FlexEntries fixed = FlexEntries::read((options_.data / "STATIC/FIXED.DAT").string());
+        for (std::size_t m = 1; m < fixed.entries.size() && m < 256; ++m) {
+            if (!fixed.entries[m].empty()) originals.push_back(Level::parse(fixed.entries[m]));
+        }
+    } catch (const std::exception&) {
+    }
+    trigger_source_ = find_trigger_users(originals, level_info(), calls);
+    trigger_settings_ = trigger_settings(originals, level_info(), trigger_source_);
+    load_prefabs();
 }
 
 void EditorApp::open_map(int map) {
@@ -365,6 +389,10 @@ bool EditorApp::links_by_quality(const LevelItem& item) const {
     // Eggs use their quality otherwise (glob number, trigger type, teleport
     // id, NPC template).
     return editor::links_by_quality(family_of(item.shape));
+}
+
+bool EditorApp::acts_through_trigger(const LevelItem& item) const {
+    return item.shape < trigger_source_.size() && trigger_source_[item.shape] && links_by_quality(item);
 }
 
 LevelInfo EditorApp::level_info() const {
@@ -799,7 +827,20 @@ void EditorApp::draw_overlays() {
         auto [wx, wy] = to_world(m.x, m.y, work_z_);
         wx = snap(wx);
         wy = snap(wy);
-        if (brush_.kind == BrushKind::Glob) {
+        if (brush_.kind == BrushKind::Prefab) {
+            if (brush_.value < prefabs_.size()) {
+                const Prefab& p = prefabs_[brush_.value].prefab;
+                int drawn = 0;
+                for (const LevelItem& i : p.items) {
+                    if (++drawn > 300) break;
+                    LevelItem ghost = i;
+                    ghost.x = i.x - p.anchor_x + wx;
+                    ghost.y = i.y - p.anchor_y + wy;
+                    ghost.z = i.z - p.anchor_z + work_z_;
+                    draw_box(ghost, kColGhost, 1.0f);
+                }
+            }
+        } else if (brush_.kind == BrushKind::Glob) {
             const std::int32_t bx = wx & ~0x1FF, by = wy & ~0x1FF;
             const ScreenPoint a = to_screen(bx, by, work_z_), b = to_screen(bx + kChunk, by, work_z_),
                               c = to_screen(bx + kChunk, by + kChunk, work_z_), d = to_screen(bx, by + kChunk, work_z_);
@@ -1151,6 +1192,13 @@ void EditorApp::place_brush(std::int32_t x, std::int32_t y) {
         level_dirty_ = world_dirty_ = true;
         return;
     }
+    if (brush_.kind == BrushKind::Prefab) {
+        if (brush_.value < prefabs_.size()) {
+            const Prefab& p = prefabs_[brush_.value].prefab;
+            place_group(p.items, {p.anchor_x, p.anchor_y, p.anchor_z}, p.source_map, std::pair{item.x, item.y}, work_z_);
+        }
+        return;
+    }
     if (brush_.kind == BrushKind::MonsterPair) {
         const std::uint8_t link = free_link_quality(level_, level_info());
         if (link == 0) {
@@ -1234,6 +1282,7 @@ void EditorApp::place_brush(std::int32_t x, std::int32_t y) {
         case BrushKind::MissionStart:
         case BrushKind::TeleportPair:
         case BrushKind::MonsterPair:
+        case BrushKind::Prefab:
             return;
     }
     push_undo();
@@ -1349,9 +1398,34 @@ void EditorApp::toggle_link(std::uint32_t target) {
     } else {
         t->quality = static_cast<std::uint16_t>((t->quality & 0xFF00) | q);
         const bool scripted = usecode_->has_class(usecode_class_of(*t, fam)) || t->shape == kShapeMarker;
+        // A switch (TRIGGER) acts on one shape among its links: it takes the
+        // clicked item's, unless items of its current one are linked.
+        std::string acts;
+        if (acts_through_trigger(*source) && trigger_target(*source) != t->shape) {
+            const std::uint16_t current = trigger_target(*source);
+            bool kept = false;
+            for (const LevelItem& i : level_.items) {
+                kept |= i.uid != source->uid && i.uid != t->uid && i.quality_low() == q && i.shape == current;
+            }
+            if (!kept) {
+                set_trigger_target(*source, t->shape);
+                acts = std::string(" ") + tr("Il agit maintenant sur ", "It now acts on ") + hex(t->shape, 3) + " " +
+                       shape_name(t->shape);
+                // What it does to them: as on the original maps.
+                if (const TriggerSetting* ts = find_trigger_setting(trigger_settings_, source->shape, t->shape)) {
+                    apply_trigger_setting(*source, *ts);
+                    acts += std::string(tr(", réglé comme dans les cartes d'origine", ", set as in the original maps"));
+                }
+                acts += ".";
+            } else {
+                acts = std::string(" ") + tr("Attention : il n'agit que sur ", "Note: it only acts on ") +
+                         hex(current, 3) + " " + shape_name(current) + tr(", pas sur cet objet.", ", not on this item.");
+            }
+        }
         message(std::string(tr("Lié par la qualité basse ", "Linked by quality low ")) + hex(q, 2) +
                 (scripted ? "." : tr(" (cet objet n'a pas de script : le lien ne fera rien).",
-                                     " (this item has no script: the link does nothing).")));
+                                     " (this item has no script: the link does nothing).")) +
+                acts);
     }
     level_dirty_ = world_dirty_ = true;
 }
@@ -1373,17 +1447,25 @@ void EditorApp::copy_selection(bool cut) {
 
 void EditorApp::paste() {
     if (clipboard_.empty()) return;
-    std::vector<LevelItem> items = clipboard_;
-    // At the pointer when it is over the view, else beside the copy (at the
-    // same place on another map).
-    std::int32_t dx = clipboard_map_ == map_ ? std::max(grid_, 16) : 0, dy = dx;
+    std::optional<std::pair<std::int32_t, std::int32_t>> at;
     const ImGuiIO& io = ImGui::GetIO();
     const ImVec2 m = io.MousePos;
     if (m.x >= view_x_ && m.y >= view_y_ && m.x < view_x_ + view_w_ && m.y < view_y_ + view_h_ && !io.WantCaptureMouse) {
         const auto [wx, wy] = to_world(m.x, m.y, clipboard_anchor_.z);
-        dx = snap(wx) - clipboard_anchor_.x;
-        dy = snap(wy) - clipboard_anchor_.y;
+        at = std::pair{snap(wx), snap(wy)};
     }
+    place_group(clipboard_, clipboard_anchor_, clipboard_map_, at, std::nullopt);
+}
+
+void EditorApp::place_group(std::vector<LevelItem> items, const Point3& anchor, int source_map,
+                            std::optional<std::pair<std::int32_t, std::int32_t>> at, std::optional<std::int32_t> z) {
+    if (items.empty()) return;
+    std::int32_t dx = source_map == map_ ? std::max(grid_, 16) : 0, dy = dx;
+    if (at) {
+        dx = at->first - anchor.x;
+        dy = at->second - anchor.y;
+    }
+    const std::int32_t dz = z ? *z - anchor.z : 0;
     // Glob eggs fill whole cells: the group moves by whole cells.
     const bool globs = std::any_of(items.begin(), items.end(),
                                    [&](const LevelItem& i) { return family_of(i.shape) == kFamGlobEgg; });
@@ -1395,8 +1477,10 @@ void EditorApp::paste() {
         assign_uids(i);
         i.x = std::clamp(i.x + dx, 0, 0xFFFF);
         i.y = std::clamp(i.y + dy, 0, 0xFFFF);
+        i.z = std::clamp(i.z + dz, 0, 255);
     }
-    const int renumbered = paste_relinks_ ? relink_pasted(items, level_, level_info(), clipboard_map_, map_) : 0;
+    const int renumbered = paste_relinks_ ? relink_pasted(items, level_, level_info(), source_map, map_) : 0;
+    const std::size_t count = items.size();
     push_undo();
     selection_.clear();
     for (LevelItem& i : items) {
@@ -1405,11 +1489,194 @@ void EditorApp::paste() {
         level_.items.push_back(std::move(i));
     }
     level_dirty_ = world_dirty_ = true;
-    std::string text = std::to_string(clipboard_.size()) + tr(" objet(s) collé(s)", " item(s) pasted");
+    std::string text = std::to_string(count) + tr(" objet(s) posé(s)", " item(s) placed");
     if (renumbered) {
         text += std::string(tr(", liens et ids renumérotés : ", ", links and ids renumbered: ")) + std::to_string(renumbered);
     }
     message(text + ".");
+}
+
+void EditorApp::find_examples(std::uint16_t shape) {
+    // The original maps (the data's, not the mod's).
+    examples_.clear();
+    examples_shape_ = shape;
+    examples_open_ = true;
+    const LevelInfo info = level_info();
+    try {
+        const FlexEntries fixed = FlexEntries::read((options_.data / "STATIC/FIXED.DAT").string());
+        for (std::size_t m = 1; m < fixed.entries.size() && m < 256; ++m) {
+            if (fixed.entries[m].empty()) continue;
+            const Level level = Level::parse(fixed.entries[m]);
+            for (const LevelItem& i : level.items) {
+                if (i.shape != shape) continue;
+                const int linked = static_cast<int>(linked_group(level, i, info, 2048).size());
+                const std::uint8_t fam = family_of(i.shape);
+                examples_.push_back({static_cast<int>(m), i.x, i.y, i.z, linked > 0 ? linked - 1 : 0,
+                                     describe(i, fam, class_name(usecode_class_of(i, fam)))});
+            }
+        }
+    } catch (const std::exception& e) {
+        message(e.what());
+    }
+    std::stable_sort(examples_.begin(), examples_.end(),
+                     [](const Example& a, const Example& b) { return a.linked > b.linked; });
+}
+
+void EditorApp::examples_window() {
+    if (!examples_open_) return;
+    ImGui::SetNextWindowSize(ImVec2(640, 380), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin(tr("Exemples des cartes d'origine", "Examples from the original maps"), &examples_open_)) {
+        ImGui::End();
+        return;
+    }
+    ImGui::TextWrapped("%s %s %s : %zu. %s", tr("Utilisations de", "Uses of"), hex(examples_shape_, 3).c_str(),
+                       shape_name(examples_shape_).c_str(), examples_.size(),
+                       tr("Cliquez une ligne : la carte s'ouvre avec l'objet et ses objets liés sélectionnés ; Ctrl+C, "
+                          "puis collez-les sur votre carte (Ctrl+V).",
+                          "Click a row: the map opens with the item and its linked items selected; Ctrl+C, then "
+                          "paste them on your map (Ctrl+V)."));
+    const Example* go = nullptr;
+    if (ImGui::BeginTable("examples", 4, ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders)) {
+        ImGui::TableSetupScrollFreeze(0, 1);
+        ImGui::TableSetupColumn(tr("carte", "map"), ImGuiTableColumnFlags_WidthFixed, 50);
+        ImGui::TableSetupColumn(tr("liés", "linked"), ImGuiTableColumnFlags_WidthFixed, 50);
+        ImGui::TableSetupColumn(tr("objet", "item"));
+        ImGui::TableSetupColumn(tr("position", "position"), ImGuiTableColumnFlags_WidthFixed, 140);
+        ImGui::TableHeadersRow();
+        ImGuiListClipper clipper;
+        clipper.Begin(static_cast<int>(examples_.size()));
+        while (clipper.Step()) {
+            for (int r = clipper.DisplayStart; r < clipper.DisplayEnd; ++r) {
+                const Example& e = examples_[static_cast<std::size_t>(r)];
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                const std::string id = std::to_string(e.map) + "##ex" + std::to_string(r);
+                if (ImGui::Selectable(id.c_str(), false, ImGuiSelectableFlags_SpanAllColumns)) go = &e;
+                ImGui::TableNextColumn();
+                ImGui::Text("%d", e.linked);
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(e.label.c_str());
+                ImGui::TableNextColumn();
+                ImGui::Text("%d, %d, %d", e.x, e.y, e.z);
+            }
+        }
+        ImGui::EndTable();
+    }
+    ImGui::End();
+    if (go) {
+        const Example e = *go;
+        if (e.map != map_) {
+            if (!project_->map_used(static_cast<std::size_t>(e.map))) return;
+            open_map(e.map);
+        }
+        const LevelItem* found = nullptr;
+        for (const LevelItem& i : level_.items) {
+            if (i.shape == examples_shape_ && i.x == e.x && i.y == e.y && i.z == e.z) found = &i;
+        }
+        if (!found) {
+            message(tr("Cet objet n'est plus à sa place sur la carte (modifiée par le mod).",
+                       "That item is no longer in its place on the map (changed by the mod)."));
+            return;
+        }
+        selection_.clear();
+        for (std::uint32_t uid : linked_group(level_, *found, level_info(), 2048)) selection_.insert(uid);
+        selection_.insert(found->uid);
+        primary_ = found->uid;
+        center_on(found->x, found->y, found->z);
+    }
+}
+
+void EditorApp::load_prefabs() {
+    prefabs_.clear();
+    std::error_code ec;
+    if (!std::filesystem::is_directory(options_.prefabs, ec)) return;
+    for (const auto& entry : std::filesystem::directory_iterator(options_.prefabs, ec)) {
+        if (entry.path().extension() != ".prefab") continue;
+        std::ifstream in(entry.path(), std::ios::binary);
+        const std::vector<std::uint8_t> bytes{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+        if (auto p = Prefab::parse(bytes)) prefabs_.push_back({entry.path().stem().string(), std::move(*p)});
+    }
+    std::sort(prefabs_.begin(), prefabs_.end(),
+              [](const PrefabEntry& a, const PrefabEntry& b) { return a.name < b.name; });
+}
+
+void EditorApp::save_prefab(const std::string& name) {
+    std::string file;
+    for (char c : name) {
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == ' ') file += c;
+    }
+    if (file.empty()) {
+        message(tr("Donnez un nom au prefab (lettres, chiffres, - et _).", "Give the prefab a name (letters, digits, - and _)."));
+        return;
+    }
+    Prefab p;
+    for (const LevelItem& i : level_.items) {
+        if (selection_.count(i.uid)) p.items.push_back(i);
+    }
+    if (p.items.empty()) return;
+    const LevelItem* anchor = level_.find(primary_);
+    if (!anchor || !level_.top_index(primary_)) anchor = &p.items.front();
+    p.anchor_x = anchor->x;
+    p.anchor_y = anchor->y;
+    p.anchor_z = anchor->z;
+    p.source_map = map_;
+    try {
+        std::filesystem::create_directories(options_.prefabs);
+        const auto path = options_.prefabs / (file + ".prefab");
+        const auto bytes = p.serialize();
+        std::ofstream out(path, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        if (!out) throw std::runtime_error(path.string());
+        message(std::string(tr("Prefab enregistré : ", "Prefab saved: ")) + path.string());
+    } catch (const std::exception& e) {
+        message(std::string(tr("Échec de l'enregistrement : ", "Save failed: ")) + e.what());
+    }
+    load_prefabs();
+}
+
+void EditorApp::tab_prefabs() {
+    ImGui::TextWrapped("%s", tr("Des groupes d'objets enregistrés pour être reposés : sélectionnez des objets, puis "
+                                "Édition > Enregistrer la sélection comme prefab. Cliquez un prefab, puis dans la vue "
+                                "(au z de travail) ; ses liens sont renumérotés.",
+                                "Groups of items saved to be placed again: select items, then Edit > Save the "
+                                "selection as a prefab. Click a prefab, then in the view (at the work z); its links "
+                                "are renumbered."));
+    ImGui::TextDisabled("%s", std::filesystem::absolute(options_.prefabs).string().c_str());
+    if (ImGui::SmallButton(tr("Recharger", "Reload"))) load_prefabs();
+    ImGui::BeginChild("prefabs", ImVec2(0, 0), ImGuiChildFlags_Borders);
+    int remove = -1;
+    for (std::size_t k = 0; k < prefabs_.size(); ++k) {
+        const PrefabEntry& e = prefabs_[k];
+        const std::string label = e.name + "  (" + std::to_string(e.prefab.items.size()) + " " +
+                                  tr("objets", "items") + ")##pf" + std::to_string(k);
+        if (ImGui::Selectable(label.c_str(), brush_.kind == BrushKind::Prefab && brush_.value == k)) {
+            brush_ = {BrushKind::Prefab, 0, 0, static_cast<std::uint16_t>(k)};
+        }
+        if (ImGui::BeginPopupContextItem()) {
+            if (ImGui::MenuItem(tr("Supprimer ce prefab", "Delete this prefab"))) remove = static_cast<int>(k);
+            ImGui::EndPopup();
+        }
+        if (ImGui::BeginItemTooltip()) {
+            std::map<std::string, int> kinds;
+            for (const LevelItem& i : e.prefab.items) {
+                const std::uint8_t fam = family_of(i.shape);
+                ++kinds[describe(i, fam, class_name(usecode_class_of(i, fam))).substr(0, 24)];
+            }
+            int shown = 0;
+            for (const auto& [k2, n] : kinds) {
+                if (++shown > 12) break;
+                ImGui::Text("%d x %s", n, k2.c_str());
+            }
+            ImGui::EndTooltip();
+        }
+    }
+    ImGui::EndChild();
+    if (remove >= 0) {
+        std::error_code ec;
+        std::filesystem::remove(options_.prefabs / (prefabs_[static_cast<std::size_t>(remove)].name + ".prefab"), ec);
+        brush_ = {};
+        load_prefabs();
+    }
 }
 
 void EditorApp::go_to_arrival(int map, std::uint8_t id) {
@@ -1542,6 +1809,7 @@ void EditorApp::frame() {
     status_bar();
     if (glob_window_open_) glob_window();
     problems_window();
+    examples_window();
     modal_popups();
     // Picking a brush ends the link mode; a pair waits only with its brush.
     if (brush_.kind != BrushKind::None) link_source_ = 0;
@@ -1602,6 +1870,14 @@ void EditorApp::main_menu() {
         ImGui::Separator();
         if (ImGui::MenuItem(tr("Lier en cliquant", "Link by clicking"), "L", false, p && links_by_quality(*p))) {
             start_link_mode(primary_);
+        }
+        if (ImGui::MenuItem(tr("Enregistrer la sélection comme prefab...", "Save the selection as a prefab..."), nullptr,
+                            false, !selection_.empty())) {
+            want_save_prefab_ = true;
+        }
+        if (ImGui::MenuItem(tr("Exemples des cartes d'origine", "Examples from the original maps"), nullptr, false,
+                            p != nullptr)) {
+            find_examples(p->shape);
         }
         ImGui::EndMenu();
     }
@@ -1689,6 +1965,10 @@ void EditorApp::left_panel() {
         }
         if (ImGui::BeginTabItem(tr("Œufs", "Eggs"))) {
             tab_eggs();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Prefabs")) {
+            tab_prefabs();
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Scripts")) {
@@ -2082,6 +2362,12 @@ void EditorApp::properties(LevelItem& item) {
     ImGui::TextWrapped("%s", describe(item, fam, class_name(cid)).c_str());
     ImGui::TextDisabled("%s %u - %s", tr("famille", "family"), fam, family_name(fam));
     shape_thumbnail(item.shape, item.frame, 128);
+    if (ImGui::SmallButton(tr("Exemples des cartes d'origine", "Examples from the original maps"))) {
+        find_examples(item.shape);
+    }
+    help_marker(tr("Où les concepteurs ont utilisé cet objet, avec ses objets liés : de quoi copier un montage qui "
+                   "marche.",
+                   "Where the designers used this item, with its linked items: a working set-up to copy."));
 
     ImGui::PushItemWidth(120);
     changed |= input_u16(tr("Forme", "Shape"), item.shape);
@@ -2335,6 +2621,101 @@ void EditorApp::semantic_properties(LevelItem& item, std::uint8_t fam) {
                 select_same_quality_low(item.quality_low());
             }
         }
+        if (acts_through_trigger(item)) {
+            // The shape it acts on, among its linked items.
+            const std::uint16_t target = trigger_target(item);
+            const LevelInfo info = level_info();
+            std::set<std::uint16_t> shapes;
+            int of_target = 0;
+            for (const LevelItem& i : level_.items) {
+                if (i.uid == item.uid || item.quality_low() == 0 || i.quality_low() != item.quality_low() ||
+                    !is_linked_item(i, info)) {
+                    continue;
+                }
+                shapes.insert(i.shape);
+                of_target += i.shape == target;
+            }
+            ImGui::SeparatorText(tr("Agit sur (TRIGGER)", "Acts on (TRIGGER)"));
+            const std::string current = hex(target, 3) + " " + shape_name(target);
+            if (ImGui::BeginCombo(tr("Forme visée", "Target shape"), current.c_str())) {
+                for (std::uint16_t sh : shapes) {
+                    if (ImGui::Selectable((hex(sh, 3) + " " + shape_name(sh)).c_str(), sh == target)) {
+                        set_trigger_target(item, sh);
+                        changed = true;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            help_marker(tr("Ses octets carte (bits 5-7) et PNJ nomment la forme des objets liés sur lesquels il agit "
+                           "(TRIGGER) ; Lier en cliquant la règle sur l'objet cliqué.",
+                           "Its map (bits 5-7) and NPC bytes name the shape of the linked items it acts on "
+                           "(TRIGGER); Link by clicking sets it to the clicked item's."));
+            // What it does to them (map number bits 0-4, quality high).
+            const std::uint8_t flags = static_cast<std::uint8_t>(item.map_number & 0x1F);
+            auto set_flags = [&](std::uint8_t f) {
+                item.map_number = static_cast<std::uint8_t>((item.map_number & 0xE0) | (f & 0x1F));
+                changed = true;
+            };
+            static const char* const kActionsFr[] = {"fixe leur qualité haute", "fixe leur qualité basse",
+                                                     "les met en marche (equip)", "les éteint / rallume"};
+            static const char* const kActionsEn[] = {"sets their quality high", "sets their quality low",
+                                                     "switches them on (equip)", "turns them off / on"};
+            if (flags & 4) {
+                int action = flags & 3;
+                const char* names[4];
+                for (int k = 0; k < 4; ++k) names[k] = tr(kActionsFr[k], kActionsEn[k]);
+                ImGui::SetNextItemWidth(200);
+                if (ImGui::Combo(tr("Action", "Action"), &action, names, 4)) {
+                    set_flags(static_cast<std::uint8_t>((flags & ~3) | action));
+                }
+            } else {
+                ImGui::TextDisabled("%s %s", tr("Action : autre (bit 2 de carte absent), réglage", "Action: other (map bit 2 clear), setting"),
+                                    hex(flags & 3, 1).c_str());
+                if (ImGui::SmallButton(tr("Passer aux actions connues", "Use the known actions"))) {
+                    set_flags(static_cast<std::uint8_t>(flags | 4));
+                }
+            }
+            int state = (flags >> 3) & 1;
+            ImGui::SetNextItemWidth(200);
+            if (ImGui::Combo(tr("Agit à l'état", "Acts at state"), &state,
+                             tr("0 (premier usage)\0" "1\0", "0 (first use)\0" "1\0"))) {
+                set_flags(static_cast<std::uint8_t>((flags & ~8) | (state << 3)));
+            }
+            bool once = flags & 0x10;
+            if (ImGui::Checkbox(tr("Une seule fois (le lien est ensuite effacé)", "Once (the link is then cleared)"), &once)) {
+                set_flags(static_cast<std::uint8_t>(once ? flags | 0x10 : flags & ~0x10));
+            }
+            std::uint8_t argument = item.quality_high();
+            ImGui::SetNextItemWidth(80);
+            if (input_u8(tr("Argument (qualité haute)", "Argument (quality high)"), argument)) {
+                item.quality = static_cast<std::uint16_t>(argument << 8 | item.quality_low());
+                changed = true;
+            }
+            if (target == kShapeMonster && (flags & 7) == 6) {
+                ImGui::TextDisabled("%s", tr("Argument = mode du MONSTER : 0 une fois, 1 à chaque fois, 2 / 3 en se "
+                                             "téléportant.",
+                                             "Argument = the MONSTER's mode: 0 once, 1 each time, 2 / 3 teleported "
+                                             "in."));
+            }
+            if (const TriggerSetting* found = find_trigger_setting(trigger_settings_, item.shape, target)) {
+                const TriggerSetting& ts = *found;
+                ImGui::TextDisabled("%s %s %s %s (%d / %d).", tr("Dans les cartes d'origine, sur cette forme :",
+                                                                 "In the original maps, on this shape:"),
+                                    hex(ts.quality_high, 2).c_str(), tr("et", "and"), hex(ts.flags, 2).c_str(), ts.uses,
+                                    ts.of);
+                if ((ts.quality_high != item.quality_high() || ts.flags != flags) &&
+                    ImGui::SmallButton(tr("Régler comme dans les cartes d'origine", "Set as in the original maps"))) {
+                    apply_trigger_setting(item, ts);
+                    changed = true;
+                }
+            }
+            if (of_target == 0) {
+                ImGui::TextColored(kTextWarning, "%s", tr("Aucun objet lié de cette forme : il n'agira sur rien.",
+                                                          "No linked item of that shape: it will act on nothing."));
+            } else {
+                ImGui::TextDisabled("%d %s", of_target, tr("objet(s) lié(s) de cette forme.", "linked item(s) of that shape."));
+            }
+        }
     }
     if (hatches(fam, item)) {
         int zx = item.npc_number >> 4, zy = item.npc_number & 0xF;
@@ -2430,41 +2811,50 @@ void EditorApp::monster_pair_properties(LevelItem& item) {
                                &m.on_enter);
     help_marker(tr("Sinon, seulement quand un script le déclenche (renforts, PNJ qui sortent d'une porte...).",
                    "Otherwise only when a script triggers it (reinforcements, NPCs coming out of a door...)."));
-    // No Regret's MHATCHER egg (usecode 0x905): when it hatches, it triggers
+    // What fires a place: switches and other TRIGGER users whose target is
+    // MONSTER, and No Regret's MHATCHER egg (usecode 0x905), which fires
     // every MONSTER within 3200 units whose quality low is its id.
+    const std::uint8_t link = place.quality_low();
+    int fired = 0;
+    std::string by;
+    for (const LevelItem& i : level_.items) {
+        if (i.quality_low() != link || !acts_through_trigger(i) || trigger_target(i) != kShapeMonster) continue;
+        ++fired;
+        if (by.size() < 60) by += (by.empty() ? "" : ", ") + class_name(i.shape);
+    }
     int hatcher = -1;
     for (int t = 0; t < 0x100 && hatcher < 0; ++t) {
         if (class_name(static_cast<std::uint16_t>(kClassEggs + t)) == "MHATCHER") hatcher = t;
     }
-    if (!m.on_enter && hatcher >= 0) {
-        const std::uint8_t link = place.quality_low();
-        int eggs = 0;
-        for (const LevelItem& i : level_.items) {
-            eggs += family_of(i.shape) == kFamTriggerEgg && i.quality_low() == hatcher && i.map_number == link &&
-                    std::max(std::abs(i.x - place.x), std::abs(i.y - place.y)) <= 3200;
-        }
-        if (eggs) {
-            ImGui::TextDisabled("%d %s %s.", eggs, tr("œuf(s) MHATCHER le déclenche(nt), id", "MHATCHER egg(s) trigger it, id"),
-                                hex(link, 2).c_str());
-        } else {
-            ImGui::TextColored(kTextWarning, "%s %s : %s",
-                               tr("Aucun œuf MHATCHER d'id", "No MHATCHER egg with id"), hex(link, 2).c_str(),
-                               tr("seul un autre script peut le déclencher.", "only another script can trigger it."));
-            if (ImGui::Button(tr("Ajouter un œuf MHATCHER ici", "Add a MHATCHER egg here"))) {
-                // Its zone: where the player sets the NPC off; move it there.
-                LevelItem egg;
-                egg.uid = new_uid();
-                egg.shape = kShapeTriggerEgg;
-                egg.x = place.x;
-                egg.y = place.y;
-                egg.z = place.z;
-                egg.quality = static_cast<std::uint16_t>(hatcher);
-                egg.map_number = link;
-                set_hatch_zone(egg, 4, 4);
-                deferred_items_.push_back(egg);
-                message(tr("Œuf MHATCHER ajouté : déplacez-le où le joueur doit déclencher le PNJ.",
-                           "MHATCHER egg added: move it where the player should set the NPC off."));
-            }
+    int eggs = 0;
+    for (const LevelItem& i : level_.items) {
+        eggs += hatcher >= 0 && family_of(i.shape) == kFamTriggerEgg && i.quality_low() == hatcher &&
+                i.map_number == link && std::max(std::abs(i.x - place.x), std::abs(i.y - place.y)) <= 3200;
+    }
+    if (fired) ImGui::TextDisabled("%s %s", tr("Déclenché par :", "Fired by:"), by.c_str());
+    if (eggs) {
+        ImGui::TextDisabled("%d %s %s.", eggs, tr("œuf(s) MHATCHER le déclenche(nt), id", "MHATCHER egg(s) trigger it, id"),
+                            hex(link, 2).c_str());
+    }
+    if (!m.on_enter && !fired && !eggs) {
+        ImGui::TextColored(kTextWarning, "%s",
+                           tr("Rien ne le déclenche : liez-lui un interrupteur (sélectionnez l'interrupteur, L, puis "
+                              "cliquez la place).",
+                              "Nothing fires it: link a switch to it (select the switch, L, then click the place)."));
+        if (hatcher >= 0 && ImGui::Button(tr("Ajouter un œuf MHATCHER ici", "Add a MHATCHER egg here"))) {
+            // Its zone: where the player sets the NPC off; move it there.
+            LevelItem egg;
+            egg.uid = new_uid();
+            egg.shape = kShapeTriggerEgg;
+            egg.x = place.x;
+            egg.y = place.y;
+            egg.z = place.z;
+            egg.quality = static_cast<std::uint16_t>(hatcher);
+            egg.map_number = link;
+            set_hatch_zone(egg, 4, 4);
+            deferred_items_.push_back(egg);
+            message(tr("Œuf MHATCHER ajouté : déplacez-le où le joueur doit déclencher le PNJ.",
+                       "MHATCHER egg added: move it where the player should set the NPC off."));
         }
     }
     changed |= activity_combo(tr("Activité au départ", "Starting activity"), m.activity[0]);
@@ -2681,6 +3071,24 @@ void EditorApp::modal_popups() {
         ImGui::EndChild();
         if (ImGui::Button(tr("Ouvrir", "Open"))) {
             open_map(open_map_choice_);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(tr("Annuler", "Cancel"))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+    if (want_save_prefab_) {
+        ImGui::OpenPopup("save_prefab");
+        want_save_prefab_ = false;
+    }
+    if (ImGui::BeginPopupModal("save_prefab", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("%zu %s", selection_.size(), tr("objet(s) sélectionné(s)", "item(s) selected"));
+        ImGui::SetNextItemWidth(280);
+        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+        const bool enter = ImGui::InputTextWithHint("##pfname", tr("nom du prefab", "prefab name"), &prefab_name_,
+                                                    ImGuiInputTextFlags_EnterReturnsTrue);
+        if (enter || ImGui::Button(tr("Enregistrer", "Save"))) {
+            save_prefab(prefab_name_);
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
