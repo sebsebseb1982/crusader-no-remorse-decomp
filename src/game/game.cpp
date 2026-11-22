@@ -473,6 +473,14 @@ void Game::reset_world() {
     damage_marks_.clear();
     casings_.clear();
     barrel_leaks_.clear();
+    glass_debris_.clear();
+    for (std::uint16_t pile : {std::uint16_t{0x27A}, std::uint16_t{0x349}}) {
+        if (const Shape* s = shapes_.get(pile); s && !s->frames().empty())
+            glass_debris_.add_pile_art(pile, s->frames()[0]);
+    }
+    hooks.item_hit = [this](const ItemHit& hit) {
+        if (config_.glass_debris) glass_debris_.hit(*world_, hit, kernel_->ticks());
+    };
     hooks.shot_landed = [this](ObjId hit, std::int32_t x, std::int32_t y, std::int32_t z, int fire_type) {
         if (config_.impact_marks) damage_marks_.record(*world_, hit, {x, y, z}, fire_type);
         if (config_.barrel_leaks) barrel_leaks_.shot(*world_, hit, {x, y, z}, fire_type, kernel_->ticks());
@@ -995,6 +1003,9 @@ void Game::update(std::uint32_t elapsed_us) {
         if (!more || movie_ || kernel_->slice_interrupted()) break;
     }
     if (config_.barrel_leaks) burn_in_fires();
+    // Port addition: the glass debris fly and the piles follow them.
+    if (config_.glass_debris) glass_debris_.advance(*world_, kernel_->ticks());
+    else if (!glass_debris_.empty()) glass_debris_.clear();
     if (autosave_lineage_) {
         bool running = false;
         kernel_->for_each_process([&](const Process& p) { running |= p.lineage() == autosave_lineage_; });
@@ -1946,8 +1957,11 @@ void Game::render_view(Surface8& screen, RenderStats* stats, bool keep_view) {
     screen.clear(0);
     world_->set_view_size(screen.width, screen.height);
     const GameState& s = world_->state;
-    const auto list =
-        build_display_list(*world_, shapes_, View{s.view_left, s.view_top}, screen.width, screen.height, stats);
+    // Port addition: the pieces of the glass piles, drawn among the items.
+    DisplayExtras glass;
+    if (config_.glass_debris) glass_debris_.extras(glass);
+    const auto list = build_display_list(*world_, shapes_, View{s.view_left, s.view_top}, screen.width, screen.height,
+                                         stats, &glass);
     // Port addition: the impact and blood marks and the casings on the
     // floor, over each item just drawn; the casings in flight after their
     // shooter.

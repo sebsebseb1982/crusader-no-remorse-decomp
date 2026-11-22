@@ -27,6 +27,7 @@ The changes fall into four groups:
    - [7c. Casings](#7c-casings)
    - [7d. 3D lighting](#7d-3d-lighting)
    - [7e. Leaking barrels](#7e-leaking-barrels)
+   - [7f. Glass debris](#7f-glass-debris)
 8. [Autosave](#8-autosave)
    - [8b. Language](#8b-language)
 9. [Toggle run](#9-toggle-run)
@@ -100,6 +101,7 @@ The original has nothing like it. This screen gathers every option the port adds
 | BLOOD / SANG | Cycles OFF → ON (the wounded bleed on the scenery) → GORE (much more blood) | `bloodmarks`, `goremode` |
 | CASINGS / DOUILLES | Firearms eject casings that stay on the floor (section 7c) | `casings` |
 | LEAKING BARRELS / FUITES DES BARILS | Explosive barrels take more bullets; each pierces them, their fuel makes a pool that catches fire when they blow up and burns whoever stands in it; a barrel left in the fire blows up (section 7e) | `barrelleaks` |
+| GLASS DEBRIS / ECLATS DE VERRE | A glass wall shatters into pieces that fly the way the shot went, bounce and scatter on the floor; blasts blow them about (section 7f) | `glassdebris` |
 
 *GAME / JEU*
 
@@ -548,6 +550,33 @@ The explosive barrels (BARRELUP 0xAA upright, BARRELS to BARRELSE 0x151..0x155 l
 **Rules**
 - Leaks use their own numbers, never the game's random generators. Only the barrels' damage, the burns and the barrels blowing up in a fire change the game.
 - They follow the game's clock (they stop with it) and are not saved: a load or a map change forgets them, and so does switching the option off. At most 32 barrels, 96 pools, 160 drops in flight and 96 fires on walls are followed; past that the oldest go.
+
+## 7f. Glass debris
+
+**Option:** GLASS DEBRIS / ECLATS DE VERRE (`glassdebris`), EFFECTS page, off by default.
+**Files:** `src/engine/world/glass_debris.*`, `src/engine/world/render.*` (sprites drawn among the items), `src/engine/world/projectile.cpp` (the shot's way), `src/engine/world/item_damage.cpp` (the blasts), `src/game/game.cpp`
+
+The glass walls and dividers (classes GLASS_EW 0x27B, GLASS_NS 0x2F3, GLDIV_EW 0x541, GLDIV_NS 0x542, in every mission) break at their first hit: their class plays the pane crumbling, lays a pile of broken glass (0x27A, 0x349) on each side where one fits and leaves the wall's foot. In the original the piles never move: blasts only throw what has a weight, and theirs is 0. With this option a pile is shown as the pieces of glass it is made of, and they follow the shots and the blasts.
+
+**Pieces**
+- Each pile's sprite is cut into some fifty irregular pieces of about 7 x 5 pixels (pixels go to the nearest of seeds strewn one to a cell), each drawn with the pile's own pixels. While its pieces are shown, the pile itself is not drawn.
+- The pieces are drawn and ordered among the items, each with a small box of its own, so walls, people and scenery in front of them hide them as they hide items.
+
+**A wall that breaks**
+- The pieces of its piles burst out of the pane, from all along it and from the floor up to 56 units high (low rather than high), the way the shot went: the projectile's own way, from where it was fired to where it hit (the game gives an item it hits a random direction). They go 0.5 to 3.9 units a tick along it, the smaller ones faster, spread to either side, and up to 2 units a tick upwards.
+- An explosive shot that hits the wall (rockets, grenades) throws them twice as hard. A blast that breaks it from beside throws them away from itself, 1.2 to 2.1 times as hard, the nearer the harder.
+- With a bullet most land in a heap at the foot of the wall, on the side the shot went, and a trail of smaller pieces runs on beyond (some 80 units).
+
+**In flight and on the floor**
+- A piece flies under gravity (0.34 units a tick per tick), turning over as it goes (drawn mirrored every 3 to 8 ticks). On the floor it bounces once or twice (a third of its fall back up, its speed along the floor 0.6 times), then slides, slowing down (0.88 of its speed kept each tick, less 0.16), and stops.
+- It bounces back off what is solid (0.3 of its speed), and falls off the edge of a floor onto the one below.
+- A blast (any fire type that splashes: 3, 4, 0xA, 0xE, 0xF) throws the pieces within its reach (at least 96 units) up and away from it, up to 9 units a tick right beside it, less further off, and the lighter further. It also turns into pieces the piles it reaches that were still whole (those already there in a saved game, or broken without the option).
+- A shot of another kind that hits a pile kicks the pieces within 28 units of where it hit the way it went.
+
+**Rules**
+- The piles stay the game's own items: once a pile's pieces have all come to rest, the pile moves to their middle, and that is what a saved game keeps. The pieces are not saved: after a load or a map change, or with the option switched off, the piles show again where they stand.
+- At most 4000 pieces; past that the piles at rest longest show as piles again.
+- Only the piles' moves change the world. The pieces use their own numbers, never the game's random generators, and follow the game's clock.
 
 ---
 

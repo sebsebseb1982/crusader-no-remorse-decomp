@@ -642,6 +642,10 @@ void ProjectileProcess::impact(ObjId hit) {
                         : item          ? direction_8(pos_.x, pos_.y, item->x, item->y)
                                         : 0x10;
         const WoundWatch wound = watch_wound(world_, hit);
+        // Port addition (glass debris): the way the shot went, which the
+        // random direction above does not tell.
+        if (!is_npc_id(hit) && world_.hooks().item_hit)
+            world_.hooks().item_hit({hit, fire_type_, false, start_.x, start_.y, start_.z, pos_.x, pos_.y, pos_.z});
         apply_damage(kernel(), world_, anims_, hit, shooter_, dir, damage_, fire_type_, &pos_);
         report_wound(world_, wound, fire_type_, start_);
     }

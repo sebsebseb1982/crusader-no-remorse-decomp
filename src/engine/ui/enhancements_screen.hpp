@@ -24,7 +24,9 @@
 //   "fuites des barils" (GameConfig::barrel_leaks): the explosive barrels
 //   take more bullets, each pierces them, their fuel runs out into a pool
 //   that catches fire when they blow up and burns whoever stands in it
-//   (barrel_leaks.hpp);
+//   (barrel_leaks.hpp), and "eclats de verre" (GameConfig::glass_debris): a
+//   glass wall's debris fly the way the shot that broke it went, and blasts
+//   blow them away (glass_debris.hpp);
 // - "jeu": "sauvegarde auto" (GameConfig::autosave): the game saves itself at
 //   the key moments of a mission, "correctifs original"
 //   (GameConfig::fix_original_bugs): bugs of the original game's scripts are
@@ -75,7 +77,7 @@ public:
         // Display.
         Native, Zoom, Smooth, Follow, Lighting, Smoke, Flashlight, Ambient,
         // Effects.
-        Impact, Blood, Casings, BarrelLeaks,
+        Impact, Blood, Casings, BarrelLeaks, GlassDebris,
         // Game.
         Autosave, FixBugs, Language,
         // Cheats.

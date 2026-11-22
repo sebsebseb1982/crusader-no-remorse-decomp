@@ -170,6 +170,13 @@ void splash_damage(Kernel& kernel, World& world, const AnimDat& anims, const Wor
             dealt = damage / steps;
         }
         const int dir = direction_16(at.x, at.y, item->x, item->y);
+        // Port addition (glass debris): the blast blows it away.
+        if (!is_npc_id(id) && world.hooks().item_hit) {
+            const World::Point to = world.location(*item);
+            world.hooks().item_hit({id, fire_type, true, at.x, at.y, at.z, to.x, to.y, to.z});
+        }
+        item = world.get(id);
+        if (!item) continue;
         const WoundWatch wound = watch_wound(world, id);
         apply_damage(kernel, world, anims, id, 0, dir, dealt, fire_type, &at);
         report_wound(world, wound, fire_type, at);

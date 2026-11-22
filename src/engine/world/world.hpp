@@ -315,6 +315,19 @@ struct Wound {
     bool bleeds = false;  // a shape bullets fully hurt: not a robot
 };
 
+// Port addition (glass debris, glass_debris.hpp): an item, not an NPC, about
+// to take a shot or a blast (WorldHooks::item_hit).
+struct ItemHit {
+    ObjId item = 0;
+    int fire_type = 0;
+    // A shot (an explosive one too) from (from) to the point hit (to), or,
+    // when `blast`, the blast of an explosion at (from) that reaches the
+    // item, `to` its position (usecode units).
+    bool blast = false;
+    std::int32_t from_x = 0, from_y = 0, from_z = 0;
+    std::int32_t to_x = 0, to_y = 0, to_z = 0;
+};
+
 // Engine-to-usecode calls made by the world. Unset hooks do nothing.
 struct WorldHooks {
     // Starts usecode event `event` of the item's class if the class has it
@@ -380,6 +393,9 @@ struct WorldHooks {
     // `fire_type` deals to `item`, not an NPC, after the game's own changes
     // (difficulty, bullets on the lifeless); returns the damage it takes.
     std::function<int(ObjId item, int damage, int fire_type)> item_damage;
+    // Port addition (glass debris): an item, not an NPC, is about to take a
+    // shot or a blast. Must not change the world.
+    std::function<void(const ItemHit& hit)> item_hit;
     // Port addition (leaking barrels): `item` blows up (SPRITE_1150_0891,
     // once per item), still in the world. Must not change the world.
     std::function<void(ObjId item)> item_exploding;

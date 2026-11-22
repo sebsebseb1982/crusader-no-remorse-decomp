@@ -21,6 +21,8 @@
 #include "engine/world/auto_firer.hpp"
 #include "engine/world/chargers.hpp"
 #include "engine/world/collision.hpp"
+#include "engine/world/glass_debris.hpp"
+#include "engine/world/item_damage.hpp"
 #include "engine/world/gravity.hpp"
 #include "engine/world/inventory.hpp"
 #include "engine/world/item_selection.hpp"
@@ -7518,6 +7520,149 @@ void test_courier_keycard(const std::filesystem::path& data) {
     }
 }
 
+// Glass debris (GameConfig::glass_debris) on the glass walls of MISSION 6:
+// a bullet breaks wall 4261 (GLASS_EW) and its pile's pieces fly west, the
+// way the shot went, and come to rest scattered there, the pile in their
+// middle; a blast beside them throws them away; an explosive shot throws
+// another wall's further. GLASS_SHOTS=<folder>: pictures.
+void test_glass_debris(const std::filesystem::path& data) {
+    constexpr ObjId kWall = 4261;
+    Game game(data, test_saves(data));
+    game.config().glass_debris = true;
+    game.load_save_file(test_saves(data) / "mission6-murs-de-verre.sav");
+    World& w = game.world();
+    const Item* wall = w.get(kWall);
+    CHECK(wall && wall->shape == 0x27B);
+    if (!wall) return;
+    const World::Point at = w.location(*wall);
+    // The Silencer east of the wall.
+    const Item* me = w.get(1);
+    std::int32_t me_x = at.x;
+    for (int d = 160; d <= 480; d += 16) {
+        const World::Point spot{at.x + d, at.y - 32, at.z};
+        if (position_free(w, me->shape, spot, nullptr, 1)) {
+            w.move_item(1, spot.x, spot.y, spot.z);
+            me_x = spot.x;
+            break;
+        }
+    }
+    const char* shots = std::getenv("GLASS_SHOTS");
+    Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+    const auto run = [&](int frames) {
+        for (int f = 0; f < frames; ++f) {
+            game.update(kFrameUs);
+            game.render(screen);
+        }
+    };
+    const auto shot = [&](const char* name) {
+        if (shots) write_png(std::filesystem::path(shots) / name, screen, game.palette());
+    };
+    const GlassDebris& glass = game.glass_debris();
+    CHECK(glass.chunk_count(0x27A) >= 30 && glass.chunk_count(0x349) >= 30);
+    const auto moving = [&] {
+        std::size_t n = 0;
+        for (const GlassDebris::Piece& p : glass.pieces()) n += !p.resting;
+        return n;
+    };
+    // The middle of a pile's pieces, and how far they spread (largest distance from it).
+    const auto spread = [&](ObjId pile, double& mx, double& my) {
+        mx = my = 0;
+        int n = 0;
+        for (const GlassDebris::Piece& p : glass.pieces())
+            if (p.pile == pile) {
+                mx += p.x;
+                my += p.y;
+                ++n;
+            }
+        if (!n) return 0.0;
+        mx /= n;
+        my /= n;
+        double far = 0;
+        for (const GlassDebris::Piece& p : glass.pieces())
+            if (p.pile == pile) far = std::max(far, std::hypot(p.x - mx, p.y - my));
+        return far;
+    };
+    run(2);
+    // The Silencer fires a bullet (fire type 2) west (direction 12): it
+    // breaks the wall.
+    fire_from_muzzle(game, 1, 12, 2, false);
+    for (int f = 0; f < 60 && glass.watches().empty(); ++f) run(1);
+    CHECK(glass.watches().size() == 1);
+    std::size_t most_moving = 0;
+    bool high = false;
+    for (int f = 0; f < 60; ++f) {
+        run(1);
+        most_moving = std::max(most_moving, moving());
+        for (const GlassDebris::Piece& p : glass.pieces()) high |= p.z > at.z + 20;
+        if (f == 30) shot("glass-1-breaking.png");
+    }
+    run(300);
+    shot("glass-2-broken.png");
+    CHECK(w.get(kWall)->shape == 0x348);
+    CHECK(glass.shattered().size() == 1);
+    if (glass.shattered().size() != 1) return;
+    const ObjId pile = glass.shattered()[0].pile;
+    double mx = 0, my = 0;
+    const double far = spread(pile, mx, my);
+    const double wall_cx = at.x - 8.0;
+    const Item* p = w.get(pile);
+    const double pile_cx = p->x - 5 * 8.0, pile_cy = p->y - 6 * 8.0;
+    std::printf("glass debris: bullet: %zu pieces, %zu in flight at most, at rest %zu; their middle %.0f west of the "
+                "wall, spread over %.0f; pile %u at its middle %.0f, %.0f\n",
+                glass.pieces().size(), most_moving, glass.pieces().size() - moving(), wall_cx - mx, far, pile,
+                pile_cx - mx, pile_cy - my);
+    CHECK(most_moving >= 30 && high && moving() == 0);
+    CHECK(wall_cx - mx > 30 && far > 40);
+    CHECK(std::abs(pile_cx - mx) < 2 && std::abs(pile_cy - my) < 2);
+    // A blast (fire type 4) 50 units north of their middle throws them south.
+    const World::Point blast{static_cast<std::int32_t>(mx), static_cast<std::int32_t>(my) - 50, p->z & 0xFF};
+    const int before_y = p->y;
+    splash_damage(game.kernel(), w, game.animations(), blast, 10, 40, 4, 0, 0);
+    const std::size_t blown = moving();
+    run(8);
+    shot("glass-3-blast.png");
+    run(300);
+    shot("glass-4-blown.png");
+    p = w.get(pile);
+    spread(pile, mx, my);
+    std::printf("glass debris: blast: %zu pieces blown, their middle now %.0f south of the blast, pile moved %d\n",
+                blown, my - blast.y, p->y - before_y);
+    CHECK(blown >= 20 && moving() == 0);
+    CHECK(p->y - before_y > 30);
+    // An explosive shot (fire type 0xE, splash 4) flying west hits wall 4474
+    // further south, as ProjectileProcess::impact deals it: it breaks and
+    // its pieces fly further.
+    constexpr ObjId kWall2 = 4474;
+    const Item* wall2 = w.get(kWall2);
+    CHECK(wall2 && wall2->shape == 0x27B);
+    if (!wall2) return;
+    const World::Point at2 = w.location(*wall2);
+    w.move_item(1, at2.x + (me_x - at.x), at2.y - 32, at2.z);
+    const std::size_t piles_before = glass.shattered().size();
+    const World::Point face{at2.x + 1, at2.y - 32, at2.z + 40};
+    w.hooks().item_hit({kWall2, 0xE, false, face.x + 300, face.y, face.z, face.x, face.y, face.z});
+    apply_damage(game.kernel(), w, game.animations(), kWall2, 1, 3, 250, 0xE, &face);
+    splash_damage(game.kernel(), w, game.animations(), face, 4, 250, 0xE, kWall2, 1);
+    // (The blast breaks the walls beside it as well.)
+    CHECK(std::any_of(glass.watches().begin(), glass.watches().end(),
+                      [](const GlassDebris::Watch& g) { return g.wall == kWall2; }));
+    run(40);
+    shot("glass-5-rocket.png");
+    run(300);
+    shot("glass-6-rocket-after.png");
+    CHECK(w.get(kWall2)->shape == 0x348);
+    double furthest = 0;
+    for (std::size_t k = piles_before; k < glass.shattered().size(); ++k) {
+        double x = 0, y = 0;
+        spread(glass.shattered()[k].pile, x, y);
+        if (std::abs(y - (at2.y - 32)) < 80) furthest = std::max(furthest, (at2.x - 8.0) - x);
+    }
+    std::printf("glass debris: explosive: pieces %.0f west of the wall in the middle, %zu piles shattered\n", furthest,
+                glass.shattered().size());
+    CHECK(furthest > 60);
+    CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
+}
+
 int main(int argc, char** argv) {
     set_languages_dir(CRUSADER_LANGUAGES_DIR);  // the French texts (languages/fr/port.txt)
     const std::filesystem::path data = argc > 1 ? argv[1] : "data";
@@ -7572,6 +7717,10 @@ int main(int argc, char** argv) {
     }
     if (argc > 2 && std::string(argv[2]) == "--rolling-barrel") {
         test_rolling_barrel_trail(data);
+        return failures ? 1 : 0;
+    }
+    if (argc > 2 && std::string(argv[2]) == "--glass-debris") {
+        test_glass_debris(data);
         return failures ? 1 : 0;
     }
     if (argc > 2 && std::string(argv[2]) == "--barrel-cook-off") {
@@ -7800,6 +7949,7 @@ int main(int argc, char** argv) {
     test_barrel_trail(data);
     test_rolling_barrel_trail(data);
     test_stacked_barrel_leak(data);
+    test_glass_debris(data);
     test_mines(data);
     test_shot_mine(data);
     test_station_pads(data);

@@ -220,6 +220,12 @@ void test_enhancements_pages() {
     CHECK(config.barrel_leaks && !config.casings);
     choose(screen, Entry::BarrelLeaks);
     CHECK(!config.barrel_leaks);
+    // Glass debris: off by default.
+    CHECK(!config.glass_debris);
+    choose(screen, Entry::GlassDebris);
+    CHECK(config.glass_debris && !config.barrel_leaks);
+    choose(screen, Entry::GlassDebris);
+    CHECK(!config.glass_debris);
     // Escape goes back to the first page on the page's row, then closes.
     screen.key(gump_key::kEscape);
     CHECK(screen.page() == Page::Main && screen.focus() == screen.row_of(Entry::Effects) && !screen.closed());

@@ -88,10 +88,26 @@ struct View {
     int left = 0, top = 0;
 };
 
+// Port addition (glass debris, glass_debris.hpp): sprites that are not items,
+// drawn and ordered among them, and items left out. A sprite has a box in
+// world units (its location the corner nearest to the viewer at the bottom,
+// as an item's) and `proxy` stands for it in the display list.
+struct ExtraSprite {
+    const Item* proxy = nullptr;
+    const ShapeFrame* frame = nullptr;
+    bool mirrored = false;
+    std::int32_t x = 0, y = 0, z = 0, x_left = 0, y_far = 0, z_top = 0;
+};
+struct DisplayExtras {
+    std::vector<ExtraSprite> sprites;
+    std::vector<ObjId> hidden;  // sorted
+};
+
 // Items of `world` visible on a w x h screen whose top-left corner is `view`,
-// in draw order.
+// in draw order; with `extras`, its sprites among them and its hidden items
+// left out.
 std::vector<DrawItem> build_display_list(const World& world, ShapeCache& shapes, const View& view, int w, int h,
-                                         RenderStats* stats = nullptr);
+                                         RenderStats* stats = nullptr, const DisplayExtras* extras = nullptr);
 // Same, centred on `camera` (world units).
 std::vector<DrawItem> build_display_list(const World& world, ShapeCache& shapes, const Camera& camera, int w,
                                          int h, RenderStats* stats = nullptr);

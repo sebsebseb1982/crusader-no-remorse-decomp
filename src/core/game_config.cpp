@@ -124,6 +124,7 @@ GameConfig GameConfig::parse(std::string_view text) {
         else if (key == "goremode") c.gore_mode = value == "true";
         else if (key == "casings") c.casings = value == "true";
         else if (key == "barrelleaks") c.barrel_leaks = value == "true";
+        else if (key == "glassdebris") c.glass_debris = value == "true";
         else if (key == "remainsloot") c.remains_loot = value == "true";
         else if (key == "language") c.language = value;
         else if (key == "fixoriginalbugs") c.fix_original_bugs = value == "true";
@@ -193,6 +194,8 @@ std::string GameConfig::text() const {
     else out.erase("casings");
     if (barrel_leaks) out.set("barrelleaks", "true");
     else out.erase("barrelleaks");
+    if (glass_debris) out.set("glassdebris", "true");
+    else out.erase("glassdebris");
     if (lighting) out.set("lighting", "true");
     else out.erase("lighting");
     if (!volumetric_smoke) out.set("volumetricsmoke", "false");

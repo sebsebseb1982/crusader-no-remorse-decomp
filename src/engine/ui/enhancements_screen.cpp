@@ -77,7 +77,8 @@ constexpr Entry kControlsEntries[] = {Entry::Pad,        Entry::Directional, Ent
                                       Entry::Vibration,  Entry::VibrationIntensity, Entry::Back};
 constexpr Entry kDisplayEntries[] = {Entry::Native,   Entry::Zoom,  Entry::Smooth,     Entry::Follow, Entry::Lighting,
                                      Entry::Smoke,    Entry::Flashlight, Entry::Ambient, Entry::Back};
-constexpr Entry kEffectsEntries[] = {Entry::Impact, Entry::Blood, Entry::Casings, Entry::BarrelLeaks, Entry::Back};
+constexpr Entry kEffectsEntries[] = {Entry::Impact,      Entry::Blood,       Entry::Casings,
+                                     Entry::BarrelLeaks, Entry::GlassDebris, Entry::Back};
 constexpr Entry kGameEntries[] = {Entry::Autosave, Entry::FixBugs, Entry::Language, Entry::Back};
 constexpr Entry kCheatsEntries[] = {Entry::RemainsLoot, Entry::Back};
 
@@ -269,6 +270,10 @@ void EnhancementsScreen::draw(Surface8& screen) const {
             name = tr("LEAKING BARRELS");
             on = config_->barrel_leaks;
             break;
+        case Entry::GlassDebris:
+            name = tr("GLASS DEBRIS");
+            on = config_->glass_debris;
+            break;
         case Entry::Autosave:
             name = tr("AUTOSAVE");
             on = config_->autosave;
@@ -371,6 +376,7 @@ void EnhancementsScreen::activate(int row) {
         break;
     case Entry::Casings: config_->casings = !config_->casings; break;
     case Entry::BarrelLeaks: config_->barrel_leaks = !config_->barrel_leaks; break;
+    case Entry::GlassDebris: config_->glass_debris = !config_->glass_debris; break;
     case Entry::Autosave: config_->autosave = !config_->autosave; break;
     case Entry::RemainsLoot: config_->remains_loot = !config_->remains_loot; break;
     case Entry::FixBugs: config_->fix_original_bugs = !config_->fix_original_bugs; break;
