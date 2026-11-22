@@ -5515,6 +5515,20 @@ void test_player_turret(const std::filesystem::path& data) {
                     game.world().get(turret) ? game.world().get(turret)->shape : 0, weapon_shape(game.world(), turret), shots);
         CHECK(turret > 1 && game.world().get(turret) && game.world().get(turret)->shape == 0x4C8);
         CHECK(shots >= 3);
+        // The right stick turns it to each of its 16 directions (it never
+        // aims: no crosshair), and it fires that way.
+        std::set<int> faced;
+        for (int step = 0; step < 64; ++step) {
+            game.set_aim_stick(true, step * 360.0 / 64);
+            for (int f = 0; f < 20; ++f) game.update(kFrameUs);
+            faced.insert(game.world().npc_direction(turret) & 0xF);
+        }
+        const int stick_shots = fire(game);
+        game.set_aim_stick(false, 0);
+        game.update(kFrameUs);
+        std::printf("player turret: stick, %zu directions, crosshair %d, %d shots\n", faced.size(),
+                    game.world().state.aim.crosshair, stick_shots);
+        CHECK(faced.size() == 16 && game.world().state.aim.crosshair == -1 && stick_shots >= 3);
         game.key(0x01, false, true, 0, 0x1B);  // Escape gives the control back
         game.key(0x01, false, false, 0, 0);
         for (int f = 0; f < 400; ++f) game.update(kFrameUs);

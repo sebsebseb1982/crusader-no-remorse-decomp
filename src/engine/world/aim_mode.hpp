@@ -101,6 +101,10 @@ void turn_crosshair(Kernel& kernel, World& world, const AnimDat& anims, std::uin
 // (action 7, as the fire key does).
 // During a side step (the left stick's strafe sideways), which suspends the
 // mode, the crosshair stays shown where the stick points.
+// An NPC whose shape has no action 1 (the turret of the surveillance
+// monitors), which never aims, has no crosshair: the stick turns it to the
+// nearest of its 16 directions (with precise aim, towards the target picked
+// as above), as the arrows would one step at a time.
 void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, double screen_deg, bool draw_when_holstered);
 // The world angle (degrees in the x, y plane, like DS:285E) of the ground
 // direction that shows on screen at `screen_deg` (the isometric view halves

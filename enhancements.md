@@ -289,6 +289,7 @@ The right stick puts the crosshair directly in the direction it points.
 - With **PRECISE AIM**, the stick also picks a target on screen (see [4b](#4b-precise-aim)): the crosshair then points at it on the ground.
 - If the avatar does not face the crosshair (16-way direction measured from its centre; that of the target picked by the stick) and is not busy, it turns with its guard animation: `0x2E` kneeling, `4` standing.
 - If target designation is active, the target search runs again after the turn, or at once when the stick picks another target in the same direction.
+- **Turret of a surveillance monitor** (BASEGUN `0x4C8`, or any NPC whose shape has no action 1): the original never puts it in aiming mode (`DS:2864`), so it has no crosshair and shoots straight ahead in one of its 16 directions, or at the target found that way; the arrow keys turn it one direction at a time. The stick turns it at once to the direction nearest where it points on screen (with **PRECISE AIM**, towards the target it picks there, which its shots then take first), with the same guard animation. Without this, a controller only had the 8 directions of the left stick.
 - **Leaving the aiming mode**: releasing the stick does not leave it, as in the original. Walking with the left stick (not aiming) leaves it at once; a **side step** or a **roll** leaves it for the duration of the animation. To put the weapon away, double-click the **right mouse button**; on the controller, the **jump** action (B by default) holsters a drawn weapon first, then jumps.
 
 ---

@@ -145,6 +145,33 @@ void search_after_turn(Kernel& kernel, World& world, const AnimDat& anims, int d
     else if (found != world.state.aim.target) designate(kernel, world, anims, markable(world, found) ? found : 0);
 }
 
+// A shape without action 1 (the turret of the surveillance monitors) never
+// aims (DS:2864): out of the mode, the arrows turn it by one of its 16
+// directions (turn_crosshair). The stick turns it at once to the direction
+// nearest the one it points at on screen, or with precise aim to the one of
+// the target it picks there (its shots then take that target first,
+// find_target), with the same combat stance.
+// @orig none: port-only directional aiming
+void stick_turn_no_stand(Kernel& kernel, World& world, const AnimDat& anims, double screen_deg) {
+    GameState::Aim& aim = world.state.aim;
+    const ObjId id = world.state.controlled_npc;
+    const Item* npc = world.get(id);
+    if (!npc) return;
+    aim.stick_target = world.precise_aim() ? stick_pick(world, anims, screen_deg) : 0;
+    const Item* target = aim.stick_target ? world.get(aim.stick_target) : nullptr;
+    int wanted;
+    if (target) {
+        wanted = closest_direction_in_range(npc->x, npc->y, target->x, target->y, 16, 0, 15);
+    } else {
+        const World::Point centre = npc_centre(world, *npc);
+        const double r = world_angle_of_screen(screen_deg) * 3.14159265358979 / 180.0;
+        wanted = direction_16(centre.x, centre.y, centre.x + std::lround(200 * std::cos(r)),
+                              centre.y + std::lround(200 * std::sin(r)));
+    }
+    if (wanted == npc_dir(world, id) || actor_busy(kernel, id)) return;
+    do_anim(kernel, world, anims, id, kneeling(world, id) ? 0x2E : 4, wanted);
+}
+
 }  // namespace
 
 bool aim_action(std::uint16_t a) {
@@ -287,7 +314,11 @@ int world_angle_of_screen(double screen_deg) {
 void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, double screen_deg, bool draw_when_holstered) {
     GameState::Aim& aim = world.state.aim;
     const ObjId id = world.state.controlled_npc;
-    if (id == 0 || aim.no_stand) return;
+    if (id == 0) return;
+    if (aim.no_stand) {
+        stick_turn_no_stand(kernel, world, anims, screen_deg);
+        return;
+    }
     if (!aim.active) {
         // A side step (0x1C, 0x1D: the strafe of the left stick sideways) is
         // a turning animation, which leaves the aiming mode until it ends
@@ -360,6 +391,8 @@ void aim_at_angle(Kernel& kernel, World& world, const AnimDat& anims, double scr
 // @orig none: port-only directional aiming
 void drop_stick_crosshair(World& world) {
     GameState::Aim& aim = world.state.aim;
+    // The stick let go: a turret's shots no longer prefer what it picked.
+    if (aim.no_stand) aim.stick_target = 0;
     if (aim.active || aim.crosshair == -1) return;
     world.state.screen_sprites.remove(aim.crosshair);
     aim.crosshair = -1;
