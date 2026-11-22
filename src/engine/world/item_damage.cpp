@@ -114,6 +114,9 @@ void explode(Kernel& kernel, World& world, const AnimDat& anims, ObjId id, int s
     world.set_broken(*item);
     if (item->flags & kItemExploded) return;
     item->flags |= kItemExploded | kItemDamaged;
+    if (world.hooks().item_exploding) world.hooks().item_exploding(id);
+    item = world.get(id);
+    if (!item) return;
     if (world.hooks().explosion) world.hooks().explosion(std::clamp(size, 0, 2));
     Audio* audio = world.audio();
     if (audio) audio->sources.stop_item(id);

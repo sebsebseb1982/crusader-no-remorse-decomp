@@ -901,10 +901,27 @@ void WorldLighting::add_puff(const Vec3& at, SmokePuff::Kind kind, float scale, 
             p.life = 1.0f;
             p.feature = 16;
             break;
+        case SmokePuff::kFire:
+            // Rising fast off the flames, widening, dark.
+            p.pos = at + Vec3{jx * 6, jy * 6, 0} * scale;
+            p.drift = {jx * 8, jy * 8, 0};
+            p.rise = 70 + rnd(50) * 30;
+            p.radius0 = 14 * scale;
+            p.radius1 = (60 + rnd(60) * 30) * scale;
+            p.density = 0.022f;
+            p.life = 2.4f + rnd(80) * 1.2f;
+            p.feature = 22;
+            break;
         }
         if (puffs_.size() >= kMaxPuffs) puffs_.erase(puffs_.begin());
         puffs_.push_back(p);
     }
+}
+
+// @orig none: port lighting (barrel leaks)
+void WorldLighting::glow(const std::vector<std::pair<std::uint32_t, std::uint8_t>>& pixels) {
+    for (const auto& [j, colour] : pixels)
+        if (j < emissive_.size() && j < world_.size() && world_[j] == colour) emissive_[j] = 1;
 }
 
 // The liquids around the view (steam and light from just off screen too).
@@ -1205,8 +1222,10 @@ void WorldLighting::puff_states(std::vector<PuffState>& out) const {
         // Fades in (at once for a muzzle wisp), thins out to nothing.
         const float fade_in = p.kind == SmokePuff::kMuzzle ? 0.02f : 0.1f;
         s.density = p.density * std::min(1.0f, age / fade_in) * std::pow(1 - u, 1.5f);
-        s.heat = p.kind == SmokePuff::kExplosion ? std::max(0.0f, 1 - age / 0.9f) : 0.0f;
-        s.grey = p.kind == SmokePuff::kExplosion ? 0.3f
+        s.heat = p.kind == SmokePuff::kExplosion ? std::max(0.0f, 1 - age / 0.9f)
+                 : p.kind == SmokePuff::kFire    ? std::max(0.0f, 0.7f - age / 0.4f)
+                                                 : 0.0f;
+        s.grey = p.kind == SmokePuff::kExplosion || p.kind == SmokePuff::kFire ? 0.3f
                  : p.kind == SmokePuff::kImpact  ? 0.55f
                                                  : 0.75f;
         s.seed = p.seed;

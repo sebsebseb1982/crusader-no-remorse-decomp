@@ -20,7 +20,11 @@
 // - "effets": "impacts" (GameConfig::impact_marks): shots mark the scenery,
 //   "sang" (GameConfig::blood_marks, gore_mode): off, the wounded
 //   bleed on it, or "gore": much more, and "douilles" (GameConfig::casings):
-//   firearms eject casings that stay on the floor (casings.hpp);
+//   firearms eject casings that stay on the floor (casings.hpp), and
+//   "fuites des barils" (GameConfig::barrel_leaks): the explosive barrels
+//   take more bullets, each pierces them, their fuel runs out into a pool
+//   that catches fire when they blow up and burns whoever stands in it
+//   (barrel_leaks.hpp);
 // - "jeu": "sauvegarde auto" (GameConfig::autosave): the game saves itself at
 //   the key moments of a mission, "correctifs original"
 //   (GameConfig::fix_original_bugs): bugs of the original game's scripts are
@@ -71,7 +75,7 @@ public:
         // Display.
         Native, Zoom, Smooth, Follow, Lighting, Smoke, Flashlight, Ambient,
         // Effects.
-        Impact, Blood, Casings,
+        Impact, Blood, Casings, BarrelLeaks,
         // Game.
         Autosave, FixBugs, Language,
         // Cheats.

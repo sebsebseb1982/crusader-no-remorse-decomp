@@ -376,6 +376,13 @@ struct WorldHooks {
     // Port addition (blood marks): an NPC lost hit points to a shot or a
     // blast (report_wound). Must not change the world.
     std::function<void(const Wound& wound)> npc_wounded;
+    // Port addition (leaking barrels, barrel_leaks.hpp): the damage a shot of
+    // `fire_type` deals to `item`, not an NPC, after the game's own changes
+    // (difficulty, bullets on the lifeless); returns the damage it takes.
+    std::function<int(ObjId item, int damage, int fire_type)> item_damage;
+    // Port addition (leaking barrels): `item` blows up (SPRITE_1150_0891,
+    // once per item), still in the world. Must not change the world.
+    std::function<void(ObjId item)> item_exploding;
     // Port addition (loot from remains, death_loot.hpp): function `event` of
     // the usecode class named `class_name` runs on `item` with `args`, at once
     // until it first yields. False when the class has no such function.

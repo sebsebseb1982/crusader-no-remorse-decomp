@@ -84,6 +84,7 @@ add_library(crusader_engine
   src/engine/world/projectile.cpp
   src/engine/world/damage_marks.cpp
   src/engine/world/casings.cpp
+  src/engine/world/barrel_leaks.cpp
   src/engine/world/lighting.cpp
   src/engine/world/death_loot.cpp
   src/engine/world/attack.cpp

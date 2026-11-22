@@ -345,6 +345,9 @@ void apply_damage(Kernel& kernel, World& world, const AnimDat& anims, ObjId targ
     damage = std::clamp(damage, 1, 250);
 
     if (!is_npc_id(target)) {
+        // Port addition (leaking barrels): the barrels may take less.
+        if (world.hooks().item_damage)
+            damage = std::clamp(world.hooks().item_damage(target, damage, fire_type), 1, 250);
         hit_item(kernel, world, anims, target, damage, fire_type);
         // Explosives (types 3, 4) throw items that have a weight (TYPEFLAG
         // byte 7) along the hit's direction: tables DS:26F8 / DS:2718 times

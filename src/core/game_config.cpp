@@ -123,6 +123,7 @@ GameConfig GameConfig::parse(std::string_view text) {
         else if (key == "bloodmarks") c.blood_marks = value == "true";
         else if (key == "goremode") c.gore_mode = value == "true";
         else if (key == "casings") c.casings = value == "true";
+        else if (key == "barrelleaks") c.barrel_leaks = value == "true";
         else if (key == "remainsloot") c.remains_loot = value == "true";
         else if (key == "language") c.language = value;
         else if (key == "fixoriginalbugs") c.fix_original_bugs = value == "true";
@@ -190,6 +191,8 @@ std::string GameConfig::text() const {
     else out.erase("goremode");
     if (casings) out.set("casings", "true");
     else out.erase("casings");
+    if (barrel_leaks) out.set("barrelleaks", "true");
+    else out.erase("barrelleaks");
     if (lighting) out.set("lighting", "true");
     else out.erase("lighting");
     if (!volumetric_smoke) out.set("volumetricsmoke", "false");

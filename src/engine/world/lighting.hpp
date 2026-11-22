@@ -91,8 +91,9 @@ struct LightingOptions {
 struct SmokePuff {
     // Explosion: a dark cloud. Muzzle: a wisp blown out of the barrel along
     // the shot. Impact: dust where a shot hits something. Trail: behind a
-    // bright shot in flight.
-    enum Kind : std::uint8_t { kExplosion, kMuzzle, kImpact, kTrail };
+    // bright shot in flight. Fire: the dark smoke of a burning pool of fuel
+    // (barrel_leaks.hpp), hot at its foot.
+    enum Kind : std::uint8_t { kExplosion, kMuzzle, kImpact, kTrail, kFire };
     Vec3 pos;                 // centre at birth, lighting space
     Vec3 drift;               // lighting-space units a second at birth, slowed by `drag`
     float drag = 0;           // per second (0: the drift keeps up)
@@ -195,6 +196,10 @@ public:
     // `dir` is the shot's direction for a muzzle wisp.
     void add_puff(const Vec3& at, SmokePuff::Kind kind, float scale = 1, Vec3 dir = {});
     void clear_smoke() { puffs_.clear(); }
+    // Pixels drawn over the captured world that glow as they are, as flashes
+    // do (screen index, the colour drawn there): those still showing that
+    // colour (flames, barrel_leaks.hpp).
+    void glow(const std::vector<std::pair<std::uint32_t, std::uint8_t>>& pixels);
 
     // A shot of `fire_type` fired by `shooter` from its muzzle at (x, y, z)
     // (usecode units) towards `dir` (0..15) at game tick `ticks`: firearms

@@ -4640,6 +4640,110 @@ void test_wall_lasers(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
 }
 
+// Port addition (barrel_leaks.hpp): the explosive barrel 5070 of
+// SAVEGAME.3 (BARRELUP 0xAA) blows up at 100 damage; with the option a
+// bullet does it 3/5 of its damage. Each bullet before the last pierces it
+// (the shot lands on it: WorldHooks::shot_landed) and its fuel runs out into
+// a pool; when it blows up it throws burning drops and its pool catches
+// fire; whoever stands in the fire burns; the pool leaves a burnt stain.
+void test_barrel_leaks(const std::filesystem::path& data) {
+    constexpr ObjId kBarrel = 5070;
+    CHECK(barrel_bullet_damage(0xAA, 30, 2) == 18 && barrel_bullet_damage(0xAA, 30, 4) == 30);
+    Game game(data, test_saves(data));
+    game.config().barrel_leaks = true;
+    game.load_save(3);
+    World& w = game.world();
+    w.state.difficulty = 3;
+    const Item* barrel = w.get(kBarrel);
+    CHECK(barrel && barrel->shape == 0xAA);
+    if (!barrel) return;
+    const World::Point spot = w.location(*barrel);
+    // The Silencer out of the blast's reach.
+    World::Point away = w.location(*w.get(1));
+    bool far = false;
+    for (int ring = 720; ring <= 1600 && !far; ring += 32) {
+        for (int k = 0; k < 16 && !far; ++k) {
+            const World::Point at{spot.x + kDirectionDx[k] * ring / 2, spot.y + kDirectionDy[k] * ring / 2, spot.z};
+            far = position_free(w, w.get(1)->shape, at, nullptr, 1);
+            if (far) away = at;
+        }
+    }
+    CHECK(far);
+    w.move_item(1, away.x, away.y, away.z);
+    Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+    const auto run = [&](int frames) {
+        for (int f = 0; f < frames; ++f) {
+            game.update(kFrameUs);
+            game.render(screen);
+        }
+    };
+    // A bullet (fire type 2, 30 damage) in the barrel's side, from (dx, dy) at height dz.
+    const auto hit = [&](int dx, int dy, int dz) {
+        apply_damage(game.kernel(), w, game.animations(), kBarrel, 1, 0, 30, 2);
+        if (w.hooks().shot_landed) w.hooks().shot_landed(kBarrel, spot.x + dx, spot.y + dy, spot.z + dz, 2);
+    };
+    const BarrelLeaks& leaks = game.barrel_leaks();
+    hit(8, 8, 20);
+    run(90);
+    std::printf("barrel leaks: after a hit, damage byte %u, %zu barrel(s), %zu pool(s)\n",
+                w.get(kBarrel) ? w.get(kBarrel)->npc_number : 0, leaks.barrels().size(), leaks.pools().size());
+    CHECK(w.get(kBarrel) && w.get(kBarrel)->npc_number == 18);
+    CHECK(leaks.barrels().size() == 1 && leaks.pools().size() == 1);
+    if (leaks.barrels().size() != 1 || leaks.pools().size() != 1) return;
+    CHECK(leaks.barrels()[0].holes.size() == 1 && leaks.barrels()[0].level < leaks.barrels()[0].height * 0.9);
+    hit(20, 2, 10);
+    run(300);
+    double extent = 0;
+    for (const BarrelLeaks::Lobe& l : leaks.pools()[0].lobes) extent = std::max(extent, l.r);
+    std::printf("barrel leaks: 2 holes, level %.1f, pool %.1f\n", leaks.barrels()[0].level, extent);
+    CHECK(extent > 20 && !leaks.pools()[0].burning);
+    // 18 a bullet: 6 to blow it up (4 without the option).
+    int hits = 2;
+    for (; hits < 12 && w.get(kBarrel) && w.get(kBarrel)->shape == 0xAA; ++hits) {
+        hit(8, 8, 20);
+        run(10);
+    }
+    CHECK(!w.get(kBarrel) || w.get(kBarrel)->shape != 0xAA);
+    std::size_t most_drops = leaks.drops().size();
+    for (int f = 0; f < 40; ++f) {
+        run(1);
+        most_drops = std::max(most_drops, leaks.drops().size());
+    }
+    std::printf("barrel leaks: blown up after %d bullets, up to %zu drops in flight, %zu pools, %zu fires on walls\n",
+                hits, most_drops, leaks.pools().size(), leaks.wall_fires().size());
+    CHECK(hits >= 6 && most_drops >= 10 && !leaks.pools().empty() && leaks.pools()[0].burning);
+    // The Silencer walks into the fire: he catches fire and burns, and goes
+    // out a second after he left it.
+    // A free place where the pool burns well (not on the barrel's debris).
+    const BarrelLeaks::Pool& pool = leaks.pools()[0];
+    const ShapeInfo* body = w.shape_info(w.get(1)->shape);
+    const int half_x = body ? body->footpad_x * 8 : 0, half_y = body ? body->footpad_y * 8 : 0;
+    World::Point in_fire{};
+    bool burning = false;
+    for (int r = 0; r <= 160 && !burning; r += 8) {
+        for (int k = 0; k < 16 && !burning; ++k) {
+            const World::Point at{spot.x + kDirectionDx[k] * r / 2, spot.y + kDirectionDy[k] * r / 2, w.get(1)->z};
+            burning = leaks.fire_at(pool, at.x - half_x, at.y - half_y, game.kernel().ticks()) > 0.5 &&
+                      position_free(w, w.get(1)->shape, {at.x, at.y, spot.z}, nullptr, 1);
+            if (burning) in_fire = {at.x, at.y, spot.z};
+        }
+    }
+    CHECK(burning);
+    const int hp = w.npc_hp(1);
+    w.move_item(1, in_fire.x, in_fire.y, in_fire.z);
+    run(45);
+    const int burnt_hp = w.npc_hp(1);
+    std::printf("barrel leaks: the Silencer in the fire, %s, hit points %d -> %d\n",
+                leaks.on_fire(1) ? "on fire" : "not on fire", hp, burnt_hp);
+    CHECK(leaks.on_fire(1) && burnt_hp < hp);
+    w.move_item(1, away.x, away.y, away.z);
+    run(BarrelLeaks::kAfterBurn + 5);
+    CHECK(!leaks.on_fire(1));
+    run(900);
+    CHECK(!leaks.pools().empty() && leaks.pools()[0].burnt);
+    CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
+}
+
 // Explosive barrels (BARRELUP 0xAA, SAVEGAME.3): their gotHit spawns BARREL,
 // which counts the damage in the npc number byte (ITEM_0574, a process that
 // ends at once: spawn hands its result over, INTER_1418_038b 0x57) and at 100
@@ -6925,6 +7029,7 @@ int main(int argc, char** argv) {
     test_weasel_buys_ammo_after_spent_clips(data);
     test_courier_keycard(data);
     test_barrels(data);
+    test_barrel_leaks(data);
     test_mines(data);
     test_shot_mine(data);
     test_station_pads(data);
