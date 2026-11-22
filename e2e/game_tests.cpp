@@ -4971,6 +4971,72 @@ void test_rolling_barrel_trail(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
 }
 
+// Leaking barrels: two barrels stacked one on the other (save
+// baril-empile-flaque-en-l-air.sav), the upper one pierced: its fuel runs
+// down the lower one to the floor, its pool lies there (it lay on the lower
+// barrel's top, where no floor is: none showed). TRAIL_SHOTS=<folder>: a
+// picture of it.
+void test_stacked_barrel_leak(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.config().barrel_leaks = true;
+    game.load_save_file(test_saves(data) / "baril-empile-flaque-en-l-air.sav");
+    World& w = game.world();
+    const Item* me = w.get(1);
+    CHECK(me != nullptr);
+    if (!me) return;
+    // The barrel nearest the player standing on another.
+    ObjId upper = 0, lower = 0;
+    double best = 1e18;
+    for (ObjId id : w.rect_search(me->x - 1024, me->y - 1024, me->x + 1024, me->y + 1024)) {
+        const Item* a = w.get(id);
+        if (!a || !is_fuel_barrel(a->shape) || a->parent != 0) continue;
+        for (ObjId other : w.rect_search(a->x - 64, a->y - 64, a->x + 64, a->y + 64)) {
+            const Item* b = w.get(other);
+            if (!b || other == id || !is_fuel_barrel(b->shape) || b->parent != 0) continue;
+            const ShapeInfo* info = w.shape_info(b->shape);
+            if (!info || a->z != b->z + info->footpad_z * 8 || std::abs(a->x - b->x) > 16 || std::abs(a->y - b->y) > 16)
+                continue;
+            const double dx = a->x - me->x, dy = a->y - me->y;
+            if (dx * dx + dy * dy < best) best = dx * dx + dy * dy, upper = id, lower = other;
+        }
+    }
+    CHECK(upper != 0);
+    if (!upper) return;
+    const Item* top = w.get(upper);
+    const Item* under = w.get(lower);
+    const World::Point spot = w.location(*top);
+    std::printf("stacked barrels: %u (shape 0x%X at %d,%d,%d) on %u (shape 0x%X at %d,%d,%d)\n", upper, top->shape,
+                top->x, top->y, top->z, lower, under->shape, under->x, under->y, under->z);
+    const std::int32_t ground = under->z;
+    Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+    const auto run = [&](int frames) {
+        for (int f = 0; f < frames; ++f) {
+            game.update(kFrameUs);
+            game.render(screen);
+        }
+    };
+    // A bullet in its side facing the camera, halfway up.
+    const ShapeInfo* info = w.shape_info(top->shape);
+    apply_damage(game.kernel(), w, game.animations(), upper, 1, 0, 30, 2);
+    if (w.hooks().shot_landed) w.hooks().shot_landed(upper, spot.x + 2, spot.y + 2, spot.z + info->footpad_z * 4, 2);
+    run(120);
+    if (const char* shots = std::getenv("TRAIL_SHOTS"))
+        write_png(std::filesystem::path(shots) / "stacked-leak.png", screen, game.palette());
+    const BarrelLeaks& leaks = game.barrel_leaks();
+    CHECK(leaks.barrels().size() == 1);
+    if (leaks.barrels().size() != 1) return;
+    const BarrelLeaks::Barrel& b = leaks.barrels()[0];
+    const BarrelLeaks::Pool* pool = leaks.pool(b.pool);
+    CHECK(pool != nullptr);
+    if (!pool) return;
+    std::printf("stacked barrels: the upper one's floor %d, its pool at %d (the floor at %d), %zu lobes, level %.1f "
+                "of %.1f\n",
+                b.floor, pool->z, ground, pool->lobes.size(), b.level, b.height);
+    // On the floor under both (the pools are drawn on the floors at their level).
+    CHECK(b.floor == ground && std::abs(pool->z - ground) <= 2 && b.level < b.height * 0.9);
+    CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
+}
+
 // Timing of the leaking barrels (not a check): barrel 5070 of SAVEGAME.3
 // leaking, then blown up and burning, with the 3D lighting and its smoke
 // (CPU shading), on a `width` x `height` screen. Prints the mean and worst
@@ -7157,6 +7223,19 @@ int main(int argc, char** argv) {
         test_barrel_trail(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--stacked-barrel") {
+        test_stacked_barrel_leak(data);
+        return failures ? 1 : 0;
+    }
+    if (argc > 2 && std::string(argv[2]) == "--barrels") {
+        test_barrels(data);
+        test_barrel_leaks(data);
+        test_barrel_trail(data);
+        test_rolling_barrel_trail(data);
+        test_stacked_barrel_leak(data);
+        std::printf(failures ? "%d failure(s)\n" : "all checks passed\n", failures);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--barrel-bench") {
         bench_barrel_leaks(data, Game::kScreenWidth, Game::kScreenHeight);
         bench_barrel_leaks(data, 1920, 1080);
@@ -7347,6 +7426,7 @@ int main(int argc, char** argv) {
     test_barrel_leaks(data);
     test_barrel_trail(data);
     test_rolling_barrel_trail(data);
+    test_stacked_barrel_leak(data);
     test_mines(data);
     test_shot_mine(data);
     test_station_pads(data);

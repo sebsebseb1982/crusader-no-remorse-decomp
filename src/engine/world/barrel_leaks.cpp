@@ -170,13 +170,15 @@ bool on_floor(const std::vector<Solid>& solids, double x, double y, std::int32_t
 }
 
 // The top of the floor under barrel `b` where it stands (its own bottom
-// when none).
+// when none), as far down as it lies: a barrel standing on another (the
+// barrels are no floor) spills down its side to the floor under both, one
+// in the air (thrown) is over the floor it falls to.
 // @orig none: port-only barrel leaks
 std::int32_t floor_of(const World& world, const BarrelLeaks::Barrel& b) {
     const auto cx = static_cast<std::int32_t>(b.x - b.length_x / 2);
     const auto cy = static_cast<std::int32_t>(b.y - b.length_y / 2);
     std::int32_t top = 0;
-    return floor_under(solids_around(world, cx, cy, cx, cy), cx, cy, b.z, top) ? top : b.z;
+    return floor_under(solids_around(world, cx, cy, cx, cy), cx, cy, b.z, top, 256) ? top : b.z;
 }
 
 // A fuel barrel as it stands, full.

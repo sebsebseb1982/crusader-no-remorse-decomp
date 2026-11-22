@@ -16,7 +16,8 @@
 //   of the barrel, growing with what has run out, with fingers running out
 //   of it and a warped, ragged edge; dark, with a sheen, mirroring what
 //   stands behind it. It lies on the floors at the barrel's level (none
-//   down a ledge, none under what stands on the floor).
+//   down a ledge, none under what stands on the floor); a barrel standing
+//   on another spills down its side to the floor under both.
 // - A leaking barrel that moves (a rolling barrel, ROLLB_NS / ROLLB_EW,
 //   rolling, or a barrel thrown by a blast) leaves its pool behind and lays
 //   a trail of fuel along its way, from every hole for a lying barrel (it
