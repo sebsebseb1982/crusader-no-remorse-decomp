@@ -17,6 +17,13 @@
 //   of it and a warped, ragged edge; dark, with a sheen, mirroring what
 //   stands behind it. It lies on the floors at the barrel's level (none
 //   down a ledge, none under what stands on the floor).
+// - A leaking barrel that moves (a rolling barrel, ROLLB_NS / ROLLB_EW,
+//   rolling, or a barrel thrown by a blast) leaves its pool behind and lays
+//   a trail of fuel along its way, from every hole for a lying barrel (it
+//   rolls them under the fuel: a splash once a turn, a dribble between),
+//   wandering a little; at rest, its jets make a pool where it lies. The
+//   trail goes on from the pool it starts from, in pools that touch: the
+//   fire runs along it from one to the next, lower than over a pool.
 // - Every barrel that blows up (the last bullet, a blast, another barrel)
 //   throws what was left in it: a pool of fire where it stood, and burning
 //   drops flying all round, which set alight the pools, floors, walls and
@@ -54,8 +61,15 @@
 
 namespace crusader {
 
-// An explosive barrel (BARRELUP, BARRELS..BARRELSE).
+// An explosive barrel (BARRELUP, BARRELS..BARRELSE): its class counts the
+// damage it takes.
 bool is_fuel_barrel(std::uint16_t shape);
+// A rolling barrel (ROLLB_NS 0x586, ROLLB_EW 0x58B): a shot sets it rolling
+// along its way (its class, event 0x21) until it meets something and blows
+// up (event 0x20).
+bool is_rolling_barrel(std::uint16_t shape);
+// A barrel that leaks when pierced: either of them.
+bool leaks_fuel(std::uint16_t shape);
 
 // The damage a shot of `fire_type` does to `shape` with the option on: a
 // bullet does a fuel barrel 3/5 of it (at least 1), so that it takes about
@@ -70,6 +84,9 @@ public:
     static constexpr std::size_t kMaxDrops = 160;
     static constexpr std::size_t kMaxWallFires = 96;
     static constexpr std::uint32_t kLeakDelay = 6;    // ticks between a hit and its leak
+    static constexpr std::uint32_t kRest = 16;        // ticks without a move: a barrel is at rest
+    static constexpr double kTrailStep = 6;           // usecode units between two drops of a trail
+    static constexpr std::size_t kMaxTrail = 64;      // trail lobes in a pool
     static constexpr int kGrid = 4;                   // a fuel cell, usecode units
     static constexpr int kPatch = 8;                  // cells a side of a patch of fire
     static constexpr std::uint32_t kBurnEvery = 15;   // ticks between two burns
@@ -93,6 +110,7 @@ public:
         double spilled = 0;        // level units run out of it
         std::uint32_t seed = 0;
         int land_lobe = -1, foot_lobe = -1;  // its lobes in the pool
+        double flow = 0;           // let out this tick while the barrel rolls
     };
 
     struct Barrel {
@@ -105,14 +123,24 @@ public:
         double level = 0;                  // fuel's height above the bottom
         std::vector<Hole> holes;
         std::uint32_t pool = 0;            // Pool::serial
+        // Moving (thrown) since game tick moved_at at most kRest ago; its
+        // trail laid up to (trail_x, trail_y), the middle of its foot; the
+        // pools of its trail at other levels (Pool::serial).
+        bool rolling = false;
+        std::uint32_t moved_at = 0;
+        double trail_x = 0, trail_y = 0;
+        double trail_way = 0;  // how far it has laid its trail, usecode units
+        std::vector<std::uint32_t> trail_pools;
     };
 
     // A disc of fuel. A finger follows another lobe (`anchor`): `frac` of
-    // its radius, `ox`, `oy` its radii away from it.
+    // its radius, `ox`, `oy` its radii away from it. A trail's drop is
+    // warped no more than its size, so that the trail runs on unbroken.
     struct Lobe {
         double x = 0, y = 0, r = 0;  // usecode units
         int anchor = -1;
         double ox = 0, oy = 0, frac = 0;
+        bool trail = false;
     };
 
     struct Pool {
@@ -121,6 +149,7 @@ public:
         std::vector<Lobe> lobes;
         std::uint32_t seed = 0;
         bool burning = false, burnt = false;
+        float flames = 1;  // its flames' height, of the tallest: lower over a trail (ignite)
         std::uint32_t lit_at = 0, burn_ticks = 0;
         double fire_x = 0, fire_y = 0;  // where it caught
         // Set when it catches: the fuel on kGrid cells from (grid_x, grid_y),
@@ -128,6 +157,9 @@ public:
         double grid_x = 0, grid_y = 0;
         int grid_w = 0, grid_h = 0;
         std::vector<float> fuel;
+        // How far the fire has to come to reach each corner of those cells
+        // (grid_w + 1 by grid_h + 1), for reached.
+        std::vector<float> arrive;
         std::vector<std::pair<int, int>> patches;  // first cells of the patches with fuel
         // field() at the corners of kGrid cells from (field_x, field_y), as
         // of game tick field_tick; dirty when its lobes changed since.
@@ -136,6 +168,9 @@ public:
         std::vector<float> field_grid;
         std::uint32_t field_tick = 0;
         bool field_dirty = true;
+        // The box of the cells of field_grid where the fuel lies (field_at
+        // 1 or more), usecode units; wet_x1 < wet_x0 when none.
+        double wet_x0 = 0, wet_y0 = 0, wet_x1 = -1, wet_y1 = -1;
     };
 
     // A burning drop thrown by an exploding barrel.
@@ -247,8 +282,14 @@ private:
     void splash_wall(const World& world, const Drop& d, const Solid& s, int face, double x, double y, double z,
                      std::uint32_t tick);
     void grow(Barrel& b);
+    Pool& pool_for(Barrel& b, bool trail);
+    void place_jet(Barrel& b, Hole& h);
+    void lay_trail(Barrel& b);
     void catch_fire(const World& world, const Pool& p, std::uint32_t tick);
+    static double arrival(const Pool& p, double x, double y);
     double reached(const Pool& p, double x, double y, std::uint32_t tick) const;
+    // fire_at where the fire came `come` units past (x, y) (reached).
+    double fire_from(const Pool& p, double x, double y, std::uint32_t tick, double come) const;
     bool opaque(const DrawItem& d, int sx, int sy) const;
     const std::vector<std::uint8_t>& mask_of(const ShapeFrame& f) const;
     void build_field(Pool& p, std::uint32_t tick);
@@ -290,12 +331,20 @@ private:
     std::unordered_map<std::size_t, std::vector<std::size_t>> walls_after_;
     std::vector<std::pair<std::uint32_t, std::uint8_t>> glowing_;
     // Per pixel, stamped with the frame: the fire already drawn (how hot, its
-    // colour), the floors at a pool's level and the pools' own pixels (the
-    // colour drawn, still there if unchanged).
+    // colour, still there if unchanged) and the flames' noise there for a
+    // seed (the same for every patch, wall or body drawn there), side by side
+    // for the columns of fire_column.
+    struct Flame {
+        std::uint32_t heat_frame = 0, noise_frame = 0, seed = 0;
+        float heat = 0, noise = 0;
+        std::uint8_t colour = 0;
+    };
+    std::vector<Flame> flames_;
+    // Per pixel, stamped with the frame: the floors at a pool's level and the
+    // pools' own pixels (the colour drawn, still there if unchanged).
     std::uint32_t frame_ = 0;
-    std::vector<std::uint32_t> heat_frame_, floor_frame_, pool_frame_;
-    std::vector<float> heat_;
-    std::vector<std::uint8_t> heat_colour_, floor_colour_, pool_colour_;
+    std::vector<std::uint32_t> floor_frame_, pool_frame_;
+    std::vector<std::uint8_t> floor_colour_, pool_colour_;
     std::vector<Rect> mirror_areas_;  // the pools' screen boxes, raised by what they may mirror
     std::size_t reflected_ = 0;
     std::size_t walls_shown_ = 0;

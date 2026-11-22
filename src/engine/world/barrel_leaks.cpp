@@ -114,6 +114,13 @@ Bounds bounds_of(const BarrelLeaks::Pool& p) {
     return b;
 }
 
+// Where pool `p` is drawn: the box of its fuel once its field is built.
+// @orig none: port-only barrel leaks
+Bounds wet_bounds(const BarrelLeaks::Pool& p) {
+    if (p.field_grid.empty()) return bounds_of(p);
+    return {p.wet_x0, p.wet_y0, p.wet_x1, p.wet_y1};
+}
+
 double depth_of(double field) { return std::clamp((field - 1) / 2, 0.0, 1.0); }
 
 // @orig none: port-only barrel leaks
@@ -123,7 +130,7 @@ std::vector<Solid> solids_around(const World& world, std::int32_t x0, std::int32
     for (ObjId id : world.rect_search(x0 - kPad, y0 - kPad, x1 + kPad, y1 + kPad)) {
         const Item* item = world.get(id);
         if (!item || is_npc_id(item->id) || item->parent != 0 || item->off_map || item->sprite_only ||
-            is_fuel_barrel(item->shape) || (item->flags & (kItemInvisible | kItemContained | kItemEthereal)))
+            leaks_fuel(item->shape) || (item->flags & (kItemInvisible | kItemContained | kItemEthereal)))
             continue;
         const ShapeInfo* info = world.shape_info(item->shape);
         if (!info || info->is(ShapeInfo::kEditor) || info->is(ShapeInfo::kTranslucent)) continue;
@@ -162,6 +169,16 @@ bool on_floor(const std::vector<Solid>& solids, double x, double y, std::int32_t
     return floor;
 }
 
+// The top of the floor under barrel `b` where it stands (its own bottom
+// when none).
+// @orig none: port-only barrel leaks
+std::int32_t floor_of(const World& world, const BarrelLeaks::Barrel& b) {
+    const auto cx = static_cast<std::int32_t>(b.x - b.length_x / 2);
+    const auto cy = static_cast<std::int32_t>(b.y - b.length_y / 2);
+    std::int32_t top = 0;
+    return floor_under(solids_around(world, cx, cy, cx, cy), cx, cy, b.z, top) ? top : b.z;
+}
+
 // A fuel barrel as it stands, full.
 // @orig none: port-only barrel leaks
 BarrelLeaks::Barrel make_barrel(const World& world, const Item& item, const ShapeInfo& info) {
@@ -178,11 +195,7 @@ BarrelLeaks::Barrel make_barrel(const World& world, const Item& item, const Shap
     b.height = info.footpad_z * 8.0;
     b.radius = upright(b.shape) ? std::min(b.length_x, b.length_y) / 2 : b.height / 2;
     b.level = b.height * kFull;
-    const auto cx = static_cast<std::int32_t>(b.x - b.length_x / 2);
-    const auto cy = static_cast<std::int32_t>(b.y - b.length_y / 2);
-    b.floor = b.z;
-    std::int32_t top = 0;
-    if (floor_under(solids_around(world, cx, cy, cx, cy), cx, cy, b.z, top)) b.floor = top;
+    b.floor = floor_of(world, b);
     return b;
 }
 
@@ -221,6 +234,12 @@ void follow_fingers(BarrelLeaks::Pool& p) {
 bool is_fuel_barrel(std::uint16_t shape) { return shape == 0xAA || (shape >= 0x151 && shape <= 0x155); }
 
 // @orig none: port-only barrel leaks
+bool is_rolling_barrel(std::uint16_t shape) { return shape == 0x586 || shape == 0x58B; }
+
+// @orig none: port-only barrel leaks
+bool leaks_fuel(std::uint16_t shape) { return is_fuel_barrel(shape) || is_rolling_barrel(shape); }
+
+// @orig none: port-only barrel leaks
 int barrel_bullet_damage(std::uint16_t shape, int damage, int fire_type) {
     const bool bullet = mark_kind(fire_type) == MarkKind::Bullet || ejection_of(fire_type) != Ejection::None;
     if (!is_fuel_barrel(shape) || !bullet) return damage;
@@ -235,12 +254,13 @@ double BarrelLeaks::field(const Pool& p, double x, double y) {
     // round blob, then ragged on a finer scale.
     const double warp = std::min(kWarp, 0.3 * extent);
     const auto fx = static_cast<float>(x), fy = static_cast<float>(y);
-    const double wx = x + warp * (2 * fast_noise(fx / 40, fy / 40, p.seed ^ 0x51u) - 1);
-    const double wy = y + warp * (2 * fast_noise(fx / 40 + 13.7f, fy / 40 + 7.1f, p.seed ^ 0x52u) - 1);
+    const double ux = 2 * fast_noise(fx / 40, fy / 40, p.seed ^ 0x51u) - 1;
+    const double uy = 2 * fast_noise(fx / 40 + 13.7f, fy / 40 + 7.1f, p.seed ^ 0x52u) - 1;
     double s = 0;
     for (const Lobe& l : p.lobes) {
         if (l.r <= 0) continue;
-        const double dx = wx - l.x, dy = wy - l.y;
+        const double w = l.trail ? std::min(warp, 0.3 * l.r) : warp;
+        const double dx = x + w * ux - l.x, dy = y + w * uy - l.y;
         s += l.r * l.r / (dx * dx + dy * dy + 1);
     }
     return s * (0.8 + 0.28 * fast_noise(fx / 9, fy / 9, p.seed) + 0.12 * fast_noise(fx / 3.5f, fy / 3.5f, p.seed ^ 3));
@@ -262,10 +282,23 @@ void BarrelLeaks::build_field(Pool& p, std::uint32_t tick) {
     p.field_w = static_cast<int>(std::ceil((bb.x1 - p.field_x) / kGrid)) + 2;
     p.field_h = static_cast<int>(std::ceil((bb.y1 - p.field_y) / kGrid)) + 2;
     p.field_grid.resize(static_cast<std::size_t>(p.field_w) * p.field_h);
-    for (int j = 0; j < p.field_h; ++j)
-        for (int i = 0; i < p.field_w; ++i)
-            p.field_grid[static_cast<std::size_t>(j) * p.field_w + i] =
-                static_cast<float>(field(p, p.field_x + i * kGrid, p.field_y + j * kGrid));
+    // field_at reaches 1 only in the cells round a corner of 1 or more.
+    int i0 = p.field_w, j0 = p.field_h, i1 = -1, j1 = -1;
+    for (int j = 0; j < p.field_h; ++j) {
+        for (int i = 0; i < p.field_w; ++i) {
+            const float s = static_cast<float>(field(p, p.field_x + i * kGrid, p.field_y + j * kGrid));
+            p.field_grid[static_cast<std::size_t>(j) * p.field_w + i] = s;
+            if (s < 1) continue;
+            i0 = std::min(i0, i);
+            j0 = std::min(j0, j);
+            i1 = std::max(i1, i);
+            j1 = std::max(j1, j);
+        }
+    }
+    p.wet_x0 = p.field_x + (i0 - 1) * kGrid;
+    p.wet_y0 = p.field_y + (j0 - 1) * kGrid;
+    p.wet_x1 = i1 < 0 ? p.wet_x0 - 1 : p.field_x + (i1 + 1) * kGrid;
+    p.wet_y1 = j1 < 0 ? p.wet_y0 - 1 : p.field_y + (j1 + 1) * kGrid;
 }
 
 // @orig none: port-only barrel leaks
@@ -339,7 +372,7 @@ void BarrelLeaks::shot(const World& world, ObjId hit, World::Point at, int fire_
     }
     if (!bullet) return;
     const Item* item = world.get(hit);
-    if (!item || !is_fuel_barrel(item->shape) || (item->flags & kItemExploded)) return;
+    if (!item || !leaks_fuel(item->shape) || (item->flags & kItemExploded)) return;
     const ShapeInfo* info = world.shape_info(item->shape);
     if (!info) return;
     auto found = std::find_if(barrels_.begin(), barrels_.end(),
@@ -393,7 +426,7 @@ void BarrelLeaks::exploded(const World& world, ObjId id, std::uint32_t now) {
         map_ = world.current_map();
     }
     const Item* item = world.get(id);
-    if (!item || !is_fuel_barrel(item->shape)) return;
+    if (!item || !leaks_fuel(item->shape)) return;
     const ShapeInfo* info = world.shape_info(item->shape);
     if (!info) return;
     Barrel b;
@@ -414,7 +447,14 @@ void BarrelLeaks::exploded(const World& world, ObjId id, std::uint32_t now) {
 void BarrelLeaks::blow_up(const World& world, const Barrel& b, std::uint32_t tick) {
     const double cx = b.x - b.length_x / 2, cy = b.y - b.length_y / 2;
     const double area = b.length_x * b.length_y / kPi;
+    // Its pool, unless it rolled down to another level since: then that one
+    // is part of its trail.
+    std::vector<std::uint32_t> trail = b.trail_pools;
     Pool* p = pool_of(b.pool);
+    if (p && !p->burnt && std::abs(p->z - b.floor) > kHeight) {
+        trail.push_back(p->serial);
+        p = nullptr;
+    }
     if (!p || p->burnt) p = &new_pool(b.floor);
     const std::uint32_t seed = mix(p->seed, static_cast<int>(b.id), static_cast<int>(tick));
     if (b.level > 1) {
@@ -424,6 +464,18 @@ void BarrelLeaks::blow_up(const World& world, const Barrel& b, std::uint32_t tic
         follow_fingers(*p);
     }
     ignite(world, *p, cx, cy, tick);
+    // Its trail at other levels catches too, from its end nearest the barrel.
+    for (std::uint32_t serial : trail) {
+        Pool* q = pool_of(serial);
+        if (!q || q->burning || q->burnt || q->lobes.empty()) continue;
+        const Lobe* near = &q->lobes.front();
+        for (const Lobe& l : q->lobes) {
+            if ((l.x - cx) * (l.x - cx) + (l.y - cy) * (l.y - cy) <
+                (near->x - cx) * (near->x - cx) + (near->y - cy) * (near->y - cy))
+                near = &l;
+        }
+        ignite(world, *q, near->x, near->y, tick);
+    }
     // The drops: more the fuller the barrel.
     if (b.height <= 0) return;
     const auto solids = std::make_shared<const std::vector<Solid>>(
@@ -486,41 +538,43 @@ void BarrelLeaks::step(const World& world, std::uint32_t tick) {
             blow_up(world, gone, tick);
             continue;
         }
+        // Thrown: it leaves its pool and lays a trail from where it was.
+        const bool slid = item->x != b.x || item->y != b.y;
+        const bool moved = slid || item->z != b.z;
+        if (slid && !b.rolling) {
+            b.rolling = true;
+            b.trail_x = b.x - b.length_x / 2;
+            b.trail_y = b.y - b.length_y / 2;
+            for (Hole& h : b.holes) h.land_lobe = h.foot_lobe = -1, h.spilled = 0;
+        }
+        if (slid) b.moved_at = tick;
         b.x = item->x;
         b.y = item->y;
         b.z = item->z;
         b.frame = item->frame;
+        if (moved) b.floor = floor_of(world, b);
+        if (b.rolling && tick - b.moved_at >= kRest) {
+            // At rest: the jets make a pool where it lies.
+            b.rolling = false;
+            for (Hole& h : b.holes)
+                if (h.started && b.level > h.height) place_jet(b, h);
+        }
         for (Hole& h : b.holes) {
+            h.flow = 0;
             if (!h.started && tick - h.made >= kLeakDelay) {
                 h.started = true;
-                if (b.level > h.height) {
-                    // Its lobes in the barrel's pool (a new one if it burnt):
-                    // where the jet lands now, at the foot below it, and
-                    // fingers running on from where it lands.
-                    Pool* p = pool_of(b.pool);
-                    if (!p || p->burnt) {
-                        p = &new_pool(b.floor);
-                        b.pool = p->serial;
-                        for (Hole& other : b.holes) other.land_lobe = other.foot_lobe = -1, other.spilled = 0;
-                    }
-                    const double v = kJet * std::sqrt(b.level - h.height);
-                    const double fall = std::sqrt(2 * (h.height + b.z - b.floor) / kGravity);
-                    const double reach = v >= kDribble ? v * fall : 1;
-                    const double hx = b.x + h.x, hy = b.y + h.y;
-                    h.land_lobe = static_cast<int>(p->lobes.size());
-                    p->lobes.push_back({hx + h.ux * (reach + 2), hy + h.uy * (reach + 2), 0});
-                    h.foot_lobe = static_cast<int>(p->lobes.size());
-                    p->lobes.push_back({hx + h.ux * 3, hy + h.uy * 3, 0});
-                    add_fingers(*p, h.land_lobe, 3, std::atan2(h.uy, h.ux), 1.7, h.seed);
-                }
+                if (b.level > h.height && !b.rolling) place_jet(b, h);
             }
             if (!h.started) continue;
-            const double head = b.level - h.height;
+            // Rolling, a lying barrel turns every hole under the fuel.
+            const double head = b.level - (b.rolling && !upright(b.shape) ? 0 : h.height);
             if (head <= 0) continue;
             const double out = std::min(head, kDrain * std::sqrt(head));
             b.level -= out;
-            h.spilled += out;
+            if (b.rolling) h.flow = out;
+            else h.spilled += out;
         }
+        if (b.rolling) lay_trail(b);
         grow(b);
         ++i;
     }
@@ -533,14 +587,20 @@ void BarrelLeaks::step(const World& world, std::uint32_t tick) {
             continue;
         }
         catch_fire(world, p, tick);
-        // A burning pool lights the pools it touches.
+        // A burning pool lights the pools it touches, once its fire has come
+        // where they touch (a trail in several pools burns on from one to
+        // the next).
         if ((tick - p.lit_at) % 8 != 0 || tick - p.lit_at < 16) continue;
         for (Pool& q : pools_) {
             if (&q == &p || q.burning || q.burnt || std::abs(q.z - p.z) > 4) continue;
             for (const Lobe& a : p.lobes) {
                 for (const Lobe& c : q.lobes) {
+                    if (q.burning) break;
                     const double dx = a.x - c.x, dy = a.y - c.y;
-                    if (a.r > 0 && c.r > 0 && std::sqrt(dx * dx + dy * dy) < a.r + c.r)
+                    // Two drops of a trail touch across a gap of its dribble.
+                    const double gap = a.trail && c.trail ? 2 * kTrailStep : 0;
+                    if (a.r > 0 && c.r > 0 && std::sqrt(dx * dx + dy * dy) < a.r + c.r + gap &&
+                        reached(p, a.x, a.y, tick) > 0)
                         ignite(world, q, c.x, c.y, tick);
                 }
             }
@@ -667,10 +727,11 @@ void BarrelLeaks::splash_wall(const World& world, const Drop& d, const Solid& s,
 // Whoever stands in the fire of `p` catches fire.
 // @orig none: port-only barrel leaks
 void BarrelLeaks::catch_fire(const World& world, const Pool& p, std::uint32_t tick) {
-    const Bounds bb = bounds_of(p);
-    if (bb.x1 < bb.x0) return;
-    const auto x0 = static_cast<std::int32_t>(bb.x0), y0 = static_cast<std::int32_t>(bb.y0);
-    const auto x1 = static_cast<std::int32_t>(bb.x1), y1 = static_cast<std::int32_t>(bb.y1);
+    // The fire's cells, and the feet round them.
+    if (p.fuel.empty()) return;
+    const auto x0 = static_cast<std::int32_t>(p.grid_x) - 8, y0 = static_cast<std::int32_t>(p.grid_y) - 8;
+    const auto x1 = static_cast<std::int32_t>(p.grid_x + p.grid_w * kGrid) + 8;
+    const auto y1 = static_cast<std::int32_t>(p.grid_y + p.grid_h * kGrid) + 8;
     for (ObjId id : world.rect_search(x0, y0, x1 + kPad, y1 + kPad)) {
         if (!is_npc_id(id)) continue;
         const Item* item = world.get(id);
@@ -688,6 +749,121 @@ void BarrelLeaks::catch_fire(const World& world, const Pool& p, std::uint32_t ti
         if (found == burning_.end()) burning_.push_back({id, tick + kAfterBurn, tick + 4});
         else found->until = std::max(found->until, tick + kAfterBurn);
     }
+}
+
+// The pool barrel `b` spills into: its own, or a new one at the level of
+// its floor when it has none, its own burnt or at another level (the
+// barrel moved), or (for a trail) its own burns or holds kMaxTrail drops
+// already (the trail goes on in a new pool that touches it: it catches from
+// it). A new pool leaves the holes without lobes.
+// @orig none: port-only barrel leaks
+BarrelLeaks::Pool& BarrelLeaks::pool_for(Barrel& b, bool trail) {
+    Pool* p = pool_of(b.pool);
+    const bool level = p && std::abs(p->z - b.floor) <= kHeight;
+    bool full = false;
+    if (trail && p) {
+        std::size_t laid = 0;
+        for (const Lobe& l : p->lobes) laid += l.trail;
+        full = laid >= kMaxTrail;
+    }
+    if (p && !p->burnt && level && !(trail && (p->burning || full))) return *p;
+    if (p && !p->burnt && !p->burning && !level) {
+        // Its trail goes on at another level: that one catches with it too.
+        if (b.trail_pools.size() >= 8) b.trail_pools.erase(b.trail_pools.begin());
+        b.trail_pools.push_back(p->serial);
+    }
+    Pool& fresh = new_pool(b.floor);
+    b.pool = fresh.serial;
+    for (Hole& h : b.holes) h.land_lobe = h.foot_lobe = -1, h.spilled = 0;
+    return fresh;
+}
+
+// The lobes of hole `h` in the barrel's pool: where its jet lands now, at
+// the foot below it, and fingers running on from where it lands.
+// @orig none: port-only barrel leaks
+void BarrelLeaks::place_jet(Barrel& b, Hole& h) {
+    Pool& p = pool_for(b, false);
+    const double v = kJet * std::sqrt(b.level - h.height);
+    const double fall = std::sqrt(2 * std::max(0.0, h.height + b.z - b.floor) / kGravity);
+    const double reach = v >= kDribble ? v * fall : 1;
+    const double hx = b.x + h.x, hy = b.y + h.y;
+    h.spilled = 0;
+    h.land_lobe = static_cast<int>(p.lobes.size());
+    p.lobes.push_back({hx + h.ux * (reach + 2), hy + h.uy * (reach + 2), 0});
+    h.foot_lobe = static_cast<int>(p.lobes.size());
+    p.lobes.push_back({hx + h.ux * 3, hy + h.uy * 3, 0});
+    add_fingers(p, h.land_lobe, 3, std::atan2(h.uy, h.ux), 1.7, h.seed);
+}
+
+// A rolling barrel: each hole that let fuel out this tick drops it every
+// kTrailStep along its way since the trail's end, wider the more it lets
+// out: an upright barrel at the foot of the side under the hole (where the
+// fuel runs down to), a lying one under itself, where the hole lies along
+// its length (the hole turns round with it). Off the floor (falling) or dry,
+// it lays none.
+// @orig none: port-only barrel leaks
+void BarrelLeaks::lay_trail(Barrel& b) {
+    const double cx = b.x - b.length_x / 2, cy = b.y - b.length_y / 2;
+    const double dx = cx - b.trail_x, dy = cy - b.trail_y;
+    const double len = std::sqrt(dx * dx + dy * dy);
+    const bool flows = std::any_of(b.holes.begin(), b.holes.end(), [](const Hole& h) { return h.flow > 0; });
+    if (!flows || b.z > b.floor + kHeight) {
+        b.trail_x = cx;
+        b.trail_y = cy;
+        return;
+    }
+    if (len < kTrailStep) return;
+    const int steps = static_cast<int>(len / kTrailStep);
+    const double turn = 2 * kPi * std::max(b.radius, 4.0);
+    for (int k = 1; k <= steps; ++k) {
+        const double s = b.trail_way + k * kTrailStep;
+        const double ax = b.trail_x + dx * (k * kTrailStep / len), ay = b.trail_y + dy * (k * kTrailStep / len);
+        for (const Hole& h : b.holes) {
+            if (h.flow <= 0) continue;
+            double ox = b.x + h.x + h.ux * 3 - cx, oy = b.y + h.y + h.uy * 3 - cy;
+            if (!upright(b.shape)) {
+                ox = b.length_x > b.length_y ? b.x + h.x - cx : 0;
+                oy = b.length_y > b.length_x ? b.y + h.y - cy : 0;
+            }
+            // The drops add up along the way: some 2 r^2 / kTrailStep wide.
+            // Uneven: the barrel wobbles, so the trail wanders from side to
+            // side (up to 14 units, over some 120), and the drops are wider
+            // or narrower. A lying barrel brings the hole round under itself
+            // about once a turn: a splash there, a broken dribble while the
+            // hole is up.
+            const double r = std::clamp(2.5 + 50 * h.flow, 3.0, 4.5);
+            const std::uint32_t n = mix(h.seed, static_cast<int>(s), 17);
+            const double side = 14 * (2 * fast_noise(static_cast<float>(s / 120), 0.5f, h.seed) - 1) +
+                                (unit(n >> 16) - 0.5) * 3;
+            double size = 0.75 + 0.5 * unit(n);
+            bool splash = false;
+            if (!upright(b.shape)) {
+                const double wobble = 0.3 * fast_noise(static_cast<float>(s / 150), 3.5f, h.seed ^ 0x5Au);
+                const double down = std::cos(2 * kPi * (s / turn + unit(h.seed >> 8) + wobble));
+                size *= 0.5 + 0.9 * std::max(0.0, down);
+                splash = down > 0.97;
+            }
+            Pool& p = pool_for(b, true);
+            Lobe l;
+            l.x = ax + ox - dy / len * side;
+            l.y = ay + oy + dx / len * side;
+            l.r = r * size;
+            l.trail = true;
+            p.lobes.push_back(l);
+            if (splash) {
+                // Thrown out a little ahead and aside.
+                const double off = (unit(n >> 8) - 0.5) * 10;
+                l.x += dx / len * 3 - dy / len * off;
+                l.y += dy / len * 3 + dx / len * off;
+                l.r = r * (1.5 + 0.7 * unit(n >> 4));
+                p.lobes.push_back(l);
+            }
+            p.field_dirty = true;
+        }
+    }
+    b.trail_x += dx * (steps * kTrailStep / len);
+    b.trail_y += dy * (steps * kTrailStep / len);
+    b.trail_way += steps * kTrailStep;
 }
 
 // The lobes of a barrel's pool, from what ran out of each hole.
@@ -721,10 +897,23 @@ void BarrelLeaks::ignite(const World& world, Pool& p, double x, double y, std::u
         p.fire_y = y;
         p.burn_ticks = static_cast<std::uint32_t>(std::clamp(240.0 + 4 * extent, 240.0, 900.0));
     }
+    // A trail's thin streak of fuel burns lower than a pool.
+    std::size_t drops = 0, lobes = 0;
+    for (const Lobe& l : p.lobes) {
+        if (l.r <= 0) continue;
+        ++lobes;
+        drops += l.trail;
+    }
+    p.flames = lobes ? 1.0f - 0.55f * static_cast<float>(drops) / static_cast<float>(lobes) : 1.0f;
     // The fuel, cell by cell, where it lies on the floor; the patches that
     // hold some.
     build_field(p, tick);
-    const Bounds bb = bounds_of(p);
+    const Bounds bb = wet_bounds(p);
+    if (bb.x1 < bb.x0) {
+        p.fuel.clear();
+        p.patches.clear();
+        return;
+    }
     p.grid_x = std::floor(bb.x0 / kGrid) * kGrid;
     p.grid_y = std::floor(bb.y0 / kGrid) * kGrid;
     p.grid_w = static_cast<int>(std::ceil((bb.x1 - p.grid_x) / kGrid)) + 1;
@@ -748,6 +937,11 @@ void BarrelLeaks::ignite(const World& world, Pool& p, double x, double y, std::u
             if (any) p.patches.emplace_back(pi, pj);
         }
     }
+    // Where the fire comes when, at the cells' corners: reached interpolates.
+    p.arrive.clear();
+    for (int j = 0; j <= p.grid_h; ++j)
+        for (int i = 0; i <= p.grid_w; ++i)
+            p.arrive.push_back(static_cast<float>(arrival(p, p.grid_x + i * kGrid, p.grid_y + j * kGrid)));
 }
 
 // @orig none: port-only barrel leaks
@@ -760,8 +954,23 @@ float BarrelLeaks::fire_strength(const Pool& p, std::uint32_t tick) const {
 // it spreads unevenly, faster one way than another.
 // @orig none: port-only barrel leaks
 double BarrelLeaks::reached(const Pool& p, double x, double y, std::uint32_t tick) const {
+    const double gone = static_cast<double>(tick - p.lit_at) * kSpread;
+    const double gx = (x - p.grid_x) / kGrid, gy = (y - p.grid_y) / kGrid;
+    const int i = static_cast<int>(std::floor(gx)), j = static_cast<int>(std::floor(gy));
+    if (p.arrive.empty() || i < 0 || j < 0 || i >= p.grid_w || j >= p.grid_h) return gone - arrival(p, x, y);
+    const double tx = gx - i, ty = gy - j;
+    const float* row = &p.arrive[static_cast<std::size_t>(j) * (p.grid_w + 1) + i];
+    const double top = row[0] + (row[1] - row[0]) * tx;
+    const double bottom = row[p.grid_w + 1] + (row[p.grid_w + 2] - row[p.grid_w + 1]) * tx;
+    return gone - (top + (bottom - top) * ty);
+}
+
+// How far the fire has to come from where it caught to reach (x, y): its
+// distance, longer one way than another.
+// @orig none: port-only barrel leaks
+double BarrelLeaks::arrival(const Pool& p, double x, double y) {
     const double from = std::sqrt((x - p.fire_x) * (x - p.fire_x) + (y - p.fire_y) * (y - p.fire_y));
-    return static_cast<double>(tick - p.lit_at) * kSpread - from * (0.75 + 0.5 * fast_noise(static_cast<float>(x / 22), static_cast<float>(y / 22), p.seed ^ 0x77u));
+    return from * (0.75 + 0.5 * fast_noise(static_cast<float>(x / 22), static_cast<float>(y / 22), p.seed ^ 0x77u));
 }
 
 // Reached by the fire, not yet burnt out there: the edge goes out first.
@@ -771,10 +980,18 @@ double BarrelLeaks::fire_at(const Pool& p, double x, double y, std::uint32_t tic
     const int i = static_cast<int>(std::floor((x - p.grid_x) / kGrid));
     const int j = static_cast<int>(std::floor((y - p.grid_y) / kGrid));
     if (i < 0 || j < 0 || i >= p.grid_w || j >= p.grid_h) return 0;
+    if (p.fuel[static_cast<std::size_t>(j) * p.grid_w + i] < 0) return 0;
+    return fire_from(p, x, y, tick, reached(p, x, y, tick));
+}
+
+// @orig none: port-only barrel leaks
+double BarrelLeaks::fire_from(const Pool& p, double x, double y, std::uint32_t tick, double come) const {
+    if (come <= 0 || !p.burning || p.fuel.empty()) return 0;
+    const int i = static_cast<int>(std::floor((x - p.grid_x) / kGrid));
+    const int j = static_cast<int>(std::floor((y - p.grid_y) / kGrid));
+    if (i < 0 || j < 0 || i >= p.grid_w || j >= p.grid_h) return 0;
     const float fuel = p.fuel[static_cast<std::size_t>(j) * p.grid_w + i];
     if (fuel < 0) return 0;
-    const double come = reached(p, x, y, tick);
-    if (come <= 0) return 0;
     const double age = tick - p.lit_at;
     const double dying = std::max(0.0, (age / p.burn_ticks - 0.55) / 0.45);
     if (fuel < dying) return 0;
@@ -795,10 +1012,10 @@ void BarrelLeaks::prepare(const World& world, const Palette& game_palette, const
     reflected_ = 0;
     ++frame_;
     const std::size_t pixels = static_cast<std::size_t>(std::max(width, 0)) * static_cast<std::size_t>(std::max(height, 0));
-    if (heat_frame_.size() != pixels) {
-        for (auto* v : {&heat_frame_, &floor_frame_, &pool_frame_}) v->assign(pixels, 0);
-        heat_.assign(pixels, 0);
-        for (auto* v : {&heat_colour_, &floor_colour_, &pool_colour_}) v->assign(pixels, 0);
+    if (flames_.size() != pixels) {
+        flames_.assign(pixels, Flame{});
+        for (auto* v : {&floor_frame_, &pool_frame_}) v->assign(pixels, 0);
+        for (auto* v : {&floor_colour_, &pool_colour_}) v->assign(pixels, 0);
     }
     bool same = tone_ready_;
     for (int c = 0; same && c < 256; ++c) {
@@ -865,7 +1082,7 @@ void BarrelLeaks::prepare(const World& world, const Palette& game_palette, const
     mirror_areas_.clear();
     for (const Pool& p : pools_) {
         if (p.burnt) continue;
-        const Bounds bb = bounds_of(p);
+        const Bounds bb = wet_bounds(p);
         if (bb.x1 < bb.x0) continue;
         Rect r{std::max(screen_x(bb.x0, bb.y1) - view_left_, 0), std::max(screen_y(bb.x0, bb.y0, p.z) - view_top_ - kMirrorReach, 0),
                std::min(screen_x(bb.x1, bb.y0) - view_left_ + 1, width), std::min(screen_y(bb.x1, bb.y1, p.z) - view_top_ + 1, height)};
@@ -946,7 +1163,7 @@ void BarrelLeaks::draw_first(Surface8& screen) {
 void BarrelLeaks::draw(Surface8& screen, const DrawItem& d, std::size_t index) {
     if (!tone_ready_) return;
     const Item& item = *d.item;
-    if (is_fuel_barrel(item.shape)) {
+    if (leaks_fuel(item.shape)) {
         for (const Barrel& b : barrels_)
             if (b.id == item.id && b.shape == item.shape) draw_barrel(screen, d, b);
     } else if (is_npc_id(item.id)) {
@@ -973,7 +1190,7 @@ void BarrelLeaks::draw(Surface8& screen, const DrawItem& d, std::size_t index) {
 // remembered: it may mirror what stands behind it (reflect).
 // @orig none: port-only barrel leaks
 void BarrelLeaks::draw_pool(Surface8& screen, const DrawItem& d, const Pool& p) {
-    const Bounds bb = bounds_of(p);
+    const Bounds bb = wet_bounds(p);
     if (bb.x1 < bb.x0) return;
     // The floor's box, usecode units, against the pool's.
     const double hx0 = d.x_left / 2.0, hx1 = d.x / 2.0, hy0 = d.y_far / 2.0, hy1 = d.y / 2.0;
@@ -1004,9 +1221,9 @@ void BarrelLeaks::draw_pool(Surface8& screen, const DrawItem& d, const Pool& p) 
                 put(screen, px, py, fast_noise(fx / 4, fy / 4, p.seed ^ 7) + depth * 0.4 > 0.75 ? kAshDark : kAsh);
                 continue;
             }
-            if (p.burning && reached(p, x, y, tick) > 0) {
+            if (const double come = p.burning ? reached(p, x, y, tick) : 0; come > 0) {
                 // Glowing under the fire, burnt where it went out.
-                if (fire_at(p, x, y, tick) > 0) put(screen, px, py, kHot, true);
+                if (fire_from(p, x, y, tick, come) > 0) put(screen, px, py, kHot, true);
                 else put(screen, px, py, fast_noise(fx / 4, fy / 4, p.seed ^ 7) > 0.6 ? kAshDark : kAsh);
                 continue;
             }
@@ -1044,8 +1261,10 @@ void BarrelLeaks::mark_floor(const Surface8& screen, const DrawItem& d) {
 }
 
 // The holes of a barrel, the fuel running down under them and out of them.
+// A lying barrel rolling turns them round: none drawn till it stops.
 // @orig none: port-only barrel leaks
 void BarrelLeaks::draw_barrel(Surface8& screen, const DrawItem& d, const Barrel& b) {
+    if (b.rolling && !upright(b.shape)) return;
     const Item& item = *d.item;
     const std::uint32_t tick = now_;
     const auto at = [&](double x, double y, double z, int& sx, int& sy) {
@@ -1137,15 +1356,24 @@ void BarrelLeaks::fire_column(Surface8& screen, int px, int bottom, const std::v
         if (py >= screen.height) continue;
         const std::size_t j = static_cast<std::size_t>(py) * static_cast<std::size_t>(screen.width) + px;
         std::uint8_t& pixel = screen.row(py)[px];
-        const bool drawn = j < heat_.size() && heat_frame_[j] == frame_ && heat_colour_[j] == pixel;
-        if (drawn && heat_[j] >= m * 1.47f) continue;  // as hot as it can get here
-        const float y = static_cast<float>(py + view_top_);
-        const float sway = 1.3f * std::sin(y * 0.19f + t * 0.08f + x * 0.05f);
-        // Streaks taller than wide, rising faster than the flames.
-        const float n1 = fast_noise((x + sway) / 3.2f, (y + t * 1.9f) / 11.0f, seed);
-        const float n2 = fast_noise(x / 1.7f, (y + t * 3.1f) / 5.0f, seed + 101);
-        const float v = m * (0.02f + 1.45f * (0.6f * n1 + 0.4f * n2));
-        if (v < 0.1f || (drawn && heat_[j] >= v)) continue;
+        if (j >= flames_.size()) continue;
+        Flame& f = flames_[j];
+        const bool drawn = f.heat_frame == frame_ && f.colour == pixel;
+        if (drawn && f.heat >= m * 1.47f) continue;  // as hot as it can get here
+        // The noise here, once a frame for a seed (the patches of a pool
+        // overlap).
+        if (f.noise_frame != frame_ || f.seed != seed) {
+            const float y = static_cast<float>(py + view_top_);
+            const float sway = 1.3f * std::sin(y * 0.19f + t * 0.08f + x * 0.05f);
+            // Streaks taller than wide, rising faster than the flames.
+            const float n1 = fast_noise((x + sway) / 3.2f, (y + t * 1.9f) / 11.0f, seed);
+            const float n2 = fast_noise(x / 1.7f, (y + t * 3.1f) / 5.0f, seed + 101);
+            f.noise_frame = frame_;
+            f.seed = seed;
+            f.noise = 0.02f + 1.45f * (0.6f * n1 + 0.4f * n2);
+        }
+        const float v = m * f.noise;
+        if (v < 0.1f || (drawn && f.heat >= v)) continue;
         const Tone tone = v > 1.0f    ? kFlameWhite
                           : v > 0.8f  ? kFlameYellow
                           : v > 0.62f ? kFlameOrange
@@ -1154,11 +1382,9 @@ void BarrelLeaks::fire_column(Surface8& screen, int px, int bottom, const std::v
                           : v > 0.2f  ? kFlameDark
                                       : kFlameSmoke;
         put(screen, px, py, tone, v > 0.32f);
-        if (j < heat_.size()) {
-            heat_frame_[j] = frame_;
-            heat_[j] = v;
-            heat_colour_[j] = pixel;
-        }
+        f.heat_frame = frame_;
+        f.heat = v;
+        f.colour = pixel;
     }
 }
 
@@ -1188,7 +1414,7 @@ void BarrelLeaks::draw_patch(Surface8& screen, const Pool& p, std::pair<int, int
         if (!any) continue;
         // Taller here, lower there, slowly changing.
         const float tall = 0.45f + 0.9f * fast_noise((px + view_left_) / 9.0f + t * 0.012f, t * 0.006f, p.seed);
-        fire_column(screen, px, bottom, column_, kFlameHeight * strength * tall, p.seed);
+        fire_column(screen, px, bottom, column_, kFlameHeight * p.flames * strength * tall, p.seed);
     }
 }
 
@@ -1369,10 +1595,16 @@ std::vector<PointLight> BarrelLeaks::lights(const World& world) const {
 std::vector<Vec3> BarrelLeaks::smoke_since(std::uint32_t since) const {
     std::vector<Vec3> out;
     if (now_ - since > 60) since = now_ - 60;
+    // Each puff costs the lighting all the pixels it covers: a big pool
+    // smokes every 7 ticks, a drop's little one every 21, a fire on a wall
+    // every 39.
     for (const Pool& p : pools_) {
         if (!p.burning || p.fuel.empty()) continue;
+        double extent = 0;
+        for (const Lobe& l : p.lobes) extent = std::max(extent, l.r);
+        const std::uint32_t every = extent > 40 ? 7 : 21;
         for (std::uint32_t t = since + 1; t <= now_ && t != 0; ++t) {
-            if ((t + p.serial) % 7 != 0 || fire_strength(p, t) < 0.4f) continue;
+            if ((t + p.serial) % every != 0 || fire_strength(p, t) < 0.4f) continue;
             // A cell picked at random: smoke if it burns.
             const std::uint32_t h = mix(p.seed, static_cast<int>(t), 5);
             const int i = static_cast<int>(h % static_cast<std::uint32_t>(p.grid_w));
@@ -1384,7 +1616,7 @@ std::vector<Vec3> BarrelLeaks::smoke_since(std::uint32_t since) const {
     }
     for (const WallFire& w : wall_fires_) {
         for (std::uint32_t t = since + 1; t <= now_ && t != 0; ++t) {
-            if ((t + w.seed) % 13 != 0 || curve(static_cast<float>(t - w.lit_at), static_cast<float>(w.burn_ticks)) < 0.4f)
+            if ((t + w.seed) % 39 != 0 || curve(static_cast<float>(t - w.lit_at), static_cast<float>(w.burn_ticks)) < 0.4f)
                 continue;
             out.push_back({static_cast<float>(w.x * 2), static_cast<float>(w.y * 2),
                            static_cast<float>((w.z + 10) * kLightZScale)});

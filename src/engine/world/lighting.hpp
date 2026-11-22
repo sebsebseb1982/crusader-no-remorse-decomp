@@ -306,6 +306,8 @@ private:
     // Smoke.
     std::vector<SmokePuff> puffs_;
     std::vector<PuffState> puff_now_;  // far to near
+    // By puff of puff_now_: the lights whose reach meets it (shade_cpu).
+    std::vector<std::vector<std::uint32_t>> puff_lights_;
     std::unordered_map<ObjId, std::uint16_t> sprites_seen_;  // sprite item -> shape
     // A leak's hole by shape << 16 | frame << 8 | whole frame (hole()).
     mutable std::unordered_map<std::uint32_t, std::optional<std::pair<float, float>>> holes_;
