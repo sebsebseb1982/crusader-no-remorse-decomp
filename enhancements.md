@@ -503,7 +503,7 @@ The explosive barrels (BARRELUP 0xAA upright, BARRELS to BARRELSE 0x151..0x155 l
 **Pool**
 - The fuel makes one pool per barrel: a patch where each jet first landed, one at the foot of the barrel under the hole, and three fingers running on from where the jet landed, mostly the way it flowed; all grow with what ran out of that hole and flow together. A barrel emptied by a low hole makes a pool up to about nine times its width.
 - Its edge is no circle: pushed in and out by broad noise (up to 26 units, less for a small pool), then ragged on a finer scale.
-- It lies on the floor under the barrel (the highest floor at most 16 below it) and on the floors at that level around: not down a ledge, and under what stands on the floor (walls, crates), which covers it.
+- It lies on the floor under the barrel (the highest floor at most 16 below it) and on the floors at that level around, as far as it runs from where it started: not down a ledge, not under what stands on the floor (walls, crates), nor past a wall onto the floor on its other side (a drop splashing against a wall does not streak through it).
 - Dark brown, a little see-through at its edge, with a slow sheen.
 
 **Trail**
@@ -529,7 +529,7 @@ The explosive barrels (BARRELUP 0xAA upright, BARRELS to BARRELSE 0x151..0x155 l
 **Fire**
 - A blast within reach of a pool, an energy shot (laser, plasma, fire...) that ends on it, a burning drop or a burning pool that touches it sets a pool alight too.
 - The fire spreads from where it caught at about 2.5 units a tick, unevenly: faster one way than another (from 0.75 to 1.25 times as far). It is drawn pixel by pixel: every point of the floor it has reached burns, more strongly where the pool is deep, and flames rise off it up to 64 pixels, losing heat as they go up. Noise rising faster than the flames, in streaks taller than wide and swaying a little, breaks them into tongues that lick up and part from the fire. The hotter a pixel, the whiter: white, yellow, orange, deep orange, then red, a see-through dark red and a wisp of smoke at the tips. The flames rise from the near parts of the pool over the far ones; where two meet, the hotter shows. The pool under the fire glows a dark orange.
-- The pool burns by patches of 32 x 32 units, each drawn in the game's order as a box of its own, so what stands in front of the fire covers it and the fire covers what is behind.
+- The pool burns by patches of 32 x 32 units, each drawn in the game's order as a box of its own (the box of its fuel, kept out of what stands on the floor), so what stands in front of the fire covers it and the fire covers what is behind: a fire just behind a wall the camera sees, drawn black, stays hidden by it.
 - It burns 4 to 15 seconds (longer the bigger the pool), dies down for its last 40 %, from the edge in, and leaves a burnt stain that stays.
 - With the 3D lighting (section 7d), the fire gives a flickering orange light, its pixels glow as they are, and, with the volumetric smoke, a dark smoke rises off it, lit from below at first: a puff every 7 ticks off a barrel's pool, every 21 off a drop's little one, every 39 off a fire on a wall (each puff costs the lighting all the pixels it covers).
 - Cost (`game_tests data --barrel-bench`, lighting on the processor, a barrel's pool burning with five fires on walls): about 4.5 ms more to draw at 640 x 480, 8 ms at 1920 x 1080.

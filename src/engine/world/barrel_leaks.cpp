@@ -169,6 +169,30 @@ bool on_floor(const std::vector<Solid>& solids, double x, double y, std::int32_t
     return floor;
 }
 
+// Something standing on the floor at level z (as on_floor) lies across the
+// way from (ax, ay) to (bx, by): neither end under it.
+// @orig none: port-only barrel leaks
+bool walled_off(const std::vector<Solid>& solids, double ax, double ay, double bx, double by, std::int32_t z) {
+    for (const Solid& s : solids) {
+        if (s.z_top <= z + kHeight || s.z > z + 16) continue;
+        const auto under = [&](double x, double y) { return x >= s.x_left && x <= s.x && y >= s.y_far && y <= s.y; };
+        if (under(ax, ay) || under(bx, by)) continue;
+        // The part of the way within the box's x, then y.
+        double t0 = 0, t1 = 1;
+        const auto clip = [&](double a, double b, double lo, double hi) {
+            const double d = b - a;
+            if (d == 0) return a >= lo && a <= hi;
+            double u0 = (lo - a) / d, u1 = (hi - a) / d;
+            if (u0 > u1) std::swap(u0, u1);
+            t0 = std::max(t0, u0);
+            t1 = std::min(t1, u1);
+            return t0 <= t1;
+        };
+        if (clip(ax, bx, s.x_left, s.x) && clip(ay, by, s.y_far, s.y)) return true;
+    }
+    return false;
+}
+
 // The top of the floor under barrel `b` where it stands (its own bottom
 // when none), as far down as it lies: a barrel standing on another (the
 // barrels are no floor) spills down its side to the floor under both, one
@@ -269,9 +293,11 @@ double BarrelLeaks::field(const Pool& p, double x, double y) {
 }
 
 // The pool's field on kGrid cells (cell corners), for drawing: the edge
-// interpolated between them stays smooth.
+// interpolated between them stays smooth. Only the fuel its lobes reach
+// over its floor lies there: none under what stands on the floor, none on
+// the far side of a wall (the field knows nothing of them).
 // @orig none: port-only barrel leaks
-void BarrelLeaks::build_field(Pool& p, std::uint32_t tick) {
+void BarrelLeaks::build_field(const World& world, Pool& p, std::uint32_t tick) {
     p.field_tick = tick;
     p.field_dirty = false;
     const Bounds bb = bounds_of(p);
@@ -284,12 +310,78 @@ void BarrelLeaks::build_field(Pool& p, std::uint32_t tick) {
     p.field_w = static_cast<int>(std::ceil((bb.x1 - p.field_x) / kGrid)) + 2;
     p.field_h = static_cast<int>(std::ceil((bb.y1 - p.field_y) / kGrid)) + 2;
     p.field_grid.resize(static_cast<std::size_t>(p.field_w) * p.field_h);
+    for (int j = 0; j < p.field_h; ++j)
+        for (int i = 0; i < p.field_w; ++i)
+            p.field_grid[static_cast<std::size_t>(j) * p.field_w + i] =
+                static_cast<float>(field(p, p.field_x + i * kGrid, p.field_y + j * kGrid));
+    // The fuel on the floor round each lobe, corner by corner as far as it
+    // runs on; the rest goes.
+    const auto solids = solids_around(world, static_cast<std::int32_t>(p.field_x), static_cast<std::int32_t>(p.field_y),
+                                      static_cast<std::int32_t>(p.field_x + p.field_w * kGrid),
+                                      static_cast<std::int32_t>(p.field_y + p.field_h * kGrid));
+    enum : std::uint8_t { kUnseen, kOpen, kShut };
+    std::vector<std::uint8_t> seen(p.field_grid.size(), kUnseen);
+    std::vector<int> queue;
+    // The first lobe's middle, where the pool started.
+    double fx = 0, fy = 0;
+    bool first = true;
+    const auto visit = [&](int i, int j) {
+        if (i < 0 || j < 0 || i >= p.field_w || j >= p.field_h) return false;
+        const std::size_t k = static_cast<std::size_t>(j) * p.field_w + i;
+        if (seen[k] == kUnseen) {
+            const double x = p.field_x + i * kGrid, y = p.field_y + j * kGrid;
+            const bool open = p.field_grid[k] >= 1 && on_floor(solids, x, y, p.z);
+            seen[k] = open ? kOpen : kShut;
+            if (open) queue.push_back(static_cast<int>(k));
+            return open;
+        }
+        return false;
+    };
+    // The same for a lobe's corner: not past a wall from the first lobe.
+    const auto seed = [&](int i, int j) {
+        if (!first && i >= 0 && j >= 0 && i < p.field_w && j < p.field_h &&
+            seen[static_cast<std::size_t>(j) * p.field_w + i] == kUnseen &&
+            walled_off(solids, fx, fy, p.field_x + i * kGrid, p.field_y + j * kGrid, p.z))
+            return false;
+        return visit(i, j);
+    };
+    for (const Lobe& l : p.lobes) {
+        if (l.r <= 0) continue;
+        if (first) {
+            fx = l.x;
+            fy = l.y;
+        }
+        // The corner nearest its middle with fuel on the floor (its middle
+        // may be under the remains of the barrel, or a drop's streak run
+        // into a wall).
+        const int ci = static_cast<int>(std::lround((l.x - p.field_x) / kGrid));
+        const int cj = static_cast<int>(std::lround((l.y - p.field_y) / kGrid));
+        const int reach = std::clamp(static_cast<int>(l.r / kGrid), 1, 8);
+        for (int ring = 0; ring <= reach; ++ring) {
+            bool found = false;
+            for (int j = cj - ring; j <= cj + ring; ++j)
+                for (int i = ci - ring; i <= ci + ring; ++i)
+                    if (std::max(std::abs(i - ci), std::abs(j - cj)) == ring) found = seed(i, j) || found;
+            if (found) break;
+        }
+        first = false;
+    }
+    if (!queue.empty()) {
+        for (std::size_t q = 0; q < queue.size(); ++q) {
+            const int i = queue[q] % p.field_w, j = queue[q] / p.field_w;
+            visit(i - 1, j);
+            visit(i + 1, j);
+            visit(i, j - 1);
+            visit(i, j + 1);
+        }
+        for (std::size_t k = 0; k < p.field_grid.size(); ++k)
+            if (seen[k] != kOpen && p.field_grid[k] >= 1) p.field_grid[k] = 0;
+    }
     // field_at reaches 1 only in the cells round a corner of 1 or more.
     int i0 = p.field_w, j0 = p.field_h, i1 = -1, j1 = -1;
     for (int j = 0; j < p.field_h; ++j) {
         for (int i = 0; i < p.field_w; ++i) {
-            const float s = static_cast<float>(field(p, p.field_x + i * kGrid, p.field_y + j * kGrid));
-            p.field_grid[static_cast<std::size_t>(j) * p.field_w + i] = s;
+            const float s = p.field_grid[static_cast<std::size_t>(j) * p.field_w + i];
             if (s < 1) continue;
             i0 = std::min(i0, i);
             j0 = std::min(j0, j);
@@ -970,7 +1062,7 @@ void BarrelLeaks::lay_trail(Barrel& b) {
 // The pools of the barrels blown up spread out, fast then slower, over the
 // fire laid when they caught: only what is drawn of them grows.
 // @orig none: port-only barrel leaks
-void BarrelLeaks::spread(const World&, std::uint32_t tick) {
+void BarrelLeaks::spread(const World& world, std::uint32_t tick) {
     for (std::size_t i = 0; i < spreads_.size();) {
         const Spread& s = spreads_[i];
         Pool* p = pool_of(s.pool);
@@ -986,7 +1078,7 @@ void BarrelLeaks::spread(const World&, std::uint32_t tick) {
         }
         p->lobes[s.lobe].r = s.to * (0.25 + 0.75 * (1 - (1 - u) * (1 - u)));
         follow_fingers(*p);
-        build_field(*p, tick);
+        build_field(world, *p, tick);
         if (u >= 1) spreads_.erase(spreads_.begin() + static_cast<std::ptrdiff_t>(i));
         else ++i;
     }
@@ -1032,7 +1124,7 @@ void BarrelLeaks::ignite(const World& world, Pool& p, double x, double y, std::u
     p.flames = lobes ? 1.0f - 0.55f * static_cast<float>(drops) / static_cast<float>(lobes) : 1.0f;
     // The fuel, cell by cell, where it lies on the floor; the patches that
     // hold some.
-    build_field(p, tick);
+    build_field(world, p, tick);
     const Bounds bb = wet_bounds(p);
     if (bb.x1 < bb.x0) {
         p.fuel.clear();
@@ -1047,19 +1139,49 @@ void BarrelLeaks::ignite(const World& world, Pool& p, double x, double y, std::u
     const auto solids = solids_around(world, static_cast<std::int32_t>(bb.x0), static_cast<std::int32_t>(bb.y0),
                                       static_cast<std::int32_t>(bb.x1), static_cast<std::int32_t>(bb.y1));
     p.patches.clear();
+    p.patch_boxes.clear();
     for (int pj = 0; pj < p.grid_h; pj += kPatch) {
         for (int pi = 0; pi < p.grid_w; pi += kPatch) {
-            bool any = false;
+            int i0 = pi + kPatch, j0 = pj + kPatch, i1 = pi - 1, j1 = pj - 1;
             for (int j = pj; j < std::min(pj + kPatch, p.grid_h); ++j) {
                 for (int i = pi; i < std::min(pi + kPatch, p.grid_w); ++i) {
                     const double cx = p.grid_x + (i + 0.5) * kGrid, cy = p.grid_y + (j + 0.5) * kGrid;
                     const double s = field_at(p, cx, cy);
                     if (s < 1 || !on_floor(solids, cx, cy, p.z)) continue;
                     p.fuel[static_cast<std::size_t>(j) * p.grid_w + i] = static_cast<float>(depth_of(s));
-                    any = true;
+                    i0 = std::min(i0, i);
+                    j0 = std::min(j0, j);
+                    i1 = std::max(i1, i);
+                    j1 = std::max(j1, j);
                 }
             }
-            if (any) p.patches.emplace_back(pi, pj);
+            if (i1 < i0) continue;
+            p.patches.emplace_back(pi, pj);
+            Pool::Box box{p.grid_x + i0 * kGrid, p.grid_y + j0 * kGrid, p.grid_x + (i1 + 1) * kGrid,
+                          p.grid_y + (j1 + 1) * kGrid};
+            // A cell whose middle is clear of a wall may still reach into
+            // it: the box draws back out of what stands on the floor across
+            // one of its sides, the side least in.
+            for (const Solid& o : solids) {
+                if (o.z_top <= p.z + kHeight || o.z > p.z + 16 || box.x1 <= o.x_left || box.x0 >= o.x ||
+                    box.y1 <= o.y_far || box.y0 >= o.y)
+                    continue;
+                double least = kPatch * kGrid;
+                int side = -1;
+                const double in[4] = {box.x1 - o.x_left, o.x - box.x0, box.y1 - o.y_far, o.y - box.y0};
+                const bool across[4] = {box.x0 < o.x_left, box.x1 > o.x, box.y0 < o.y_far, box.y1 > o.y};
+                for (int k = 0; k < 4; ++k) {
+                    if (across[k] && in[k] < least) {
+                        least = in[k];
+                        side = k;
+                    }
+                }
+                if (side == 0) box.x1 = o.x_left;
+                else if (side == 1) box.x0 = o.x;
+                else if (side == 2) box.y1 = o.y_far;
+                else if (side == 3) box.y0 = o.y;
+            }
+            p.patch_boxes.push_back(box);
         }
     }
     // Where the fire comes when, at the cells' corners: reached interpolates.
@@ -1179,7 +1301,7 @@ void BarrelLeaks::prepare(const World& world, const Palette& game_palette, const
         tone_ready_ = true;
     }
     for (Pool& p : pools_) {
-        if (p.field_grid.empty() || (p.field_dirty && now_ - p.field_tick >= 8)) build_field(p, now_);
+        if (p.field_grid.empty() || (p.field_dirty && now_ - p.field_tick >= 8)) build_field(world, p, now_);
     }
     // Each fire on a wall right after the item that shows its middle: the
     // last drawn there whose box is near the point hit (the wall hit may be
@@ -1213,16 +1335,15 @@ void BarrelLeaks::prepare(const World& world, const Palette& game_palette, const
                std::min(screen_x(bb.x1, bb.y0) - view_left_ + 1, width), std::min(screen_y(bb.x1, bb.y1, p.z) - view_top_ + 1, height)};
         if (r.left < r.right && r.top < r.bottom) mirror_areas_.push_back(r);
     }
-    // Each patch of fire right after the last item it must be drawn over (a
-    // box of its own in the game's draw order), before the items in front.
+    // Each patch of fire right after the last item it must be drawn over (the
+    // box of its fuel in the game's draw order), before the items in front.
     fire_after_.clear();
     fire_first_.clear();
     for (std::size_t pi = 0; pi < pools_.size(); ++pi) {
         const Pool& p = pools_[pi];
         if (!p.burning) continue;
         for (std::size_t k = 0; k < p.patches.size(); ++k) {
-            const double x0 = p.grid_x + p.patches[k].first * kGrid, y0 = p.grid_y + p.patches[k].second * kGrid;
-            const double x1 = x0 + kPatch * kGrid, y1 = y0 + kPatch * kGrid;
+            const auto [x0, y0, x1, y1] = p.patch_boxes[k];
             DrawItem d{};
             d.x = world_from_usecode(static_cast<std::int32_t>(x1));
             d.y = world_from_usecode(static_cast<std::int32_t>(y1));

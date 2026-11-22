@@ -177,6 +177,14 @@ public:
         // (grid_w + 1 by grid_h + 1), for reached.
         std::vector<float> arrive;
         std::vector<std::pair<int, int>> patches;  // first cells of the patches with fuel
+        // Each patch's place in the draw order: the box of its fuel cells,
+        // kept out of what stands on the floor round it (usecode units).
+        // The whole patch would poke into a wall the fire lies against,
+        // and come in front of it.
+        struct Box {
+            double x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+        };
+        std::vector<Box> patch_boxes;
         // field() at the corners of kGrid cells from (field_x, field_y), as
         // of game tick field_tick; dirty when its lobes changed since.
         double field_x = 0, field_y = 0;
@@ -333,7 +341,7 @@ private:
     double fire_from(const Pool& p, double x, double y, std::uint32_t tick, double come) const;
     bool opaque(const DrawItem& d, int sx, int sy) const;
     const std::vector<std::uint8_t>& mask_of(const ShapeFrame& f) const;
-    void build_field(Pool& p, std::uint32_t tick);
+    void build_field(const World& world, Pool& p, std::uint32_t tick);
     void draw_pool(Surface8& screen, const DrawItem& d, const Pool& p);
     void mark_floor(const Surface8& screen, const DrawItem& d);
     void draw_barrel(Surface8& screen, const DrawItem& d, const Barrel& b);

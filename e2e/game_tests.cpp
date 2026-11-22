@@ -4951,6 +4951,104 @@ void test_barrel_splash(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
 }
 
+// Port addition (barrel_leaks.hpp): barrel 5070 of SAVEGAME.3 (baril2)
+// blown up on the floor of its room just behind the room's east wall
+// (7939, 7940, shape 9, x 30703..30719, the side the camera sees drawn
+// black): its fire and the drops' burning behind the wall are hidden by it
+// (a patch of fire 32 units a side poked into the wall and came in front of
+// it, its flames up the black wall), and no fuel runs on past the wall (a
+// pool's field went under it, a drop splashing against it streaked through
+// it, and burnt on the far side). TRAIL_SHOTS=<folder>: a picture of the
+// worst frame, if any fire shows on the wall.
+void test_fire_behind_wall(const std::filesystem::path& data) {
+    constexpr ObjId kBarrel = 5070;
+    constexpr std::int32_t kWallX = 30703;  // the wall's x_left
+    Game game(data, test_saves(data));
+    game.config().barrel_leaks = true;
+    game.load_save(3);
+    World& w = game.world();
+    w.state.difficulty = 3;
+    const Item* barrel = w.get(kBarrel);
+    CHECK(barrel && barrel->shape == 0xAA);
+    if (!barrel) return;
+    const std::uint16_t shape = barrel->shape;
+    const auto is_wall = [&](ObjId id) { return id == 7939 || id == 7940; };
+    for (ObjId id : {7939, 7940}) {
+        const Item* wall = w.get(static_cast<ObjId>(id));
+        CHECK(wall && wall->shape == 9 && wall->x == kWallX + 16);
+        if (!wall) return;
+    }
+    // On the floor as near the wall as it is free (66 units off).
+    World::Point spot{};
+    bool found = false;
+    for (std::int32_t x = kWallX - 2; x >= kWallX - 96 && !found; x -= 2) {
+        for (std::int32_t y = 20000; y <= 20220 && !found; y += 4) {
+            const World::Point at{x, y, 96};
+            found = position_free(w, shape, at, nullptr, kBarrel) &&
+                    !position_free(w, shape, {at.x, at.y, at.z - 1}, nullptr, kBarrel);
+            if (found) spot = at;
+        }
+    }
+    CHECK(found);
+    if (!found) return;
+    w.move_item(kBarrel, spot.x, spot.y, spot.z);
+    Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+    const BarrelLeaks& leaks = game.barrel_leaks();
+    const auto frame = [&] {
+        game.update(kFrameUs);
+        game.render(screen);
+    };
+    for (int f = 0; f < 10; ++f) frame();
+    apply_damage(game.kernel(), w, game.animations(), kBarrel, 1, 0, 250, 4);
+    // The fire drawn over the wall, once the drops have landed (those in
+    // flight are drawn over everything) while the pools burn.
+    int over = 0, burning = 0, frames = 0, worst = 0;
+    const char* shots = std::getenv("TRAIL_SHOTS");
+    const std::uint32_t until = game.kernel().ticks() + 240;
+    for (int f = 0; f < 4000 && game.kernel().ticks() < until; ++f) {
+        frame();
+        if (!leaks.drops().empty()) continue;
+        const GameState& gs = w.state;
+        const auto list = build_display_list(w, game.shapes(), View{gs.view_left, gs.view_top}, screen.width,
+                                             screen.height);
+        int here = 0;
+        std::vector<std::uint8_t> seen(static_cast<std::size_t>(screen.width) * screen.height, 0);
+        for (const auto& [index, colour] : leaks.glowing()) {
+            if (seen[index]) continue;  // drawn over by more fire
+            seen[index] = 1;
+            const int x = static_cast<int>(index % static_cast<std::uint32_t>(screen.width));
+            const int y = static_cast<int>(index / static_cast<std::uint32_t>(screen.width));
+            if (screen.row(y)[x] != colour) continue;  // drawn over by what stands in front
+            const auto hits = pick(list, x, y);
+            if (!hits.empty() && is_wall(list[hits.back()].item->id)) ++here;
+        }
+        ++frames;
+        over += here;
+        if (here > worst) {
+            worst = here;
+            if (shots) write_png(std::filesystem::path(shots) / "fire-behind-wall.png", screen, game.palette());
+        }
+        for (const BarrelLeaks::Pool& p : leaks.pools()) burning += p.burning;
+    }
+    // Every pool's fuel behind the wall: none on its other side.
+    int pools = 0, behind = 0;
+    for (const BarrelLeaks::Pool& p : leaks.pools()) {
+        ++pools;
+        bool all = true;
+        for (int j = 0; j < p.grid_h; ++j)
+            for (int i = 0; i < p.grid_w; ++i)
+                if (p.fuel[static_cast<std::size_t>(j) * p.grid_w + i] >= 0)
+                    all = all && p.grid_x + (i + 0.5) * BarrelLeaks::kGrid < kWallX;
+        behind += all;
+    }
+    std::printf("fire behind wall: barrel at (%d, %d, %d), %d pools (%d behind the wall), %d frames, %d fire pixels "
+                "over the wall (%d at most in a frame)\n",
+                spot.x, spot.y, spot.z, pools, behind, frames, over, worst);
+    CHECK(pools > 0 && behind == pools && frames > 100 && burning > 0);
+    CHECK(over == 0);
+    CHECK(game.machine().faults().empty() && game.machine().unbound_intrinsic_calls().empty());
+}
+
 // Leaking barrels: barrel 5070 of SAVEGAME.3, pierced twice, then thrown
 // along the floor (as a blast throws it, Item::I_hurl, gravity 2) lays a
 // trail of fuel in its pool from where it stood to where it stops; it blows
@@ -7446,6 +7544,10 @@ int main(int argc, char** argv) {
         test_barrel_splash(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--fire-behind-wall") {
+        test_fire_behind_wall(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--barrel-trail") {
         test_barrel_trail(data);
         return failures ? 1 : 0;
@@ -7458,6 +7560,7 @@ int main(int argc, char** argv) {
         test_barrels(data);
         test_barrel_leaks(data);
         test_barrel_splash(data);
+        test_fire_behind_wall(data);
         test_barrel_cook_off(data);
         test_barrel_trail(data);
         test_rolling_barrel_trail(data);
@@ -7654,6 +7757,7 @@ int main(int argc, char** argv) {
     test_barrels(data);
     test_barrel_leaks(data);
     test_barrel_splash(data);
+    test_fire_behind_wall(data);
     test_barrel_cook_off(data);
     test_barrel_trail(data);
     test_rolling_barrel_trail(data);
