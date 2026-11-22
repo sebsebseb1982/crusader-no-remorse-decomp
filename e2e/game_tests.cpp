@@ -3972,6 +3972,39 @@ void test_weapon_out_movement(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
+// The save of the bug "left stick up, right stick down": the player aims
+// (action 4, in combat) with the stance bit 0x02 clear, which only an NPC's
+// AttackProcess sets. Game::weapon_out() read that bit, so the controller
+// sent the keypad's Up (walk north) instead of the strafe while the stick
+// aimed south: he turned north and back every few frames without moving.
+// The weapon is out, and the backward strafe (Alt + Down) moves him north
+// facing the aim.
+void test_weapon_out_with_stance_bit_clear(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "pad-recul-en-visant-vers-le-bas.sav");
+    for (int i = 0; i < 10; ++i) game.update(kFrameUs);
+    World& w = game.world();
+    CHECK(!weapon_drawn(w, 1) && in_combat(w, 1));
+    CHECK(game.weapon_out());
+    const std::int32_t y0 = w.get(1)->y;
+    game.key(kScAlt, false, true, 0);
+    game.key(0x50, true, true, kLeftAlt | kAlt);
+    int turned = 0;
+    for (int i = 0; i < 60; ++i) {
+        game.set_aim_stick(true, -90);
+        game.update(kFrameUs);
+        turned += (w.npc_direction(1) & 0xF) != 6;
+    }
+    game.key(0x50, true, false, kLeftAlt | kAlt);
+    game.key(kScAlt, false, false, 0);
+    std::printf("backward while aiming south: last action 0x%X, moved y %d, frames turned away %d\n", last_action(game),
+                w.get(1)->y - y0, turned);
+    CHECK(last_action(game) == 2 || last_action(game) == 0x2D);
+    CHECK(w.get(1)->y < y0 - 32);
+    CHECK(turned == 0);
+    CHECK(game.machine().faults().empty());
+}
+
 // ActorAnim_init (1158:016F): the controlled NPC is in combat while it plays
 // a combat action, which shows its weapon (WPNOVLAY.DAT).
 void test_player_combat_flag(const std::filesystem::path& data) {
@@ -7493,6 +7526,11 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (!have_test_saves(data)) return 1;
+    if (argc > 2 && std::string(argv[2]) == "--weapon-out") {
+        test_weapon_out_movement(data);
+        test_weapon_out_with_stance_bit_clear(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--player-turret") {
         test_player_turret(data);
         return failures ? 1 : 0;
@@ -7791,6 +7829,7 @@ int main(int argc, char** argv) {
     test_player_combat_flag(data);
     test_run_stop_stays_armed(data);
     test_weapon_out_movement(data);
+    test_weapon_out_with_stance_bit_clear(data);
     test_leave_surface(data);
     test_enemies(data);
     test_new_game(data);

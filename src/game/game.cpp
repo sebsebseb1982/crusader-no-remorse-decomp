@@ -557,10 +557,14 @@ void Game::key(std::uint8_t scancode, bool extended, bool pressed, std::uint16_t
     keyboard_.key(scancode, extended, pressed, flags, ascii, kernel_->ticks());
 }
 
+// The controlled NPC's weapon shows while it is in combat (the flag ActorAnim
+// keeps from its last action). The stance bit weapon_drawn reads is only the
+// AttackProcess's, an NPC's: the player's keeps whatever the save holds, so a
+// player aiming with it clear sent keypad moves against the stick's aim.
 bool Game::weapon_out() const {
     if (!mouse_in_play() || !world_) return false;
     const ObjId npc = world_->state.controlled_npc;
-    return npc != 0 && weapon_drawn(*world_, npc);
+    return npc != 0 && in_combat(*world_, npc);
 }
 
 // @orig none: the slot's file in the save directory
