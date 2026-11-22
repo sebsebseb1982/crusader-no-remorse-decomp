@@ -30,6 +30,10 @@ constexpr ImU32 kColLinked = IM_COL32(0, 230, 255, 220);
 constexpr ImU32 kColZone = IM_COL32(255, 80, 200, 200);
 constexpr ImU32 kColTeleport = IM_COL32(120, 255, 120, 230);
 constexpr ImU32 kColGhost = IM_COL32(255, 255, 255, 150);
+constexpr ImU32 kColHover = IM_COL32(255, 255, 255, 110);
+constexpr ImVec4 kTextError(1.0f, 0.4f, 0.4f, 1.0f);
+constexpr ImVec4 kTextWarning(1.0f, 0.75f, 0.3f, 1.0f);
+constexpr ImVec4 kTextNote(0.6f, 0.8f, 1.0f, 1.0f);
 
 ImTextureID tex_id(SDL_Texture* t) { return static_cast<ImTextureID>(reinterpret_cast<std::intptr_t>(t)); }
 
@@ -117,6 +121,7 @@ void EditorApp::load_resources() {
     usecode_ = std::make_unique<UsecodeFile>(
         UsecodeFile::from_flex(FlexArchive::open(project_->file("USECODE/EUSECODE.FLX"))));
     npc_types_ = dtable::NpcTypes::load(project_->file("STATIC/DTABLE.FLX"));
+    busiest_records_ = busiest_map_records(FlexEntries::read((options_.data / "STATIC/FIXED.DAT").string()).entries);
 }
 
 void EditorApp::open_map(int map) {
@@ -128,6 +133,8 @@ void EditorApp::open_map(int map) {
     redo_.clear();
     selection_.clear();
     primary_ = 0;
+    pair_departure_ = link_source_ = hovered_ = 0;
+    if (brush_.kind == BrushKind::TeleportPair) brush_ = {};
     world_dirty_ = true;
     center_on_default();
 }
@@ -136,6 +143,7 @@ void EditorApp::commit_map() {
     if (!level_dirty_ || !project_) return;
     project_->store_map(static_cast<std::size_t>(map_), level_);
     level_dirty_ = false;
+    maps_changed();
 }
 
 void EditorApp::save() {
@@ -154,6 +162,7 @@ void EditorApp::save() {
                 if (!project_->glob_bytes(g).empty()) moved.store_glob(g, project_->glob(g));
             }
             *project_ = std::move(moved);
+            maps_changed();
         }
         commit_map();
         project_->save();
@@ -174,8 +183,10 @@ void EditorApp::test_in_game() {
         if (family_of(i.shape) == kFamTeleportEgg && i.frame == 1 && i.quality_low() == egg) found = true;
     }
     if (!found) {
-        message(tr("Pas d'œuf d'arrivée 0x1E sur la carte : placez-en un (onglet Œufs) ou sélectionnez-en un.",
-                   "No arrival egg 0x1E on the map: place one (Eggs tab) or select one."));
+        message(tr("Pas de départ de mission sur la carte : onglet Œufs > Départ de mission, puis cliquez dans la vue "
+                   "(ou sélectionnez un œuf d'arrivée).",
+                   "No mission start on the map: Eggs tab > Mission start, then click in the view (or select an "
+                   "arrival egg)."));
         return;
     }
     save();
@@ -283,6 +294,7 @@ void EditorApp::new_empty_map() {
     start.quality = kStartEgg;
     level.items.push_back(start);
     project_->store_map(slot, level);
+    maps_changed();
     open_map(static_cast<int>(slot));
     message(std::string(tr("Nouvelle carte ", "New map ")) + std::to_string(slot) +
             tr(" : sol de la mission 1 (glob ", ": floor of mission 1 (glob ") + std::to_string(floor) +
@@ -297,6 +309,7 @@ void EditorApp::copy_map_to_free_slot() {
         return;
     }
     project_->store_map(slot, level_);
+    maps_changed();
     const int from = map_;
     open_map(static_cast<int>(slot));
     message(std::string(tr("Carte ", "Map ")) + std::to_string(from) + tr(" copiée vers la carte ", " copied to map ") +
@@ -351,8 +364,47 @@ std::uint8_t EditorApp::family_of(std::uint16_t shape) const {
 bool EditorApp::links_by_quality(const LevelItem& item) const {
     // Eggs use their quality otherwise (glob number, trigger type, teleport
     // id, NPC template).
-    const std::uint8_t fam = family_of(item.shape);
-    return fam != kFamGlobEgg && fam != kFamTriggerEgg && fam != kFamTeleportEgg && fam != kFamMonsterEgg;
+    return editor::links_by_quality(family_of(item.shape));
+}
+
+LevelInfo EditorApp::level_info() const {
+    LevelInfo info;
+    info.family = [this](std::uint16_t shape) { return family_of(shape); };
+    info.has_class = [this](std::uint16_t cid) { return usecode_ && usecode_->has_class(cid); };
+    return info;
+}
+
+std::map<std::uint8_t, int> EditorApp::arrivals_of(int map) {
+    if (map == map_) return arrival_ids(level_, level_info());
+    auto it = arrivals_cache_.find(map);
+    if (it == arrivals_cache_.end()) {
+        const bool used = map > 0 && project_->map_used(static_cast<std::size_t>(map));
+        it = arrivals_cache_
+                 .emplace(map, used ? arrival_ids(project_->load_map(static_cast<std::size_t>(map)), level_info())
+                                    : std::map<std::uint8_t, int>{})
+                 .first;
+    }
+    return it->second;
+}
+
+void EditorApp::run_checks() {
+    CheckContext context;
+    context.info = level_info();
+    context.map = map_;
+    context.glob_pieces = [this](std::uint16_t glob) { return glob_cached(glob).pieces.size(); };
+    context.map_exists = [this](int map) {
+        return map == map_ || (map > 0 && project_->map_used(static_cast<std::size_t>(map)));
+    };
+    context.arrivals_on = [this](int map) { return arrivals_of(map); };
+    context.busiest_records = busiest_records_;
+    problems_ = check_level(level_, context);
+}
+
+const LevelItem* EditorApp::find_start_egg() const {
+    for (const LevelItem& i : level_.items) {
+        if (is_arrival(i, family_of(i.shape)) && i.quality_low() == kStartEgg) return &i;
+    }
+    return nullptr;
 }
 
 std::string EditorApp::class_name(std::uint16_t cid) const {
@@ -537,6 +589,7 @@ void EditorApp::rebuild_world() {
     }
     world_items_ = world_->item_count();
     view_dirty_ = true;
+    run_checks();
 }
 
 void EditorApp::render_view_if_needed() {
@@ -684,7 +737,7 @@ void EditorApp::draw_overlays() {
         if (i.z > z_cut_) continue;
         const std::uint8_t fam = family_of(i.shape);
         if (show_zones_ && hatches(fam, i)) draw_zone(i, kColZone);
-        if (show_zones_ && fam == kFamTeleportEgg && i.frame == 0 && (i.map_number == map_ || i.map_number == 0)) {
+        if (show_zones_ && is_departure(i, fam) && i.map_number == map_) {
             auto it = arrivals.find(i.quality_low());
             if (it != arrivals.end()) {
                 const ScreenPoint a = to_screen(i.x, i.y, i.z);
@@ -692,19 +745,34 @@ void EditorApp::draw_overlays() {
                 dl->AddLine(ImVec2(a.x, a.y), ImVec2(b.x, b.y), kColTeleport, 2.0f);
                 dl->AddCircleFilled(ImVec2(b.x, b.y), 5.0f, kColTeleport);
             }
+        } else if (show_zones_ && is_departure(i, fam)) {
+            // To another map: where it leads, written by the egg.
+            const ScreenPoint a = to_screen(i.x, i.y, i.z);
+            const std::string label = std::string("→ ") + tr("carte ", "map ") + std::to_string(i.map_number) + " / " +
+                                      hex(i.quality_low(), 2);
+            dl->AddText(ImVec2(a.x + 8, a.y - 8), kColTeleport, label.c_str());
         }
     }
     // Items linked to the selected one by their quality low byte (TRIGGER,
     // switches, valves, chests and their markers...).
-    if (show_links_ && primary && primary->quality_low() != 0 && links_by_quality(*primary)) {
-        const std::uint8_t q = primary->quality_low();
+    // In link mode, the source's links are always shown, with a line to each.
+    const LevelItem* source = link_source_ ? level_.find(link_source_) : primary;
+    if ((show_links_ || link_source_) && source && source->quality_low() != 0 && links_by_quality(*source)) {
+        const std::uint8_t q = source->quality_low();
+        const ScreenPoint from = to_screen(source->x, source->y, source->z);
         for (const LevelItem& i : level_.items) {
-            if (i.uid == primary->uid || i.quality_low() != q) continue;
+            if (i.uid == source->uid || i.quality_low() != q) continue;
             const std::uint8_t fam = family_of(i.shape);
             if (fam == kFamGlobEgg || fam == kFamTeleportEgg) continue;
-            if (!usecode_->has_class(usecode_class_of(i, fam)) && i.shape != kShapeMarker) continue;
+            if (!usecode_->has_class(usecode_class_of(i, fam)) && i.shape != kShapeMarker && !link_source_) continue;
             draw_box(i, kColLinked, 1.5f);
+            const ScreenPoint to = to_screen(i.x, i.y, i.z);
+            dl->AddLine(ImVec2(from.x, from.y), ImVec2(to.x, to.y), (kColLinked & 0x00FFFFFF) | 0x90000000, 1.0f);
         }
+        if (link_source_) draw_box(*source, kColPrimary, 2.5f);
+    }
+    if (hovered_ && !selection_.count(hovered_)) {
+        if (const LevelItem* h = level_.find(hovered_)) draw_box(*h, kColHover, 1.0f);
     }
     for (std::uint32_t uid : selection_) {
         if (const LevelItem* i = level_.find(uid)) {
@@ -743,6 +811,13 @@ void EditorApp::draw_overlays() {
             if (brush_.kind == BrushKind::TeleportArrival) shape = kShapeTeleportEgg, frame = 1;
             if (brush_.kind == BrushKind::TeleportDeparture) shape = kShapeTeleportEgg, frame = 0;
             if (brush_.kind == BrushKind::MonsterEgg) shape = kShapeMonsterEgg, frame = 0;
+            if (brush_.kind == BrushKind::MissionStart) shape = kShapeTeleportEgg, frame = 1;
+            const LevelItem* pending = level_.find(pair_departure_);
+            if (brush_.kind == BrushKind::TeleportPair) shape = kShapeTeleportEgg, frame = pending ? 1 : 0;
+            if (brush_.kind == BrushKind::TeleportPair && pending) {
+                const ScreenPoint a = to_screen(pending->x, pending->y, pending->z), b = to_screen(wx, wy, work_z_);
+                dl->AddLine(ImVec2(a.x, a.y), ImVec2(b.x, b.y), kColTeleport, 2.0f);
+            }
             int w, h, xo, yo;
             if (SDL_Texture* t = frame_texture(shape, frame, &w, &h, &xo, &yo)) {
                 const ScreenPoint p = to_screen(wx, wy, work_z_);
@@ -757,6 +832,31 @@ void EditorApp::draw_overlays() {
             ghost.z = work_z_;
             draw_box(ghost, kColGhost, 1.0f);
         }
+    }
+    // What the current tool expects, at the top of the view.
+    std::string banner;
+    if (link_source_) {
+        banner = tr("Mode liaison : cliquez les objets à lier à l'objet encadré en blanc (même qualité basse) ; un "
+                    "objet déjà lié se délie. Échap ou clic droit : terminer.",
+                    "Link mode: click the items to link to the item framed in white (same quality low); clicking a "
+                    "linked item unlinks it. Esc or right click: done.");
+    } else if (brush_.kind == BrushKind::TeleportPair) {
+        banner = level_.find(pair_departure_)
+                     ? tr("Paire de téléporteurs : cliquez maintenant où le joueur arrive.",
+                          "Teleporter pair: now click where the player arrives.")
+                     : tr("Paire de téléporteurs : cliquez où le joueur part (zone de déclenchement).",
+                          "Teleporter pair: click where the player leaves (trigger area).");
+    } else if (brush_.kind == BrushKind::MissionStart) {
+        banner = tr("Départ de mission : cliquez où le joueur commence la mission.",
+                    "Mission start: click where the player starts the mission.");
+    }
+    if (!banner.empty()) {
+        const float wrap = std::max(200.0f, view_w_ - 32.0f);
+        const ImVec2 size = ImGui::CalcTextSize(banner.c_str(), nullptr, false, wrap);
+        const ImVec2 at(view_x_ + 12, view_y_ + 12);
+        dl->AddRectFilled(ImVec2(at.x - 6, at.y - 4), ImVec2(at.x + size.x + 6, at.y + size.y + 4),
+                          IM_COL32(0, 0, 0, 200), 4.0f);
+        dl->AddText(nullptr, 0.0f, at, IM_COL32(255, 230, 120, 255), banner.c_str(), nullptr, wrap);
     }
     dl->PopClipRect();
 }
@@ -813,6 +913,7 @@ void EditorApp::handle_view_input() {
             if (ImGui::IsMouseReleased(ImGuiMouseButton_Right) && std::abs(m.x - press_x_) < 3 &&
                 std::abs(m.y - press_y_) < 3) {
                 brush_ = {};
+                pair_departure_ = link_source_ = 0;
             }
             panning_ = false;
         }
@@ -822,7 +923,17 @@ void EditorApp::handle_view_input() {
     if (in_view && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         press_x_ = m.x;
         press_y_ = m.y;
-        if (brush_.kind != BrushKind::None) {
+        if (link_source_) {
+            // The first item under the pointer that links by its quality
+            // (a floor's glob egg does not).
+            for (std::uint32_t uid : pick_at(m.x, m.y)) {
+                const LevelItem* i = level_.find(uid);
+                if (i && links_by_quality(*i)) {
+                    toggle_link(uid);
+                    break;
+                }
+            }
+        } else if (brush_.kind != BrushKind::None) {
             auto [wx, wy] = to_world(m.x, m.y, work_z_);
             place_brush(snap(wx), snap(wy));
         } else {
@@ -940,8 +1051,16 @@ void EditorApp::handle_view_input() {
             if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) work_z_ = std::max(0, work_z_ - 8);
         }
         if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-            if (brush_.kind != BrushKind::None) {
+            if (link_source_) {
+                link_source_ = 0;
+                message(tr("Mode liaison terminé.", "Link mode finished."));
+            } else if (brush_.kind != BrushKind::None) {
+                if (level_.find(pair_departure_)) {
+                    message(tr("Le départ reste sans arrivée : la vérification du niveau le signale.",
+                               "The departure stays without an arrival: the level check reports it."));
+                }
                 brush_ = {};
+                pair_departure_ = 0;
             } else {
                 selection_.clear();
                 primary_ = 0;
@@ -950,7 +1069,43 @@ void EditorApp::handle_view_input() {
         if (ImGui::IsKeyPressed(ImGuiKey_F) || ImGui::IsKeyPressed(ImGuiKey_Home)) {
             if (const LevelItem* p = level_.find(primary_)) center_on(p->x, p->y, p->z);
         }
+        if (ImGui::IsKeyPressed(ImGuiKey_L, false) && !io.KeyCtrl && primary_) start_link_mode(primary_);
     }
+
+    // The item under the pointer, for its tooltip.
+    std::uint32_t hover = 0;
+    if (in_view && !dragging_ && !panning_ && !box_selecting_ && brush_.kind == BrushKind::None) {
+        const std::vector<std::uint32_t> hits = pick_at(m.x, m.y);
+        if (!hits.empty()) hover = hits.front();
+    }
+    if (hover != hovered_) {
+        hovered_ = hover;
+        hover_since_ = ImGui::GetTime();
+    }
+}
+
+void EditorApp::hover_tooltip() {
+    if (!hovered_ || ImGui::GetTime() - hover_since_ < 0.35) return;
+    const LevelItem* i = level_.find(hovered_);
+    if (!i) return;
+    const std::uint8_t fam = family_of(i->shape);
+    ImGui::BeginTooltip();
+    ImGui::TextUnformatted(describe(*i, fam, class_name(usecode_class_of(*i, fam))).c_str());
+    ImGui::TextDisabled("%s %s  (%d, %d, %d)", hex(i->shape, 3).c_str(), family_name(fam), i->x, i->y, i->z);
+    if (is_departure(*i, fam)) {
+        ImGui::Text("→ %s %u, %s %s", tr("carte", "map"), i->map_number, tr("œuf", "egg"), hex(i->quality_low(), 2).c_str());
+    } else if (links_by_quality(*i) && i->quality_low() != 0) {
+        ImGui::TextDisabled("%s %s", tr("qualité basse", "quality low"), hex(i->quality_low(), 2).c_str());
+    }
+    if (link_source_) {
+        const LevelItem* s = level_.find(link_source_);
+        const bool linked = s && s->quality_low() != 0 && s->quality_low() == i->quality_low();
+        ImGui::TextColored(kTextNote, "%s",
+                           !links_by_quality(*i) ? tr("Ne peut pas être lié.", "Cannot be linked.")
+                           : linked              ? tr("Clic : délier.", "Click: unlink.")
+                                                 : tr("Clic : lier.", "Click: link."));
+    }
+    ImGui::EndTooltip();
 }
 
 // ---------------------------------------------------------------------------
@@ -962,6 +1117,65 @@ void EditorApp::place_brush(std::int32_t x, std::int32_t y) {
     item.x = std::clamp(x, 0, 0xFFFF);
     item.y = std::clamp(y, 0, 0xFFFF);
     item.z = work_z_;
+    if (brush_.kind == BrushKind::MissionStart) {
+        // One mission start per map: an existing one moves.
+        push_undo();
+        LevelItem* start = nullptr;
+        for (LevelItem& i : level_.items) {
+            if (is_arrival(i, family_of(i.shape)) && i.quality_low() == kStartEgg) {
+                start = &i;
+                break;
+            }
+        }
+        if (start) {
+            start->x = item.x;
+            start->y = item.y;
+            start->z = item.z;
+            select_only(start->uid);
+            message(tr("Départ de mission déplacé.", "Mission start moved."));
+        } else {
+            item.shape = kShapeTeleportEgg;
+            item.frame = 1;
+            item.quality = kStartEgg;
+            level_.items.push_back(item);
+            select_only(item.uid);
+            message(tr("Départ de mission posé : F5 et les nouvelles parties sur cette carte commencent ici.",
+                       "Mission start placed: F5 and new games on this map start here."));
+        }
+        brush_ = {};
+        level_dirty_ = world_dirty_ = true;
+        return;
+    }
+    if (brush_.kind == BrushKind::TeleportPair) {
+        // First click: the departure, with a free id; second: its arrival.
+        item.shape = kShapeTeleportEgg;
+        if (const LevelItem* departure = level_.find(pair_departure_)) {
+            item.frame = 1;
+            item.quality = departure->quality_low();
+            pair_departure_ = 0;
+            brush_ = {};
+            message(std::string(tr("Téléporteur relié : départ et arrivée ", "Teleporter linked: departure and arrival ")) +
+                    hex(item.quality, 2) + ".");
+        } else {
+            const std::uint8_t id = free_arrival_id(level_, level_info());
+            if (id == 0) {
+                message(tr("Plus d'id d'arrivée libre sur cette carte.", "No free arrival id left on this map."));
+                return;
+            }
+            item.frame = 0;
+            item.quality = id;
+            item.map_number = static_cast<std::uint8_t>(map_);
+            set_hatch_zone(item, 2, 2);
+            pair_departure_ = item.uid;
+            message(tr("Départ posé : cliquez maintenant où le joueur arrive (Échap : arrêter).",
+                       "Departure placed: now click where the player arrives (Esc: stop)."));
+        }
+        push_undo();
+        level_.items.push_back(item);
+        select_only(item.uid);
+        level_dirty_ = world_dirty_ = true;
+        return;
+    }
     switch (brush_.kind) {
         case BrushKind::Shape:
             item.shape = brush_.shape;
@@ -994,6 +1208,8 @@ void EditorApp::place_brush(std::int32_t x, std::int32_t y) {
             item = make_monster_egg(item.x, item.y, item.z, brush_.value);
             break;
         case BrushKind::None:
+        case BrushKind::MissionStart:
+        case BrushKind::TeleportPair:
             return;
     }
     push_undo();
@@ -1069,6 +1285,121 @@ void EditorApp::select_same_quality_low(std::uint8_t q) {
         if (!usecode_->has_class(usecode_class_of(i, fam)) && i.shape != kShapeMarker) continue;
         selection_.insert(i.uid);
     }
+}
+
+void EditorApp::start_link_mode(std::uint32_t source) {
+    const LevelItem* s = level_.find(source);
+    if (!s) return;
+    if (!links_by_quality(*s)) {
+        message(tr("Cet œuf utilise sa qualité pour autre chose : il ne se lie pas.",
+                   "This egg uses its quality for something else: it does not link."));
+        return;
+    }
+    brush_ = {};
+    pair_departure_ = 0;
+    link_source_ = source;
+    message(tr("Mode liaison : cliquez les objets à lier, Échap pour terminer.",
+               "Link mode: click the items to link, Esc when done."));
+}
+
+void EditorApp::toggle_link(std::uint32_t target) {
+    if (target == link_source_ || !level_.find(link_source_) || !level_.find(target)) return;
+    push_undo();
+    LevelItem* source = level_.find(link_source_);
+    LevelItem* t = level_.find(target);
+    if (source->quality_low() == 0) {
+        const std::uint8_t q = free_link_quality(level_, level_info());
+        if (q == 0) {
+            undo_.pop_back();
+            message(tr("Plus de qualité basse libre sur cette carte.", "No free quality low left on this map."));
+            return;
+        }
+        source->quality = static_cast<std::uint16_t>((source->quality & 0xFF00) | q);
+    }
+    const std::uint8_t q = source->quality_low();
+    const std::uint8_t fam = family_of(t->shape);
+    if (t->quality_low() == q) {
+        t->quality &= 0xFF00;
+        message(tr("Délié.", "Unlinked."));
+    } else {
+        t->quality = static_cast<std::uint16_t>((t->quality & 0xFF00) | q);
+        const bool scripted = usecode_->has_class(usecode_class_of(*t, fam)) || t->shape == kShapeMarker;
+        message(std::string(tr("Lié par la qualité basse ", "Linked by quality low ")) + hex(q, 2) +
+                (scripted ? "." : tr(" (cet objet n'a pas de script : le lien ne fera rien).",
+                                     " (this item has no script: the link does nothing).")));
+    }
+    level_dirty_ = world_dirty_ = true;
+}
+
+void EditorApp::copy_selection(bool cut) {
+    clipboard_.clear();
+    for (const LevelItem& i : level_.items) {
+        if (selection_.count(i.uid)) clipboard_.push_back(i);
+    }
+    if (clipboard_.empty()) return;
+    const LevelItem* anchor = level_.find(primary_);
+    if (!anchor || !level_.top_index(primary_)) anchor = &clipboard_.front();
+    clipboard_anchor_ = {anchor->x, anchor->y, anchor->z};
+    clipboard_map_ = map_;
+    const std::size_t n = clipboard_.size();
+    if (cut) delete_selection();
+    message(std::to_string(n) + (cut ? tr(" objet(s) coupé(s).", " item(s) cut.") : tr(" objet(s) copié(s).", " item(s) copied.")));
+}
+
+void EditorApp::paste() {
+    if (clipboard_.empty()) return;
+    std::vector<LevelItem> items = clipboard_;
+    // At the pointer when it is over the view, else beside the copy (at the
+    // same place on another map).
+    std::int32_t dx = clipboard_map_ == map_ ? std::max(grid_, 16) : 0, dy = dx;
+    const ImGuiIO& io = ImGui::GetIO();
+    const ImVec2 m = io.MousePos;
+    if (m.x >= view_x_ && m.y >= view_y_ && m.x < view_x_ + view_w_ && m.y < view_y_ + view_h_ && !io.WantCaptureMouse) {
+        const auto [wx, wy] = to_world(m.x, m.y, clipboard_anchor_.z);
+        dx = snap(wx) - clipboard_anchor_.x;
+        dy = snap(wy) - clipboard_anchor_.y;
+    }
+    // Glob eggs fill whole cells: the group moves by whole cells.
+    const bool globs = std::any_of(items.begin(), items.end(),
+                                   [&](const LevelItem& i) { return family_of(i.shape) == kFamGlobEgg; });
+    if (globs) {
+        dx = static_cast<std::int32_t>(std::lround(dx / static_cast<double>(kChunk))) * kChunk;
+        dy = static_cast<std::int32_t>(std::lround(dy / static_cast<double>(kChunk))) * kChunk;
+    }
+    for (LevelItem& i : items) {
+        assign_uids(i);
+        i.x = std::clamp(i.x + dx, 0, 0xFFFF);
+        i.y = std::clamp(i.y + dy, 0, 0xFFFF);
+    }
+    const int renumbered = paste_relinks_ ? relink_pasted(items, level_, level_info(), clipboard_map_, map_) : 0;
+    push_undo();
+    selection_.clear();
+    for (LevelItem& i : items) {
+        selection_.insert(i.uid);
+        primary_ = i.uid;
+        level_.items.push_back(std::move(i));
+    }
+    level_dirty_ = world_dirty_ = true;
+    std::string text = std::to_string(clipboard_.size()) + tr(" objet(s) collé(s)", " item(s) pasted");
+    if (renumbered) {
+        text += std::string(tr(", liens et ids renumérotés : ", ", links and ids renumbered: ")) + std::to_string(renumbered);
+    }
+    message(text + ".");
+}
+
+void EditorApp::go_to_arrival(int map, std::uint8_t id) {
+    if (map != map_) {
+        if (map <= 0 || !project_->map_used(static_cast<std::size_t>(map))) return;
+        open_map(map);
+    }
+    for (const LevelItem& i : level_.items) {
+        if (is_arrival(i, family_of(i.shape)) && i.quality_low() == id) {
+            select_only(i.uid);
+            center_on(i.x, i.y, i.z);
+            return;
+        }
+    }
+    message(tr("Aucune arrivée de cet id sur cette carte.", "No arrival of this id on this map."));
 }
 
 void EditorApp::glob_from_selection() {
@@ -1168,6 +1499,9 @@ void EditorApp::frame() {
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) io.KeyShift ? redo() : undo();
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) redo();
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false)) duplicate_selection();
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C, false)) copy_selection(false);
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_X, false)) copy_selection(true);
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V, false)) paste();
     }
 
     main_menu();
@@ -1182,9 +1516,14 @@ void EditorApp::frame() {
     right_panel();
     status_bar();
     if (glob_window_open_) glob_window();
+    problems_window();
     modal_popups();
+    // Picking a brush ends the link mode; a pair waits only with its brush.
+    if (brush_.kind != BrushKind::None) link_source_ = 0;
+    if (brush_.kind != BrushKind::TeleportPair) pair_departure_ = 0;
 
     handle_view_input();
+    hover_tooltip();
     render_view_if_needed();
     if (view_texture_) {
         ImGui::GetBackgroundDrawList()->AddImage(
@@ -1209,6 +1548,20 @@ void EditorApp::main_menu() {
         if (ImGui::MenuItem(tr("Annuler", "Undo"), "Ctrl+Z", false, !undo_.empty())) undo();
         if (ImGui::MenuItem(tr("Rétablir", "Redo"), "Ctrl+Y", false, !redo_.empty())) redo();
         ImGui::Separator();
+        if (ImGui::MenuItem(tr("Couper", "Cut"), "Ctrl+X", false, !selection_.empty())) copy_selection(true);
+        if (ImGui::MenuItem(tr("Copier", "Copy"), "Ctrl+C", false, !selection_.empty())) copy_selection(false);
+        if (ImGui::MenuItem(tr("Coller", "Paste"), "Ctrl+V", false, !clipboard_.empty())) paste();
+        ImGui::MenuItem(tr("Coller : renuméroter liens et téléporteurs", "Paste: renumber links and teleports"), nullptr,
+                        &paste_relinks_);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", tr("Les objets collés qui se lient entre eux (interrupteur et portes, téléporteurs) "
+                                       "reçoivent des numéros libres de cette carte : ils restent liés entre eux, sans "
+                                       "toucher aux liens déjà là.",
+                                       "Pasted items that link to each other (switch and doors, teleporters) get "
+                                       "numbers this map does not use: they stay linked together, apart from the "
+                                       "links already there."));
+        }
+        ImGui::Separator();
         if (ImGui::MenuItem(tr("Dupliquer", "Duplicate"), "Ctrl+D", false, !selection_.empty())) duplicate_selection();
         if (ImGui::MenuItem(tr("Supprimer", "Delete"), "Suppr", false, !selection_.empty())) delete_selection();
         ImGui::Separator();
@@ -1221,6 +1574,10 @@ void EditorApp::main_menu() {
                             p && family_of(p->shape) == kFamGlobEgg)) {
             explode_glob(primary_);
         }
+        ImGui::Separator();
+        if (ImGui::MenuItem(tr("Lier en cliquant", "Link by clicking"), "L", false, p && links_by_quality(*p))) {
+            start_link_mode(primary_);
+        }
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu(tr("Carte", "Map"))) {
@@ -1232,6 +1589,12 @@ void EditorApp::main_menu() {
         if (ImGui::MenuItem(tr("Copier cette carte vers un emplacement libre", "Copy this map to a free slot"))) {
             copy_map_to_free_slot();
         }
+        ImGui::Separator();
+        if (ImGui::MenuItem(tr("Aller au départ de mission", "Go to the mission start"), nullptr, false,
+                            find_start_egg() != nullptr)) {
+            go_to_arrival(map_, kStartEgg);
+        }
+        if (ImGui::MenuItem(tr("Vérifier le niveau", "Check the level"), nullptr, &problems_open_)) {}
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu(tr("Affichage", "View"))) {
@@ -1496,12 +1859,38 @@ void EditorApp::tab_eggs() {
                                 "The original levels are driven by eggs: pick one, then click in the view. Set "
                                 "its parameters in Properties afterwards."));
     static std::uint8_t arrival_id = kStartEgg, departure_id = 1;
+    ImGui::SeparatorText(tr("Outils guidés", "Guided tools"));
+    if (ImGui::Button(tr("Départ de mission", "Mission start"))) brush_ = {BrushKind::MissionStart, 0, 0, 0};
+    help_marker(tr("Cliquez ensuite dans la vue : l'œuf d'arrivée 0x1E, où la mission commence, y est posé (ou déplacé "
+                   "s'il existe). F5 et les nouvelles parties sur cette carte commencent dessus.",
+                   "Then click in the view: the arrival egg 0x1E, where the mission starts, goes there (or moves there "
+                   "if the map has one). F5 and new games on this map start on it."));
+    if (find_start_egg()) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton(tr("Y aller", "Go to it"))) go_to_arrival(map_, kStartEgg);
+    }
+    if (ImGui::Button(tr("Paire de téléporteurs", "Teleporter pair"))) {
+        brush_ = {BrushKind::TeleportPair, 0, 0, 0};
+        pair_departure_ = 0;
+    }
+    help_marker(tr("Premier clic : où le joueur part (une zone de déclenchement) ; second clic : où il arrive. "
+                   "L'éditeur donne à la paire un id libre et relie les deux œufs.",
+                   "First click: where the player leaves (a trigger area); second click: where they arrive. The "
+                   "editor gives the pair a free id and links both eggs."));
+    ImGui::TextWrapped("%s", tr("Relier un interrupteur à des portes, champs de force, vapeur... : sélectionnez-le, "
+                                "appuyez sur L puis cliquez les objets.",
+                                "To link a switch to doors, force fields, steam...: select it, press L, then click "
+                                "the items."));
     ImGui::SeparatorText(tr("Téléportation", "Teleport"));
     ImGui::SetNextItemWidth(100);
     input_u8("##arr", arrival_id);
     ImGui::SameLine();
     if (ImGui::Button(tr("Arrivée (id)", "Arrival (id)"))) {
         brush_ = {BrushKind::TeleportArrival, 0, 0, static_cast<std::uint16_t>(arrival_id)};
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton(tr("id libre", "free id"))) {
+        if (const std::uint8_t id = free_arrival_id(level_, level_info())) arrival_id = id;
     }
     help_marker(tr("Œuf d'arrivée : le jeu commence une mission sur l'œuf 0x1E de la carte. Les téléporteurs et "
                    "les changements de carte visent ces œufs par leur id.",
@@ -1599,11 +1988,15 @@ void EditorApp::right_panel() {
                                     ": objet suivant sous le pointeur ; glisser : déplacer ou sélection par rectangle "
                                     "; clic droit ou molette enfoncée : faire défiler ; molette : zoom ; flèches, "
                                     "PgPréc/PgSuiv : déplacer la sélection ; F : centrer ; Suppr : supprimer ; "
-                                    "Échap : lâcher le pinceau.",
+                                    "Échap : lâcher le pinceau ; Ctrl+C / Ctrl+X / Ctrl+V : copier, couper, coller "
+                                    "sous le pointeur (aussi vers une autre carte) ; L : lier en cliquant.\n\n"
+                                    "Pour commencer : onglet Œufs > Départ de mission, puis F5 pour tester.",
                                     "Nothing selected.\n\nClick: select; Ctrl/Shift+click: add; Alt+click: next item "
                                     "under the pointer; drag: move, or select by rectangle; right or middle drag: "
                                     "scroll; wheel: zoom; arrows, PgUp/PgDn: move the selection; F: centre; Del: "
-                                    "delete; Esc: drop the brush."));
+                                    "delete; Esc: drop the brush; Ctrl+C / Ctrl+X / Ctrl+V: copy, cut, paste under "
+                                    "the pointer (to another map too); L: link by clicking.\n\n"
+                                    "To begin: Eggs tab > Mission start, then F5 to test."));
     } else if (selection_.size() > 1) {
         ImGui::Text("%zu %s", selection_.size(), tr("objets sélectionnés", "items selected"));
         if (ImGui::Button(tr("Supprimer", "Delete"))) delete_selection();
@@ -1705,6 +2098,8 @@ void EditorApp::properties(LevelItem& item) {
 void EditorApp::semantic_properties(LevelItem& item, std::uint8_t fam) {
     const LevelItem before = *level_.top_of(item.uid);
     bool changed = false;
+    int goto_map = -1;
+    std::uint8_t goto_id = 0;
     ImGui::PushItemWidth(150);
     if (fam == kFamGlobEgg) {
         int g = item.quality;
@@ -1766,32 +2161,61 @@ void EditorApp::semantic_properties(LevelItem& item, std::uint8_t fam) {
         if (item.frame == 1) {
             if (input_u8(tr("Id d'arrivée", "Arrival id"), id)) changed = true;
             if (id == kStartEgg) ImGui::TextDisabled("%s", tr("Départ de mission (0x1E).", "Mission start (0x1E)."));
+            const auto ids = arrivals_of(map_);
+            if (auto n = ids.find(id); n != ids.end() && n->second > 1) {
+                ImGui::TextColored(kTextWarning, "%s", tr("Un autre œuf d'arrivée a cet id.", "Another arrival egg has this id."));
+            }
+            int leading = 0;
+            for (const LevelItem& i : level_.items) {
+                leading += is_departure(i, family_of(i.shape)) && i.map_number == map_ && i.quality_low() == id;
+            }
+            ImGui::TextDisabled("%d %s", leading, tr("départ(s) de cette carte y mène(nt).", "departure(s) of this map lead here."));
         } else {
-            if (input_u8(tr("Vers l'œuf", "To egg"), id)) changed = true;
-            changed |= input_u8(tr("Vers la carte (0 = celle-ci)", "To map (0 = this one)"), item.map_number, false);
+            // The map: any map of FIXED.DAT (the game takes the number as it is).
+            const std::string to_map = std::string(tr("Carte ", "Map ")) + std::to_string(item.map_number) +
+                                       (item.map_number == map_ ? tr(" (celle-ci)", " (this one)") : "");
+            if (ImGui::BeginCombo(tr("Vers la carte", "To map"), to_map.c_str())) {
+                for (std::size_t m : project_->used_maps()) {
+                    if (m == 0 || m > 255) continue;
+                    const std::string label = std::string(tr("Carte ", "Map ")) + std::to_string(m) +
+                                              (static_cast<int>(m) == map_ ? tr(" (celle-ci)", " (this one)") : "");
+                    if (ImGui::Selectable(label.c_str(), m == item.map_number)) {
+                        item.map_number = static_cast<std::uint8_t>(m);
+                        changed = true;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            const auto ids = arrivals_of(item.map_number);
+            auto id_label = [](std::uint8_t v) {
+                return hex(v, 2) + (v == kStartEgg ? tr(" (départ de mission)", " (mission start)") : "");
+            };
+            if (ImGui::BeginCombo(tr("Vers l'arrivée", "To arrival"), id_label(id).c_str())) {
+                for (const auto& [v, n] : ids) {
+                    if (ImGui::Selectable(id_label(v).c_str(), v == id)) {
+                        id = v;
+                        changed = true;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            if (input_u8(tr("id", "id"), id)) changed = true;
             bool wait = item.quality_high() != 0;
             if (ImGui::Checkbox(tr("Attendre (fondu)", "Wait (fade)"), &wait)) changed = true;
             item.quality = static_cast<std::uint16_t>((wait ? 0x100 : 0) | id);
+            if (ids.count(id)) {
+                if (ImGui::Button(item.map_number == map_ ? tr("Voir l'arrivée", "Show the arrival")
+                                                          : tr("Ouvrir la carte de l'arrivée", "Open the arrival's map"))) {
+                    goto_map = item.map_number;
+                    goto_id = id;
+                }
+            } else {
+                ImGui::TextColored(kTextError, "%s",
+                                   tr("Aucune arrivée de cet id sur cette carte : le téléporteur ne fera rien.",
+                                      "No arrival of this id on that map: the teleport will do nothing."));
+            }
         }
         if (item.frame == 1) item.quality = static_cast<std::uint16_t>((item.quality & 0xFF00) | id);
-        if (item.frame == 0) {
-            const bool here = item.map_number == 0 || item.map_number == map_;
-            bool found = false;
-            for (const LevelItem& i : level_.items) {
-                if (family_of(i.shape) == kFamTeleportEgg && i.frame == 1 && i.quality_low() == id) {
-                    found = true;
-                    if (here && ImGui::Button(tr("Voir l'arrivée", "Show the arrival"))) {
-                        select_only(i.uid);
-                        center_on(i.x, i.y, i.z);
-                    }
-                    break;
-                }
-            }
-            if (here && !found) {
-                ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "%s",
-                                   tr("Aucune arrivée de cet id sur la carte.", "No arrival of this id on the map."));
-            }
-        }
     } else if (fam == kFamMonsterEgg) {
         MonsterEgg m = read_monster_egg(item);
         const std::uint16_t shape = npc_types_->word(m.npc_type, 0x3E);
@@ -1848,9 +2272,18 @@ void EditorApp::semantic_properties(LevelItem& item, std::uint8_t fam) {
                                     "This item's scripts read its quality and NPC / map bytes. The quality low often "
                                     "links items (switch -> force fields, valve -> steam, chest -> markers): linked "
                                     "items are framed in cyan."));
-        if (item.quality_low() != 0 && links_by_quality(item) &&
-            ImGui::Button(tr("Sélectionner les objets liés", "Select the linked items"))) {
-            select_same_quality_low(item.quality_low());
+        if (ImGui::Button(tr("Lier en cliquant (L)", "Link by clicking (L)"))) start_link_mode(item.uid);
+        help_marker(tr("Cliquez ensuite dans la vue les objets sur lesquels celui-ci agit (portes, champs de force, "
+                       "vapeur, points d'apparition...) : ils prennent sa qualité basse (une libre s'il n'en a pas). "
+                       "Un objet déjà lié se délie ; Échap pour terminer.",
+                       "Then click in the view the items this one acts on (doors, force fields, steam, spawn "
+                       "points...): they take its quality low (a free one if it has none). A linked item unlinks; "
+                       "Esc when done."));
+        if (item.quality_low() != 0 && links_by_quality(item)) {
+            ImGui::SameLine();
+            if (ImGui::Button(tr("Sélectionner les objets liés", "Select the linked items"))) {
+                select_same_quality_low(item.quality_low());
+            }
         }
     }
     if (hatches(fam, item)) {
@@ -1866,6 +2299,7 @@ void EditorApp::semantic_properties(LevelItem& item, std::uint8_t fam) {
     }
     ImGui::PopItemWidth();
     if (changed) note_change(before);
+    if (goto_map >= 0) go_to_arrival(goto_map, goto_id);
 }
 
 void EditorApp::script_properties(const LevelItem& item, std::uint8_t fam) {
@@ -2091,6 +2525,46 @@ void EditorApp::modal_popups() {
     }
 }
 
+void EditorApp::problems_window() {
+    if (!problems_open_) return;
+    ImGui::SetNextWindowSize(ImVec2(620, 340), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin(tr("Vérification du niveau", "Level check"), &problems_open_)) {
+        ImGui::End();
+        return;
+    }
+    ImGui::TextDisabled("%s", tr("Ce qui ne marcherait pas dans le jeu, mis à jour à chaque modification.",
+                                 "What would not work in the game, updated at each change."));
+    if (problems_.empty()) {
+        ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "%s", tr("Aucun problème trouvé.", "No problem found."));
+    }
+    std::uint32_t show = 0;
+    for (std::size_t k = 0; k < problems_.size(); ++k) {
+        const Problem& p = problems_[k];
+        ImGui::PushID(static_cast<int>(k));
+        const ImVec4 colour = p.severity == Severity::Error     ? kTextError
+                              : p.severity == Severity::Warning ? kTextWarning
+                                                                : kTextNote;
+        const char* tag = p.severity == Severity::Error     ? tr("Erreur", "Error")
+                          : p.severity == Severity::Warning ? tr("Attention", "Warning")
+                                                            : tr("Note", "Note");
+        if (p.uid) {
+            if (ImGui::SmallButton(tr("Voir", "Show"))) show = p.uid;
+        } else {
+            ImGui::Dummy(ImVec2(ImGui::CalcTextSize(tr("Voir", "Show")).x + 2 * ImGui::GetStyle().FramePadding.x, 1));
+        }
+        ImGui::SameLine();
+        ImGui::TextColored(colour, "%s", tag);
+        ImGui::SameLine();
+        ImGui::TextWrapped("%s", p.text.c_str());
+        ImGui::PopID();
+    }
+    if (const LevelItem* i = show ? level_.find(show) : nullptr) {
+        select_only(i->uid);
+        center_on(i->x, i->y, i->z);
+    }
+    ImGui::End();
+}
+
 void EditorApp::status_bar() {
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x, vp->WorkPos.y + vp->WorkSize.y - kStatusHeight));
@@ -2112,11 +2586,24 @@ void EditorApp::status_bar() {
                            tr("trop d'objets pour la table du jeu", "too many items for the game's table"), records,
                            kItemTableSlots);
         ImGui::SameLine();
-    } else if (records > 8000) {
+    } else if (records > busiest_records_) {
         ImGui::TextColored(ImVec4(1, 0.6f, 0.3f, 1), "  %s (%zu / %zu)",
                            tr("plus chargée que les cartes d'origine", "busier than the original maps"), records,
                            kItemTableSlots);
         ImGui::SameLine();
+    }
+    if (!problems_.empty()) {
+        int errors = 0, warnings = 0;
+        for (const Problem& p : problems_) {
+            errors += p.severity == Severity::Error;
+            warnings += p.severity == Severity::Warning;
+        }
+        ImGui::SameLine();
+        const std::string label = std::to_string(errors) + tr(" erreur(s), ", " error(s), ") + std::to_string(warnings) +
+                                  tr(" avertissement(s)", " warning(s)") + "##problems";
+        ImGui::PushStyleColor(ImGuiCol_Text, errors ? kTextError : warnings ? kTextWarning : kTextNote);
+        if (ImGui::SmallButton(label.c_str())) problems_open_ = true;
+        ImGui::PopStyleColor();
     }
     ImGui::SameLine();
     ImGui::TextDisabled("  %s%s", project_->mod().string().c_str(),

@@ -3,8 +3,10 @@
 
 #include "editor/item_semantics.hpp"
 #include "editor/level.hpp"
+#include "editor/level_tools.hpp"
 #include "editor/project.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -146,12 +148,101 @@ void check_project_files() {
     std::filesystem::remove_all(root);
 }
 
+LevelItem item_at(std::uint16_t shape, std::uint8_t frame, std::uint16_t quality, std::uint8_t map = 0) {
+    LevelItem i;
+    i.uid = new_uid();
+    i.shape = shape;
+    i.frame = frame;
+    i.quality = quality;
+    i.map_number = map;
+    return i;
+}
+
+void check_level_tools() {
+    // Shapes of this test: 0x194 teleport egg, 0x011 trigger egg, 0x010 glob
+    // egg, 0x24F monster egg; 0x300 a switch and 0x301 a door (scripted),
+    // 0x302 a crate (no script).
+    LevelInfo info;
+    info.family = [](std::uint16_t s) -> std::uint8_t {
+        switch (s) {
+            case kShapeTeleportEgg: return kFamTeleportEgg;
+            case kShapeTriggerEgg: return kFamTriggerEgg;
+            case kShapeGlobEgg: return kFamGlobEgg;
+            case kShapeMonsterEgg: return kFamMonsterEgg;
+            case 0x300: return kFamUsable;
+            default: return kFamGeneric;
+        }
+    };
+    info.has_class = [](std::uint16_t cid) { return cid == 0x300 || cid == 0x301 || cid == 0x901; };
+
+    Level level;
+    level.items.push_back(item_at(kShapeTeleportEgg, 1, kStartEgg));
+    level.items.push_back(item_at(kShapeTeleportEgg, 1, 1));
+    level.items.push_back(item_at(kShapeTeleportEgg, 1, 2));
+    level.items.push_back(item_at(0x300, 0, 0x0001));  // switch, link 1
+    level.items.push_back(item_at(0x301, 0, 0x0001));  // door, link 1
+    level.items.push_back(item_at(0x302, 0, 0x0002));  // crate: its quality is no link
+    level.items.push_back(item_at(kShapeTriggerEgg, 0, 0x0201));  // trigger type 1, parameter 2
+    check(free_arrival_id(level, info) == 3, "free arrival id");
+    check(free_link_quality(level, info) == 3, "free link: 1 linked, 2 a trigger parameter");
+    check(arrival_ids(level, info).size() == 3, "arrival ids");
+
+    // Pasting the switch, the door and a teleport pair into the same map.
+    std::vector<LevelItem> paste = {level.items[3], level.items[4], item_at(kShapeTeleportEgg, 1, 1),
+                                    item_at(kShapeTeleportEgg, 0, 1, 5), item_at(kShapeTeleportEgg, 0, 2, 5)};
+    const int renumbered = relink_pasted(paste, level, info, 5, 7);
+    check(renumbered == 2, "one link and one arrival renumbered");
+    check(paste[0].quality_low() == 3 && paste[1].quality_low() == 3, "pasted switch and door stay linked");
+    check(paste[2].quality_low() == 3, "pasted arrival gets a free id");
+    check(paste[3].quality_low() == 3 && paste[3].map_number == 7, "pasted departure follows its arrival");
+    check(paste[4].quality_low() == 2 && paste[4].map_number == 5, "other departure unchanged");
+
+    // Problems.
+    CheckContext context;
+    context.info = info;
+    context.map = 5;
+    context.glob_pieces = [](std::uint16_t g) -> std::size_t { return g == 7 ? 4 : 0; };
+    context.map_exists = [](int m) { return m == 5 || m == 6; };
+    context.arrivals_on = [](int m) {
+        std::map<std::uint8_t, int> ids;
+        if (m == 6) ids[4] = 1;
+        return ids;
+    };
+    auto count = [&](const Level& l, Severity s) {
+        const auto problems = check_level(l, context);
+        return std::count_if(problems.begin(), problems.end(), [&](const Problem& p) { return p.severity == s; });
+    };
+    check(count(level, Severity::Error) == 0 && count(level, Severity::Warning) == 0, "a clean map");
+    Level bad = level;
+    LevelItem to_missing = item_at(kShapeTeleportEgg, 0, 9, 5);
+    set_hatch_zone(to_missing, 2, 2);
+    LevelItem to_other = item_at(kShapeTeleportEgg, 0, 4, 6);
+    set_hatch_zone(to_other, 2, 2);
+    LevelItem to_none = item_at(kShapeTeleportEgg, 0, 4, 0);
+    set_hatch_zone(to_none, 2, 2);
+    bad.items.push_back(to_missing);                              // error: no arrival 9 here
+    bad.items.push_back(to_other);                                // fine: map 6 has egg 4
+    bad.items.push_back(to_none);                                 // error: map 0
+    bad.items.push_back(item_at(kShapeTriggerEgg, 0, 0x0005));    // error: no class 0x905
+    bad.items.push_back(item_at(kShapeGlobEgg, 0, 3));            // note: empty glob
+    bad.items.push_back(item_at(kShapeGlobEgg, 0, 0));            // fine: glob 0 is none
+    bad.items.push_back(item_at(kShapeTeleportEgg, 1, 2));        // warning: id 2 twice
+    LevelItem monster = item_at(kShapeMonsterEgg, 0, 0);
+    bad.items.push_back(monster);                                 // error: no template
+    check(count(bad, Severity::Error) == 4, "errors found");
+    check(count(bad, Severity::Warning) == 1, "warnings found");
+    bad.items.erase(bad.items.begin());
+    check(check_level(bad, context).front().severity == Severity::Error, "errors first");
+    check(count(bad, Severity::Note) == 2, "empty glob and missing mission start noted");
+}
+
 }  // namespace
 
 int main() {
     check_records();
     check_globs();
     check_semantics();
+    check_level_tools();
     check_project_files();
     std::printf(failures ? "%d failure(s)\n" : "all checks passed\n", failures);
     return failures ? 1 : 0;

@@ -19,6 +19,43 @@ crusader-no-remorse data --mod mods/base-secrete --map 3 --egg 0x1E
 
 `--map` starts a new game on that map, at the arrival egg `--egg` (0x1E by default, the egg where every mission starts). If an arrival egg is selected, F5 starts from it. A mod's saved games go in `<mod>/SAVEGAME`.
 
+## Getting started
+
+1. *Map > New map*: a 3 × 3 cell floor and the mission start.
+2. Place scenery from the *Shapes* and *Globs* tabs, NPCs from the *Eggs* tab.
+3. *Eggs* tab > **Mission start** moves the start where you click; **Teleporter pair** places a teleporter and its destination, already linked.
+4. Select a switch, press **L** and click the doors or force fields it should drive.
+5. Watch the status bar: a red or orange counter means the **level check** found something that would not work; click it.
+6. **F5** to play.
+
+## Guided tools
+
+The original levels are made of numbers that must match: a teleporter names the id of its arrival egg, a switch shares its quality low with the doors it opens. These tools set the numbers for you:
+
+| Tool | Where | What it does |
+|---|---|---|
+| **Mission start** | *Eggs* tab | Click in the view: the arrival egg 0x1E goes there (it moves if the map has one). *Go to it* and *Map > Go to the mission start* find it. |
+| **Teleporter pair** | *Eggs* tab | First click: the departure (a trigger area); second click: the arrival. The pair gets an id that the map does not use. |
+| **Link by clicking** | **L**, *Edit* menu, or *Properties* | Click the items the selected one acts on: they take its quality low (a free one if it has none). Clicking a linked item unlinks it; Esc or a right click when done. The links are drawn as cyan lines. |
+| **Copy, cut, paste** | Ctrl+C, Ctrl+X, Ctrl+V | Pastes under the pointer, on this map or another one (the clipboard stays when you open another map). A switch pasted with its doors, or a teleporter with its arrival, gets numbers the map does not use, so the copy works on its own and leaves the map's own links alone (*Edit > Paste: renumber links and teleports* turns this off). |
+| **Teleport destination** | *Properties* of a departure | Pick the map and the arrival from lists; *Open the arrival's map* goes there. |
+| **Level check** | status bar, *Map > Check the level* | Lists what would not work in the game, updated at each change; *Show* selects the item. |
+| **Tooltip** | pointer over the view | What the item is, where a teleporter leads, its link number. |
+
+The level check reports:
+
+| Severity | Problem |
+|---|---|
+| Error | a departure to a map that does not exist, or to an arrival id the target map does not have (the teleport does nothing) |
+| Error | a trigger egg whose type has no usecode class, a monster egg without its NPC template |
+| Error | more items than the game's item table holds |
+| Warning | several arrival eggs with the same id (the game takes whichever its search finds first) |
+| Warning | a departure without a trigger area |
+| Warning | a map busier than the busiest original map (7,855 records) |
+| Note | no mission start (the map can still be reached by a teleport), a glob egg whose glob is empty |
+
+On the original maps it finds what the designers left behind: 5 departures to maps that do not exist, 4 trigger eggs of a type without a class, 4 arrival ids used twice.
+
 ## What a level contains
 
 The format is the one used by the original levels; the editor reads and rewrites the game's 63 maps and 3,072 globs byte for byte (`editor_data_tests` test).
@@ -49,12 +86,12 @@ The original levels have no map-specific script. The designers placed **eggs** a
 | Egg | Shape | Parameters |
 |---|---|---|
 | Teleport arrival | 0x194 frame 1 | id = low quality; the mission starts on id 0x1E |
-| Teleport departure | 0x194 frame 0 | to the egg (low quality) of the map (map number, 0 = this one), delay if high quality ≠ 0, trigger zone |
+| Teleport departure | 0x194 frame 0 | to the egg (low quality) of the map (map number: the game takes it as it is, 0 is no map), delay if high quality ≠ 0, trigger zone |
 | Trigger | 0x011 | class 0x900 + low quality (`TRIGEGG`, `ONCEEGG`, `DOOREGG`, `CAMERA`, `MUSIC`, `MISS1EGG`…), parameter = high quality, id = map number, trigger zone |
 | Monster (NPC) | 0x24F | NPC type (`DTABLE.FLX`), direction, minimum difficulty, other weapon, three activities (at start, on seeing the player, when shot at); the last three are stored in the template the egg contains |
 | Marker | 0x476 | object given by the chest with the same low quality, or object cut by a `TRIGGER` |
 
-The **trigger zone** (half-widths × 32 units, stored in the NPC number; the player must also be within 0x30 in z) is drawn in pink; teleport departures are joined to their arrival by a green line.
+The **trigger zone** (half-widths × 32 units, stored in the NPC number; the player must also be within 0x30 in z) is drawn in pink; teleport departures are joined to their arrival by a green line, or labelled with their map and egg when they lead to another map.
 
 Many objects answer each other through their **low quality**: switch → energy walls or doors (`TRIGGER`), valve → steam, chest → markers, camera → alarm. When an object is selected, the ones that share its low quality and have a script are outlined in cyan, and *Select linked objects* takes them all.
 
@@ -76,8 +113,10 @@ Note that a copied map keeps its mission eggs (`MISS1EGG`…) and its teleports,
 | Rectangle selection | drag on empty space |
 | Move | drag the selection (snapped to the grid; Alt: no snapping), arrows, PgUp / PgDn for z |
 | Place an object | pick a brush (Shapes, Globs, Eggs), then click; right click or Esc to drop it |
+| Link to the selected object | L, then click the objects; Esc when done |
 | Scroll, zoom | right click or middle button and drag, arrows with no selection; mouse wheel |
 | Center on the selection | F |
+| Copy, cut, paste under the pointer | Ctrl+C, Ctrl+X, Ctrl+V |
 | Duplicate, delete | Ctrl+D, Del |
 | Undo, redo | Ctrl+Z, Ctrl+Y |
 | Save, test | Ctrl+S, F5 |

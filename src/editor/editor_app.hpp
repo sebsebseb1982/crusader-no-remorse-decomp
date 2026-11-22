@@ -9,6 +9,7 @@
 #include "core/dtable.hpp"
 #include "editor/item_semantics.hpp"
 #include "editor/level.hpp"
+#include "editor/level_tools.hpp"
 #include "editor/project.hpp"
 #include "engine/usecode/usecode_file.hpp"
 #include "engine/world/render.hpp"
@@ -53,7 +54,19 @@ public:
 
 private:
     // --- Brush: what a click in the view creates.
-    enum class BrushKind { None, Shape, Glob, TriggerEgg, TeleportArrival, TeleportDeparture, MonsterEgg };
+    // MissionStart places (or moves) the arrival egg 0x1E; TeleportPair
+    // places a departure, then its arrival, linked by a free id.
+    enum class BrushKind {
+        None,
+        Shape,
+        Glob,
+        TriggerEgg,
+        TeleportArrival,
+        TeleportDeparture,
+        MonsterEgg,
+        MissionStart,
+        TeleportPair,
+    };
     struct Brush {
         BrushKind kind = BrushKind::None;
         std::uint16_t shape = 0;
@@ -101,6 +114,15 @@ private:
     void move_selection(std::int32_t dx, std::int32_t dy, std::int32_t dz);
     void select_only(std::uint32_t uid);
     void select_same_quality_low(std::uint8_t q);
+    // Link mode: each click in the view links the item to `link_source_`
+    // (same quality low), or unlinks it when it already was.
+    void start_link_mode(std::uint32_t source);
+    void toggle_link(std::uint32_t target);
+    // Clipboard (kept across maps).
+    void copy_selection(bool cut);
+    void paste();
+    // Opens `map` (committing this one) and selects its arrival egg `id`.
+    void go_to_arrival(int map, std::uint8_t id);
     void glob_from_selection();
     void explode_glob(std::uint32_t egg_uid);
 
@@ -120,10 +142,18 @@ private:
     void contents_editor(LevelItem& item);
     void glob_window();
     void modal_popups();
+    void problems_window();
+    void hover_tooltip();
 
     // --- Helpers.
     std::uint8_t family_of(std::uint16_t shape) const;
     bool links_by_quality(const LevelItem& item) const;
+    LevelInfo level_info() const;
+    // Arrival ids of a map (this one: the level being edited).
+    std::map<std::uint8_t, int> arrivals_of(int map);
+    void maps_changed() { arrivals_cache_.clear(); }
+    void run_checks();
+    const LevelItem* find_start_egg() const;
     std::string shape_name(std::uint16_t shape) const;
     std::string class_name(std::uint16_t cid) const;
     int frame_count(std::uint16_t shape);
@@ -145,6 +175,7 @@ private:
     std::optional<XformTable> xform_;
     std::unique_ptr<UsecodeFile> usecode_;
     std::optional<dtable::NpcTypes> npc_types_;
+    std::size_t busiest_records_ = 8000;  // the game's busiest original map
 
     // The map being edited.
     int map_ = 1;
@@ -194,6 +225,21 @@ private:
     bool box_selecting_ = false;
 
     Brush brush_;
+    std::uint32_t pair_departure_ = 0;  // TeleportPair: the departure placed, waiting for its arrival
+    std::uint32_t link_source_ = 0;     // link mode
+    std::uint32_t hovered_ = 0;         // item under the pointer
+    double hover_since_ = 0;
+
+    // Clipboard.
+    std::vector<LevelItem> clipboard_;
+    Point3 clipboard_anchor_{};
+    int clipboard_map_ = 0;
+    bool paste_relinks_ = true;
+
+    // Level check.
+    std::vector<Problem> problems_;
+    bool problems_open_ = false;
+    std::map<int, std::map<std::uint8_t, int>> arrivals_cache_;
 
     // Palettes.
     std::string shape_filter_;
