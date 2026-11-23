@@ -2,6 +2,7 @@ name: Bug report
 description: Something does not work, or differs from the original game
 title: "[Bug] "
 labels: ["bug"]
+assignees: ["sebsebseb1982"]
 body:
   - type: markdown
     attributes:
