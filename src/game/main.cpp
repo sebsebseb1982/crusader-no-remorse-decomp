@@ -195,6 +195,14 @@ int main(int argc, char** argv) {
             }
             set_languages_dir(languages);
         }
+        // SDL_Quit runs last, after the destructors of the window, the audio, the
+        // controller and the GPU lighting, which still call SDL (and the GL library
+        // it unloads): closing the controller after SDL_Quit crashed with
+        // sdl2-compat (SDL3) on exit (issue #23), deleting the GL objects after it
+        // crashed too (issue #28). Declared first, so destroyed last.
+        struct SdlQuitLast {
+            ~SdlQuitLast() { SDL_Quit(); }
+        } sdl_quit_last;
         Game game(data, {}, mod);
         game.set_port_version(CRUSADER_VERSION);
         if (lighting) game.config().lighting = true;
@@ -327,12 +335,6 @@ int main(int argc, char** argv) {
 
         // The options screen saves its settings, as the original does.
         game.set_config_file(data / "CRUSADER.CFG");
-        // SDL_Quit runs last, after the destructors of the window, the audio and
-        // the controller, which still call SDL: closing the controller after
-        // SDL_Quit crashed with sdl2-compat (SDL3) on exit (issue #23).
-        struct SdlQuitLast {
-            ~SdlQuitLast() { SDL_Quit(); }
-        } sdl_quit_last;
         SdlPresenter presenter(kWindowTitle, Game::kScreenWidth, Game::kScreenHeight, 2, fullscreen);
         presenter.set_gamma(gamma);
         install_real_shift();  // Windows: Shift + keypad with Num Lock on (issue #14)
