@@ -10,8 +10,10 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <vector>
 
 using namespace crusader;
@@ -316,6 +318,68 @@ void check_level_tools() {
 
 }  // namespace
 
+// Locks of a generated level: each one's key is reached before it, the
+// solver opens them in the way's order, switches and panels stand within
+// TRIGGER's range of their barrier (3200 units), card numbers are apart
+// from the links of the automatic doors, and each item links what it should.
+void check_locks(const crusader::editor::gen::Result& r) {
+    using namespace crusader::editor::gen;
+    std::vector<int> order;
+    check(check_solvable(r, &order).empty() && order.size() == r.locks.size(), "solver opens every lock");
+    std::set<int> numbers;
+    for (std::size_t k = 0; k < r.locks.size(); ++k) {
+        const Lock& lock = r.locks[k];
+        check(lock.key_room != lock.room && r.links[static_cast<std::size_t>(lock.link)].lock == static_cast<int>(k),
+              "lock and its passage");
+        check(numbers.insert(lock.number).second, "lock numbers differ");
+        const bool in_passage = lock.kind == LockKind::kCardDoor || lock.kind == LockKind::kKeypadDoor;
+        if (in_passage) {
+            check(std::abs(lock.reader.x - lock.barrier.x) <= 160 && std::abs(lock.reader.y - lock.barrier.y) <= 160,
+                  "reader or keypad beside its door");
+        }
+        if (lock.kind == LockKind::kCardDoor) {
+            check(lock.number >= 1 && lock.number <= 31, "card number");
+        } else if (lock.kind == LockKind::kKeypadDoor) {
+            check(lock.number >= 32, "keypad link above the card numbers");
+            check(std::abs(lock.key.x - lock.code_box.x) <= 3200 && std::abs(lock.key.y - lock.code_box.y) <= 3200,
+                  "monitor within range of its VALUEBOX");
+            check(lock.message == 10 || lock.message == 18 || lock.message == 19, "a code message");
+            int boxes = 0, monitors = 0;
+            for (const LevelItem& i : r.level.items) {
+                if (i.shape == 0x251 && i.quality_low() == lock.number) {
+                    ++boxes;
+                    check(i.npc_number == 0 && (i.map_number & 3) == 0, "code drawn when the map loads");
+                }
+                if (i.shape == 0x102 && i.quality == (lock.message << 8 | lock.number) && i.map_number == 0) ++monitors;
+            }
+            check(boxes == 1 && monitors == 1, "one VALUEBOX and one monitor of the link");
+        } else {
+            check(lock.number >= 32, "switch links above the card numbers");
+            check(std::abs(lock.key.x - lock.barrier.x) <= 3200 && std::abs(lock.key.y - lock.barrier.y) <= 3200,
+                  "switch within TRIGGER's range");
+        }
+        int barriers = 0, keys = 0;
+        for (const LevelItem& i : r.level.items) {
+            if (i.shape == lock.barrier_shape && i.x == lock.barrier.x && i.y == lock.barrier.y) {
+                ++barriers;
+                check(i.quality_low() == lock.number, "barrier's link");
+            }
+            const bool key_item = i.shape == lock.key_shape && i.x == lock.key.x && i.y == lock.key.y;
+            const bool user = in_passage
+                                  ? i.shape == lock.reader_shape && i.x == lock.reader.x && i.y == lock.reader.y
+                                  : key_item;
+            if (key_item) ++keys;
+            if (user) {
+                check(trigger_target(i) == lock.barrier_shape && (i.map_number & 0x1F) == 7 &&
+                          i.quality_low() == lock.number,
+                      "the key acts on its barrier");
+            }
+            if (key_item && lock.kind == LockKind::kCardDoor) check(i.quality == lock.number, "card's number");
+        }
+        check(barriers == 1 && keys == 1, "one barrier, one key");
+    }
+}
+
 // The procedural generator on a made-up biome (docs/GENERATEUR.md).
 void check_generator() {
     using namespace crusader::editor::gen;
@@ -339,6 +403,8 @@ void check_generator() {
     check(!no_post.can_build(kBack, kAlongX, 3) && no_post.can_build(kBack, kAlongX, 6), "runs without posts");
 
     const std::vector<Biome> biomes{biome};
+    std::size_t locks_seen = 0;
+    int kinds[4] = {0, 0, 0, 0};
     for (std::uint32_t seed = 1; seed <= 60; ++seed) {
         Options o;
         o.seed = seed;
@@ -366,11 +432,40 @@ void check_generator() {
             if (i.shape == kShapeTeleportEgg && i.frame == 0 && i.map_number == 101 && i.quality_low() == kStartEgg) {
                 ++departures;
             }
-            if (i.shape == 0x0A9 || i.shape == 0x046) ++doors;
+            const bool lock_door = std::any_of(r.locks.begin(), r.locks.end(),
+                                               [&](const Lock& l) { return l.number == i.quality_low(); });
+            if ((i.shape == 0x0A9 || i.shape == 0x046) && !lock_door) ++doors;
             if (i.shape == kShapeTriggerEgg && i.quality == 0x0A && i.npc_number == 0x44) ++door_eggs;
         }
         check(arrivals == 1 && departures == 1, "one start, one exit");
-        check(doors == static_cast<int>(2 * r.links.size()) && door_eggs == doors, "a door and its egg per corridor end");
+        check(doors == static_cast<int>(2 * r.links.size() - r.locks.size()) && door_eggs == doors,
+              "an automatic door and its egg per corridor end, but at locked doorways");
+        check_locks(r);
+        locks_seen += r.locks.size();
+        for (const Lock& lock : r.locks) ++kinds[static_cast<int>(lock.kind)];
+    }
+    check(locks_seen >= 60 && kinds[0] > 5 && kinds[1] > 5 && kinds[2] > 5 && kinds[3] > 5, "locks of every kind");
+    // Locks asked for: none, or as many as the way to the exit allows.
+    {
+        Options o;
+        o.seed = 5;
+        o.locks = 0;
+        check(generate(biomes, o).locks.empty(), "no lock asked for");
+        o.locks = 9;
+        const Result r = generate(biomes, o);
+        check(!r.locks.empty() && check_solvable(r).empty(), "many locks asked for");
+    }
+    // The solver finds a key left behind its own lock.
+    {
+        Options o;
+        o.seed = 11;
+        o.locks = 1;
+        Result r = generate(biomes, o);
+        check(r.locks.size() == 1, "one lock");
+        if (r.locks.size() == 1) {
+            r.locks[0].key_room = r.locks[0].room;
+            check(!check_solvable(r).empty(), "a key behind its lock is found");
+        }
     }
     // NOLIMIT.JSON: the seeds written, read back, the same map replaced; the
     // options read back give the same level.

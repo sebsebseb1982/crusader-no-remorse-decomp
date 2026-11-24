@@ -7,15 +7,20 @@
 //    and the exit pad;
 //  - a door opens when the player comes near it (its DOOREGG);
 //  - the exit teleporter leads to the next level's start.
-// Usage: generator_data_tests <data_dir> [first_seed] [seeds]
+// Usage: generator_data_tests <data_dir> [first_seed] [seeds] [--shots DIR]
 
 #include "core/language.hpp"
+#include "core/png_writer.hpp"
+#include "core/surface.hpp"
 #include "core/flex.hpp"
 #include "editor/generator/campaign.hpp"
 #include "editor/level_tools.hpp"
 #include "editor/project.hpp"
 #include "engine/usecode/usecode_file.hpp"
+#include "engine/ui/computer_gump.hpp"
+#include "engine/ui/keypad_gump.hpp"
 #include "engine/world/collision.hpp"
+#include "engine/world/inventory.hpp"
 #include "game/game.hpp"
 #include "test_saves.hpp"
 
@@ -34,6 +39,8 @@ using namespace crusader::editor;
 namespace {
 
 int failures = 0;
+// --shots DIR: a picture of each lock and its key, in the game (port review).
+std::filesystem::path shots_dir;
 
 #define CHECK(cond)                                                                  \
     do {                                                                             \
@@ -152,16 +159,138 @@ void check_seed(const std::filesystem::path& data, const gen::GameData& game_dat
         return game;
     };
 
-    // Walking: every room and the exit, the doors taken out (open).
+    // The automatic doors' links: those doors are taken out (open) for the
+    // walking search; locked doors and energy walls stay.
+    std::set<int> auto_links;
+    for (const gen::Link& l : level.links) {
+        if (l.door_a) auto_links.insert(l.door_a);
+        if (l.door_b) auto_links.insert(l.door_b);
+    }
+    auto is_auto_door = [&](const Item& i) {
+        return i.parent == 0 && is_door(i.shape) && auto_links.count(i.quality & 0xFF);
+    };
+
+    // Walking, and the locks opened one by one with their keys, in the order
+    // the solver opens them: each lock bars its room until its key is used.
     {
         auto game = play("walking");
         World& w = game->world();
         std::vector<ObjId> doors;
         w.for_each([&](const Item& i) {
-            if (i.parent == 0 && is_door(i.shape)) doors.push_back(i.id);
+            if (is_auto_door(i)) doors.push_back(i.id);
         });
-        CHECK(doors.size() == 2 * level.links.size());
+        CHECK(doors.size() == auto_links.size());
         for (ObjId d : doors) w.destroy(d);
+        auto find = [&](std::uint16_t shape, const gen::Spot& at) {
+            ObjId id = 0;
+            w.for_each([&](const Item& i) {
+                if (!id && i.parent == 0 && i.shape == shape && i.x == at.x && i.y == at.y) id = i.id;
+            });
+            return id;
+        };
+        // A spot of the walk within `range` of a point (x and y).
+        auto near = [](const auto& seen, const gen::Spot& at, std::int32_t range) {
+            for (const auto& [x, y, z] : seen) {
+                if (std::abs(x - at.x) <= range && std::abs(y - at.y) <= range) return true;
+            }
+            return false;
+        };
+        std::vector<int> order;
+        CHECK(gen::check_solvable(level, &order).empty());
+        CHECK(order.size() == level.locks.size());
+        for (int k : order) {
+            const gen::Lock& lock = level.locks[static_cast<std::size_t>(k)];
+            const gen::Room& behind = level.rooms[static_cast<std::size_t>(lock.room)];
+            w.teleport(1, level.start.x, level.start.y, level.start.z, w.current_map());
+            auto seen = walk_area(w);
+            const bool barred = !reached_in(seen, behind.x0, behind.y0, behind.x1, behind.y1);
+            // A monitor stands on a desk: used from in front of it.
+            const std::int32_t key_range = lock.kind == gen::LockKind::kKeypadDoor ? 128 : 64;
+            const bool key_reached =
+                near(seen, lock.key, key_range) && (!lock.reader_shape || near(seen, lock.reader, 64));
+            std::printf("  %s %u: %s, key %s\n", gen::lock_name(lock.kind), lock.number,
+                        barred ? "bars its room" : "DOES NOT BAR ITS ROOM", key_reached ? "reached" : "NOT REACHED");
+            CHECK(barred && key_reached);
+            if (!key_reached) {
+                std::fprintf(stderr, "seed %u: key at (%d, %d) %s, reader at (%d, %d) %s; rooms reached:", seed,
+                             lock.key.x, lock.key.y, near(seen, lock.key, 64) ? "reached" : "not reached",
+                             lock.reader.x, lock.reader.y, near(seen, lock.reader, 64) ? "reached" : "not reached");
+                for (std::size_t r = 0; r < level.rooms.size(); ++r) {
+                    const gen::Room& room = level.rooms[r];
+                    if (reached_in(seen, room.x0, room.y0, room.x1, room.y1)) std::fprintf(stderr, " %zu", r);
+                }
+                std::fprintf(stderr, "\n");
+            }
+            // Using the key.
+            const ObjId key = find(lock.key_shape, lock.key);
+            CHECK(key != 0);
+            if (!key) break;
+            if (lock.kind == gen::LockKind::kCardDoor) {
+                w.teleport(1, lock.key.x, lock.key.y, lock.key.z, w.current_map());
+                run_frames(*game, 2);
+                // Picked up as the selection mode does (S, then Enter).
+                // (families 10 to 13 are taken, start_selection).
+                const ShapeInfo* info = w.shape_info(lock.key_shape);
+                CHECK(info && info->family >= 10 && info->family <= 13);
+                CHECK(add_item_cru(w, key, false));
+                run_frames(*game, 30);
+                CHECK((w.state.keycards >> lock.number) & 1);
+                const ObjId reader = find(lock.reader_shape, lock.reader);
+                CHECK(reader != 0);
+                if (!reader) break;
+                use_item(w, reader);
+            } else if (lock.kind == gen::LockKind::kKeypadDoor) {
+                // The monitor shows the code its VALUEBOX drew when the map loaded.
+                const Item* box = w.get(find(0x251, lock.code_box));
+                CHECK(box != nullptr);
+                if (!box) break;
+                const int code = box->npc_number + ((box->map_number & 3) << 8);
+                CHECK(code >= 100 && code <= 999);
+                use_item(w, key);
+                run_frames(*game, 3);
+                const auto* computer = dynamic_cast<const ComputerGump*>(game->screen());
+                CHECK(computer && computer->text().find(std::to_string(code)) != std::string::npos);
+                if (computer) std::printf("    monitor: \"%s\"\n", computer->text().c_str());
+                for (int i = 0; i < 30 && game->screen(); ++i) {
+                    game->key(0x01, false, true, 0, 0x1B);
+                    game->key(0x01, false, false, 0, 0x1B);
+                    run_frames(*game, 2);
+                }
+                CHECK(!game->screen());
+                // The code typed on the keypad.
+                const ObjId keypad = find(lock.reader_shape, lock.reader);
+                CHECK(keypad != 0);
+                if (!keypad) break;
+                use_item(w, keypad);
+                run_frames(*game, 3);
+                const auto* pad = dynamic_cast<const KeypadGump*>(game->screen());
+                CHECK(pad && pad->code() == code);
+                for (const char c : std::to_string(code)) {
+                    const auto scancode = static_cast<std::uint8_t>(c == '0' ? 0x0B : 0x02 + (c - '1'));
+                    game->key(scancode, false, true, 0, static_cast<std::uint8_t>(c));
+                    game->key(scancode, false, false, 0, static_cast<std::uint8_t>(c));
+                    game->update(kFrameUs);
+                }
+                game->key(0x1C, false, true, 0, 0x0D);
+                game->key(0x1C, false, false, 0, 0x0D);
+                game->update(kFrameUs);
+            } else {
+                use_item(w, key);
+            }
+            run_frames(*game, 180);
+            w.teleport(1, level.start.x, level.start.y, level.start.z, w.current_map());
+            seen = walk_area(w);
+            const bool open = reached_in(seen, behind.x0, behind.y0, behind.x1, behind.y1);
+            if (!open) {
+                const ObjId barrier = find(lock.barrier_shape, lock.barrier);
+                const Item* bi = w.get(barrier);
+                std::fprintf(stderr, "seed %u: %s %u still shut: barrier %u shape 0x%X frame %u quality 0x%X\n", seed,
+                             gen::lock_name(lock.kind), lock.number, barrier, bi ? bi->shape : 0,
+                             bi ? bi->frame : 0, bi ? bi->quality : 0);
+            }
+            CHECK(open);
+        }
+        w.teleport(1, level.start.x, level.start.y, level.start.z, w.current_map());
         const auto seen = walk_area(w);
         for (std::size_t r = 0; r < level.rooms.size(); ++r) {
             const gen::Room& room = level.rooms[r];
@@ -179,7 +308,7 @@ void check_seed(const std::filesystem::path& data, const gen::GameData& game_dat
         World& w = game->world();
         ObjId door = 0;
         w.for_each([&](const Item& i) {
-            if (!door && i.parent == 0 && is_door(i.shape)) door = i.id;
+            if (!door && is_auto_door(i)) door = i.id;
         });
         CHECK(door != 0);
         if (door) {
@@ -205,6 +334,25 @@ void check_seed(const std::filesystem::path& data, const gen::GameData& game_dat
             CHECK(r.ok);
         }
         CHECK(game->machine().faults().empty());
+    }
+
+    // Pictures of the locks and keys (--shots): the player beside each.
+    if (!shots_dir.empty()) {
+        auto game = play("shots");
+        World& w = game->world();
+        Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+        auto shoot = [&](const gen::Spot& at, std::int32_t dx, std::int32_t dy, const std::string& name) {
+            w.teleport(1, at.x + dx, at.y + dy, 0, w.current_map());
+            run_frames(*game, 40);
+            game->render(screen);
+            write_png(shots_dir / ("seed" + std::to_string(seed) + "-" + name + ".png"), screen, game->palette());
+        };
+        for (std::size_t k = 0; k < level.locks.size(); ++k) {
+            const gen::Lock& lock = level.locks[k];
+            const std::string n = std::to_string(k) + "-" + std::to_string(static_cast<int>(lock.kind));
+            shoot(lock.key, 40, 80, n + "-key");
+            shoot(lock.kind == gen::LockKind::kCardDoor ? lock.reader : lock.barrier, 60, 60, n + "-lock");
+        }
     }
 
     // The exit teleporter: to the next level's start.
@@ -234,6 +382,10 @@ int main(int argc, char** argv) {
     if (!have_test_saves(data)) return 1;
     const std::uint32_t first = argc > 2 ? static_cast<std::uint32_t>(std::stoul(argv[2])) : 1;
     const std::uint32_t count = argc > 3 ? static_cast<std::uint32_t>(std::stoul(argv[3])) : 6;
+    if (argc > 5 && std::string(argv[4]) == "--shots") {
+        shots_dir = argv[5];
+        std::filesystem::create_directories(shots_dir);
+    }
     const gen::GameData game_data = gen::GameData::load(data);
     check_biomes(game_data);
     for (std::uint32_t s = first; s < first + count; ++s) check_seed(data, game_data, s);

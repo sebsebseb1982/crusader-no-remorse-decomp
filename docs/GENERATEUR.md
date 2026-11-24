@@ -83,7 +83,7 @@ Each milestone ends with levels that can be played by hand, and tests that check
 | # | Milestone | Playable result |
 |---|---|---|
 | 1 | **Shell**: biomes learned from the globs; rooms and corridors on one storey with doors; start and exit teleporter; chained levels; physical verification in the engine | walk from the start to the exit of a generated level, through doors |
-| 2 | **Locks and keys**: mission graph and solver; key-card doors, switches and energy walls, pressure plates, keypads with their code on a computer | a level where the exit is behind two or three locks |
+| 2 ✅ | **Locks and keys**: mission graph and solver; key-card doors, switches and energy walls, panel doors, keypads with their code on a computer | a level where the exit is behind one to three locks |
 | 3 | **Verticality**: storeys at z 96 and above, lifts and elevators, stairs, catwalks and railings over lower rooms, multi-storey verification | a level that climbs two storeys to the exit |
 | 4 | **Opposition**: MONSTER pairs by difficulty and room, cameras and alarms with their reinforcements, turrets, mines, lasers, steam and valves, explosive barrels | a defended level, its hazards switched off by its controls |
 | 5 | **Supplies and props**: medikits, ammunition, chests and crates, rechargers, rooms furnished from the original maps (prefabs taken from the rooms where the designers placed them), secrets | a level that can be finished at every difficulty |
@@ -100,6 +100,28 @@ Each milestone ends with levels that can be played by hand, and tests that check
 - Start: arrival egg 0x1E in the first room. Exit: a `TELEPAD` with a departure egg to the next level's start (the last level leads back to the first).
 - Editor: *Map > Generate a level (Crusader: No Limit)...* (seed, biome, number of rooms); command line `--generate SEED [--levels N] [--biome B] [--mod DIR]` (default mod folder: `mods/gen-SEED`).
 - Seeds saved in the mod's `NOLIMIT.JSON`, shown in the editor; `--regenerate DIR` generates a shared file's levels again.
-- Tests: `editor_tests` (no data: determinism, layout, one start, one exit, doors and their eggs, 60 seeds); `generator_data_tests data [first_seed] [seeds]` (on the data, played in the engine: walking to every room and to the exit, a door that opens and is crossed, the exit teleport, the editor's level check).
+- Tests (milestone 1): `editor_tests` (no data: determinism, layout, one start, one exit, doors and their eggs, 60 seeds); `generator_data_tests data [first_seed] [seeds]` (on the data, played in the engine: walking to every room and to the exit, a door that opens and is crossed, the exit teleport, the editor's level check).
 
-Next: milestone 2, locks and keys.
+**Milestone 2 done** (24 November 2026): locks and keys.
+
+- The way to the exit gets 1 to 3 locks (option `locks`, -1: drawn), on passages that no other way goes round (bridges; when the loops leave none, they are dropped). Each lock bars the doorway of the room behind it; its key is in a room reached before it, preferably off the way.
+- Four kinds, each built as on the original maps (bytes measured on `FIXED.DAT`):
+
+| Lock | Barrier | Key | Settings |
+|---|---|---|---|
+| Card door | `MDOOR_N` / `MDOOR_E`, quality = card number, no `DOOREGG` | card 0x111 on the floor of the key room (quality = its number, 1 to 31), reader `CARD_NS` / `CARD_EW` in the corridor | reader: quality 0x300 + number, target the door, map bits 7 |
+| Switch and energy wall | `EWALLNS` / `EWALLEW` frame 0 in the doorway | `SWITCHNS` on the north wall of the key room | switch: quality 0x100 + link, target the wall, map bits 7 |
+| Panel door | the door, quality = link | `PANELNS` on the north wall of the key room | panel: quality 0x300 + link, target the door, map bits 7 |
+| Keypad door | the door, quality = link | `KEYPADNS` / `KEYPADEW` in the corridor, a `VALUEBOX` beside it, a monitor `MONITNS` on a desk `MDESKNS` in the key room | keypad: quality 0x300 + link; `VALUEBOX`: quality = link, code 0; monitor: quality = message << 8 + link, map number 0 |
+
+- What the game's scripts require, found on the way:
+  - `TRIGGER` (and the monitor's and keypad's search for their `VALUEBOX`) looks no farther than global 0x40 × 32 = **3,200 units**: switches, panels and monitors stay within one slot of their lock, else the lock becomes a card door.
+  - Readers, keypads, switches and panels stand on the **south or east face** of a wall, the one the camera sees (on the original maps, always): readers and keypads go on the corridor's far wall, beside the doorway, whatever side the player comes from.
+  - A `VALUEBOX` whose code is 0 draws one between 100 and 999 when the map loads (`VALUEBOX` cachein); the monitor shows it in its message (`TEXTFILE` 10, 18 or 19: "Le nouveau code est 356", "356 est le code de cette semaine"...).
+  - Key cards are a bit of the player for the whole game: chained levels number theirs from different first cards (option `first_card`); the links of doors and switches start at 32, above the card numbers, since a `DOOREGG` opens every door of its link.
+- Solver (`check_solvable`): a lock opens once its key room is reached, and, for a card reader or a keypad, the room before the lock too; the exit and then every room must be reached.
+- Generator version 2 (`NOLIMIT.JSON` of version 1 refused).
+- Editor: number of locks in *Generate a level*.
+- Tests: `editor_tests` checks every lock of 60 seeds (key before the lock, ranges, links, numbers, one barrier and one key each) and that the solver finds a key left behind its own lock; `generator_data_tests` plays them in the engine: each lock bars its room, its key and reader are reached on foot, the card is picked up (as the selection mode does), the monitor shows the code that the keypad then takes, the switch or panel is used, and the room is then reached. On seeds 1 to 40: 73 locks (15 card doors, 17 keypad doors, 24 panel doors, 17 energy walls), all open. `--shots DIR` saves a picture of each lock and key.
+
+Next: milestone 3, verticality.

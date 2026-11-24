@@ -341,6 +341,10 @@ void EditorApp::generate_level() {
     o.seed = static_cast<std::uint32_t>(generate_seed_);
     o.biome = generate_biome_;
     o.rooms = generate_rooms_;
+    o.locks = generate_locks_;
+    // Key cards stay with the player from level to level: each generated
+    // map of the mod numbers its own.
+    o.first_card = 1 + (3 * static_cast<int>(manifest().levels.size())) % 30;
     o.map = static_cast<int>(slot);
     o.next_map = static_cast<int>(slot);  // the exit leads back to the start
     const gen::Result result = gen::generate(generator_data_->biomes, o);
@@ -3133,10 +3137,10 @@ void EditorApp::modal_popups() {
     }
     if (ImGui::BeginPopupModal("Crusader: No Limit###generate_level", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         if (!generator_data_) generator_data_ = std::make_unique<gen::GameData>(gen::GameData::load(project_->data()));
-        ImGui::TextUnformatted(tr("Un niveau procédural sur une carte libre : salles, couloirs, portes, départ et\n"
-                                  "téléporteur de sortie (qui ramène au départ).",
-                                  "A procedural level on a free map: rooms, corridors, doors, start and exit\n"
-                                  "teleporter (back to the start)."));
+        ImGui::TextUnformatted(tr("Un niveau procédural sur une carte libre : salles, couloirs, portes, verrous et\n"
+                                  "leurs clés, départ et téléporteur de sortie (qui ramène au départ).",
+                                  "A procedural level on a free map: rooms, corridors, doors, locks and their keys,\n"
+                                  "start and exit teleporter (back to the start)."));
         ImGui::TextDisabled("%s", tr("La graine est notée dans NOLIMIT.JSON du mod à l'enregistrement.",
                                      "The seed is recorded in the mod's NOLIMIT.JSON when saving."));
         ImGui::InputInt(tr("Graine", "Seed"), &generate_seed_);
@@ -3155,6 +3159,7 @@ void EditorApp::modal_popups() {
             ImGui::EndCombo();
         }
         ImGui::SliderInt(tr("Salles (0 : au hasard)", "Rooms (0: random)"), &generate_rooms_, 0, 16);
+        ImGui::SliderInt(tr("Verrous (-1 : au hasard)", "Locks (-1: random)"), &generate_locks_, -1, 4);
         if (ImGui::Button(tr("Générer", "Generate"))) {
             generate_level();
             ImGui::CloseCurrentPopup();

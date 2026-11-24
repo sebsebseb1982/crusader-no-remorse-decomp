@@ -28,6 +28,8 @@ Options ManifestLevel::options() const {
     o.seed = seed;
     o.biome = biome;
     o.rooms = rooms;
+    o.locks = locks;
+    o.first_card = first_card;
     o.map = map;
     o.next_map = next_map;
     return o;
@@ -39,6 +41,8 @@ ManifestLevel manifest_level(const Options& options, const Result& result, const
     l.seed = options.seed;
     l.biome = options.biome;
     l.rooms = options.rooms;
+    l.locks = options.locks;
+    l.first_card = options.first_card;
     l.next_map = options.next_map;
     if (result.biome >= 0 && result.biome < static_cast<int>(biomes.size())) {
         l.biome_name = biomes[static_cast<std::size_t>(result.biome)].name();
@@ -66,6 +70,8 @@ std::optional<Manifest> Manifest::read(const std::filesystem::path& mod, std::st
             l.seed = static_cast<std::uint32_t>(v.number_at("seed", 0));
             l.biome = static_cast<int>(v.number_at("biome", -1));
             l.rooms = static_cast<int>(v.number_at("rooms", 0));
+            l.locks = static_cast<int>(v.number_at("locks", -1));
+            l.first_card = static_cast<int>(v.number_at("first_card", 1));
             l.next_map = static_cast<int>(v.number_at("next_map", 0));
             l.biome_name = v.string_at("biome_name", "");
             l.room_count = static_cast<int>(v.number_at("room_count", 0));
@@ -82,7 +88,8 @@ std::string Manifest::to_json() const {
     for (std::size_t i = 0; i < levels.size(); ++i) {
         const ManifestLevel& l = levels[i];
         out << (i ? ",\n" : "\n") << "    {\"map\": " << l.map << ", \"seed\": " << l.seed << ", \"biome\": " << l.biome
-            << ", \"rooms\": " << l.rooms << ", \"next_map\": " << l.next_map
+            << ", \"rooms\": " << l.rooms << ", \"locks\": " << l.locks
+            << ", \"first_card\": " << l.first_card << ", \"next_map\": " << l.next_map
             << ", \"biome_name\": " << quoted(l.biome_name) << ", \"room_count\": " << l.room_count << "}";
     }
     out << (levels.empty() ? "]\n}\n" : "\n  ]\n}\n");

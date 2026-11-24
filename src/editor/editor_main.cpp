@@ -85,7 +85,8 @@ int generate(const std::filesystem::path& data, const std::filesystem::path& mod
         project.save();
         gen::record_levels(mod, generated);
         for (const auto& g : generated) {
-            std::printf("map %d: %s\n", g.map, g.result.notes.empty() ? "" : g.result.notes.front().c_str());
+            std::printf("map %d:\n", g.map);
+            for (const std::string& note : g.result.notes) std::printf("  %s\n", note.c_str());
         }
         std::printf("written to %s (seeds in %s); play with:\n  crusader-no-remorse %s --mod %s --map %d\n",
                     mod.string().c_str(), gen::kManifestFile, data.string().c_str(), mod.string().c_str(),

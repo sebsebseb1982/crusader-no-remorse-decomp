@@ -72,6 +72,8 @@ std::vector<GeneratedLevel> generate_levels(Project& project, const GameData& da
         o.biome = biome;
         o.map = maps[k];
         o.next_map = maps[(k + 1) % levels];
+        // Cards stay with the player: each level numbers its own (up to 3).
+        o.first_card = 1 + (3 * k) % 30;
         GeneratedLevel g{maps[k], generate(data.biomes, o), {}};
         g.entry = manifest_level(o, g.result, data.biomes);
         const std::string problem = check_solvable(g.result);
