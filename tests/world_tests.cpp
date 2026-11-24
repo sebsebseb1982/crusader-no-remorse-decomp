@@ -11,6 +11,7 @@
 #include "engine/world/actor_anim.hpp"
 #include "engine/world/attack.hpp"
 #include "engine/world/casings.hpp"
+#include "engine/world/ceiling_lights.hpp"
 #include "engine/world/collision.hpp"
 #include "engine/world/damage_marks.hpp"
 #include "engine/world/gravity.hpp"
@@ -1527,6 +1528,49 @@ void test_blood_marks() {
     CHECK(marks.size() == 0);
 }
 
+// Port addition: the ceiling lights (ceiling_lights.hpp), read from their
+// JSON files. A kinds file replaces built-in kinds and adds others; a map
+// file's lights take their room's kind, or their own, and their own reach;
+// each gives a point light, brighter with the ambient light, that lowers the
+// ambient light round it. The files shipped: mission 1's map has its lamps,
+// others none yet.
+void test_ceiling_lights() {
+    const auto kinds_doc = parse_json(R"({"kinds": {"neon": {"colour": [0.5, 0.5, 1], "strength": 2},
+                                                     "uv": {"colour": [0.6, 0.2, 1], "radius": 500, "dim": 2}}})");
+    CHECK(kinds_doc.has_value());
+    if (!kinds_doc) return;
+    const auto kinds = parse_ceiling_light_kinds(*kinds_doc);
+    CHECK(kinds.size() == 6 && kinds[0].name == "warm" && kinds[1].name == "neon" && kinds[5].name == "uv");
+    CHECK(kinds[1].strength == 2 && kinds[1].colour.x == 0.5f && kinds[1].radius == 1200);
+    CHECK(kinds[5].radius == 500 && kinds[5].dim == 1 && kinds[5].colour.z == 1);
+    const auto map_doc = parse_json(R"({"map": 7, "rooms": [
+        {"id": "A", "kind": "neon", "lights": [[100, 200, 86], [300, 400, 70, 900, "uv"]]},
+        {"id": "B", "lights": [[500, 600, 86, 0, "nothing such"]]},
+        {"id": "C", "skip": "small", "lights": []}]})");
+    CHECK(map_doc.has_value());
+    if (!map_doc) return;
+    const auto lights = parse_ceiling_lights(*map_doc, kinds);
+    CHECK(lights.size() == 3);
+    if (lights.size() != 3) return;
+    CHECK(lights[0].kind == 1 && lights[0].x == 100 && lights[0].z == 86 && lights[0].radius == 0);
+    CHECK(lights[1].kind == 5 && lights[1].radius == 900 && lights[2].kind == 0);
+
+    set_ceiling_lights_dirs({CRUSADER_CEILING_LIGHTS_DIR});
+    const auto& shipped = ceiling_light_kinds();
+    CHECK(shipped.size() >= 5 && shipped[0].name == "warm");
+    const auto& map1 = ceiling_lights(1);
+    CHECK(map1.size() > 100 && ceiling_lights(0).empty() && ceiling_lights(99).empty());
+    CHECK(std::all_of(map1.begin(), map1.end(), [](const CeilingLight& l) { return l.z > 40; }));
+    if (map1.empty()) return;
+    std::vector<PointLight> dark, bright;
+    add_ceiling_lights({map1[0]}, 0.0f, dark);
+    add_ceiling_lights({map1[0]}, 0.85f, bright);
+    CHECK(dark.size() == 1 && bright.size() == 1);
+    CHECK(bright[0].color.x > dark[0].color.x && bright[0].dim > 0 && bright[0].radius > 300);
+    CHECK(bright[0].pos.x == float(map1[0].x) && bright[0].pos.z == map1[0].z * kLightZScale);
+    set_ceiling_lights_dirs({});
+}
+
 // Port addition: a muzzle flash goes out of its shooter's box (out_of_box,
 // issue #29), so that the shooter casts its shadow.
 void test_flash_out_of_box() {
@@ -1684,6 +1728,7 @@ int main() {
     test_casings();
     test_flash_out_of_box();
     test_beam_meets();
+    test_ceiling_lights();
     test_typeflag_decode();
     test_world_ids();
     test_create_npc_reuses_a_slot();

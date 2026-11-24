@@ -5,6 +5,7 @@
 #include "core/data_info.hpp"
 #include "core/game_config.hpp"
 #include "core/iso_image.hpp"
+#include "core/json.hpp"
 #include "core/language.hpp"
 #include "core/translation.hpp"
 
@@ -333,6 +334,33 @@ void check_data_info() {
 }  // namespace
 
 // Language files (port addition): parsing, code page 850, picking a language.
+void check_json() {
+    // Objects keep their keys in order, numbers are read without the locale,
+    // strings unescaped (UTF-8 out of \u), a byte order mark skipped.
+    std::string error;
+    const auto doc = parse_json("\xEF\xBB\xBF { \"a\": [1, -2.5, 3e2, 0.65], \"b\": {\"t\": true, \"n\": null},\n"
+                                " \"s\": \"x\\\"y\\u00e9\\n\" } ",
+                                &error);
+    check(doc.has_value() && error.empty(), "json: a document parses");
+    if (!doc) return;
+    const JsonValue* a = doc->get("a");
+    check(a && a->is_array() && a->array.size() == 4, "json: an array");
+    if (a && a->array.size() == 4)
+        check(a->array[0].number == 1 && a->array[1].number == -2.5 && a->array[2].number == 300 &&
+                  a->array[3].number == 0.65,
+              "json: numbers");
+    check(doc->object.size() == 3 && doc->object[0].first == "a" && doc->object[2].first == "s", "json: key order");
+    const JsonValue* b = doc->get("b");
+    check(b && b->get("t") && b->get("t")->boolean && b->get("n") && b->get("n")->type == JsonValue::Type::kNull,
+          "json: true and null");
+    check(doc->string_at("s", "") == "x\"y\xC3\xA9\n", "json: escapes");
+    check(doc->number_at("missing", 7) == 7 && doc->string_at("a", "no") == "no", "json: fallbacks");
+    // Errors say where.
+    check(!parse_json("{\"a\": [1, 2,]}", &error) && error.find("line 1") == 0, "json: a stray comma fails");
+    check(!parse_json("{\"a\": 1}\n x", &error) && error.find("line 2") == 0, "json: text after the value fails");
+    check(!parse_json("[\"open", &error), "json: an unterminated string fails");
+}
+
 void check_languages() {
     // UTF-8 to code page 850 and back: the Portuguese letters are in it.
     check(utf8_to_cp850("a\xC3\xA3\xC3\xA7\xC3\x89") == "a\xC6\x87\x90", "cp850: a, a tilde, c cedilla, E acute");
@@ -441,6 +469,7 @@ int main() {
     check_iso();
     check_data_info();
     check_languages();
+    check_json();
     std::printf(failures ? "%d failure(s)\n" : "all checks passed\n", failures);
     return failures ? 1 : 0;
 }

@@ -30,6 +30,7 @@
 #include "platform/gl_lighting.hpp"
 #include "crusader_version.hpp"
 #include "engine/ui/christmas_hat.hpp"
+#include "engine/world/ceiling_lights.hpp"
 #include "engine/world/inventory.hpp"
 #include "engine/world/projectile.hpp"
 #include "game/game.hpp"
@@ -194,6 +195,19 @@ int main(int argc, char** argv) {
                 if (std::error_code error; std::filesystem::is_directory(beside, error)) languages = beside;
             }
             set_languages_dir(languages);
+        }
+        // The ceiling lights (port addition, engine/world/ceiling_lights.hpp):
+        // the "ceiling_lights" folder of the mod, then the one next to the
+        // executable, else in the current folder.
+        {
+            std::vector<std::filesystem::path> dirs;
+            if (!mod.empty()) dirs.push_back(mod / "ceiling_lights");
+            if (char* base = SDL_GetBasePath()) {
+                dirs.push_back(std::filesystem::path(base) / "ceiling_lights");
+                SDL_free(base);
+            }
+            dirs.push_back("ceiling_lights");
+            set_ceiling_lights_dirs(std::move(dirs));
         }
         // SDL_Quit runs last, after the destructors of the window, the audio, the
         // controller and the GPU lighting, which still call SDL (and the GL library

@@ -75,7 +75,7 @@ public:
         // Controls.
         Pad, Directional, Aim, Draw, PreciseAim, Run, Vibration, VibrationIntensity,
         // Display.
-        Native, Zoom, Smooth, Follow, Lighting, Smoke, Flashlight, Ambient,
+        Native, Zoom, Smooth, Follow, Lighting, Smoke, Flashlight, CeilingLights, Ambient,
         // Effects.
         Impact, Blood, Casings, BarrelLeaks, GlassDebris,
         // Game.
@@ -113,7 +113,7 @@ public:
     // The row of `entry` on the page shown, -1 when it is not there.
     int row_of(Entry entry) const;
     // Whether `entry` is greyed and does nothing: the 3D lighting's options
-    // (smoke, flashlight, ambient light) while it is off.
+    // (smoke, flashlight, ceiling lights, ambient light) while it is off.
     bool inactive(Entry entry) const;
     const GamepadScreen* gamepad() const { return pad_.get(); }
     Rect row_rect(int row) const;

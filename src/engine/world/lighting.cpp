@@ -1802,6 +1802,16 @@ bool WorldLighting::shade(const World& world, const Surface8& screen, const Pale
     set_palette(palette);
     lights_ = std::move(extra);
     gather_lights(world, opt, lights_);
+    // Lights that reach nothing on the screen (the map's ceiling lights,
+    // most of them far away): out. A ball of radius r round a light shows
+    // within half r of the light's pixel (the projection stretches no
+    // direction by more than kPixelScale * sqrt 2).
+    std::erase_if(lights_, [&](const PointLight& L) {
+        const float sx = (L.pos.x - L.pos.y) * 0.25f, sy = (L.pos.x + L.pos.y) * 0.125f - L.pos.z / kLightZScale;
+        const float r = std::max(L.radius, L.halo * 3) * 0.5f;
+        return sx + r < float(view_left_) || sx - r > float(view_left_ + width_) || sy + r < float(view_top_) ||
+               sy - r > float(view_top_ + height_);
+    });
     gather_occluders(world);
     if (opt.smoke) puff_states(puff_now_);
     else puff_now_.clear();

@@ -121,6 +121,10 @@ public:
     // the Silencer carries a lamp that lights in front of him. L (or the
     // controller's FLASHLIGHT action) switches it in play.
     bool flashlight = true;
+    // Port addition, written when off: "ceilinglights", with the 3D
+    // lighting, lamps under the rooms' ceilings light them
+    // (engine/world/ceiling_lights.hpp).
+    bool ceiling_lights = true;
     // Port addition, written when not 85: "ambientlight", with the 3D
     // lighting, the light the scene keeps where no lamp reaches, in percent
     // (0: only the lamps light it, 100: the scene is not darkened at all).

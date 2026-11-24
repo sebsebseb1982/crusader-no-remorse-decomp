@@ -76,7 +76,8 @@ constexpr Entry kControlsEntries[] = {Entry::Pad,        Entry::Directional, Ent
                                       Entry::Draw,       Entry::PreciseAim,  Entry::Run,
                                       Entry::Vibration,  Entry::VibrationIntensity, Entry::Back};
 constexpr Entry kDisplayEntries[] = {Entry::Native,   Entry::Zoom,  Entry::Smooth,     Entry::Follow, Entry::Lighting,
-                                     Entry::Smoke,    Entry::Flashlight, Entry::Ambient, Entry::Back};
+                                     Entry::Smoke,    Entry::Flashlight, Entry::CeilingLights, Entry::Ambient,
+                                     Entry::Back};
 constexpr Entry kEffectsEntries[] = {Entry::Impact,      Entry::Blood,       Entry::Casings,
                                      Entry::BarrelLeaks, Entry::GlassDebris, Entry::Back};
 constexpr Entry kGameEntries[] = {Entry::Autosave, Entry::FixBugs, Entry::Language, Entry::Back};
@@ -132,7 +133,9 @@ std::span<const EnhancementsScreen::Entry> EnhancementsScreen::entries() const {
 // @orig none: port-only enhancements window
 bool EnhancementsScreen::inactive(Entry entry) const {
     // The 3D lighting's own options: without it, nothing of them is drawn.
-    return (entry == Entry::Smoke || entry == Entry::Flashlight || entry == Entry::Ambient) && !config_->lighting;
+    return (entry == Entry::Smoke || entry == Entry::Flashlight || entry == Entry::CeilingLights ||
+            entry == Entry::Ambient) &&
+           !config_->lighting;
 }
 
 // @orig none: port-only enhancements window
@@ -249,6 +252,10 @@ void EnhancementsScreen::draw(Surface8& screen) const {
             name = tr("FLASHLIGHT");
             on = config_->flashlight;
             break;
+        case Entry::CeilingLights:
+            name = tr("CEILING LIGHTS");
+            on = config_->ceiling_lights;
+            break;
         case Entry::Ambient:
             name = tr("AMBIENT LIGHT");
             value = std::to_string(config_->ambient_light) + "%";
@@ -360,6 +367,7 @@ void EnhancementsScreen::activate(int row) {
     case Entry::Lighting: config_->lighting = !config_->lighting; break;
     case Entry::Smoke: config_->volumetric_smoke = !config_->volumetric_smoke; break;
     case Entry::Flashlight: config_->flashlight = !config_->flashlight; break;
+    case Entry::CeilingLights: config_->ceiling_lights = !config_->ceiling_lights; break;
     case Entry::Ambient: config_->ambient_light = (config_->ambient_light + 5) % 105; break;
     case Entry::Impact: config_->impact_marks = !config_->impact_marks; break;
     case Entry::Blood:

@@ -6,7 +6,7 @@
 //        lightview [data_dir] --save SAVEGAME_FILE [...]          a saved game, centred on the Silencer
 //        lightview [data_dir] [map] [cx cy] --png out.png [--mouse sx sy] [--drop sx sy]... [--ambient 0-4]
 //                  [--orbit yaw pitch] [--flat] [--no-shadows] [--box-shadows] [--no-bump] [--no-glow] [--no-fixtures]
-//                  [--alert]
+//                  [--alert] [--no-ceiling] [--ceiling-file MAP.json]
 //                  [--no-lamp] [--no-smoke] [--no-liquids] [--fixed-actors] [--no-back-faces] [--normals] [--probe sx sy]...
 //                  [--puff sx sy]... [--puff-scale K] [--rocket sx sy]... [--shot TYPE] [--ticks N] [--cpu] [--size WxH] [--bench N]
 //                                                                 one frame to a PNG
@@ -14,7 +14,7 @@
 //   Left click       drop a light there        Right click  remove the last one
 //   Wheel            light height              C            light colour
 //   S shadows  G shadows cut by sprites  B bump  E lights from glowing pixels  L Silencer's lamp  K lamps and screens
-//   J  alert on / off (alarm lights)
+//   J  alert on / off (alarm lights)   O  ceiling lights on / off (ceiling_lights.hpp)   F5  read their files again
 //   A ambient  N normals view  Tab original picture (unlit)
 //   Q / W  turn the camera  Z / X  tilt it  R  back to the isometric view
 //   T  characters' frames follow the camera  F  far box faces  P  an explosion's smoke at the pointer
@@ -29,6 +29,7 @@
 #include "core/typeflags.hpp"
 #include "core/xform.hpp"
 #include "engine/usecode/world_intrinsics.hpp"
+#include "engine/world/ceiling_lights.hpp"
 #include "engine/world/lighting.hpp"
 #include "engine/world/projectile.hpp"
 #include "engine/world/render.hpp"
@@ -42,6 +43,8 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <map>
 #include <memory>
 #include <optional>
@@ -85,7 +88,25 @@ struct View3D {
     bool lit = true;
     int ambient = 1;  // index in kAmbient
     std::uint32_t ticks = 0;  // the smoke's clock: one tick a frame
+    bool ceiling = true;      // the map's ceiling lights
+    std::vector<CeilingLight> ceiling_lights;
 };
+
+// The map's ceiling lights: the game's (ceiling_lights/mapNNN.json), or those
+// of another map file of the same form (a plan of tools/lights).
+std::vector<CeilingLight> load_ceiling(std::size_t map, const std::filesystem::path& file) {
+    if (file.empty()) return ceiling_lights(static_cast<int>(map));
+    std::ifstream in(file, std::ios::binary);
+    std::stringstream text;
+    text << in.rdbuf();
+    std::string why;
+    const auto doc = parse_json(text.str(), &why);
+    if (!doc) {
+        std::fprintf(stderr, "%s: %s\n", file.string().c_str(), why.c_str());
+        return {};
+    }
+    return parse_ceiling_lights(*doc, ceiling_light_kinds());
+}
 
 // Draws the world around `camera`, lit, into `argb` (kW x kH).
 void render(const World& world, ShapeCache& shapes, const XformTable& xform, const Palette& palette,
@@ -108,6 +129,7 @@ void render(const World& world, ShapeCache& shapes, const XformTable& xform, con
         return;
     }
     std::vector<PointLight> extra = lights;
+    if (v.ceiling) add_ceiling_lights(v.ceiling_lights, v.opt.ambient, extra);
     if (mouse) {
         if (auto p = lighting.light_spot(mouse->first, mouse->second, mouse_height))
             extra.push_back({*p, scaled(mouse_color, 1.6f), 900});
@@ -143,6 +165,7 @@ int main(int argc, char** argv) {
     std::vector<std::pair<int, int>> puffs, rockets;
     int shot = -1;  // --shot: the Silencer fires this fire type (its muzzle flash)
     std::filesystem::path save;
+    std::filesystem::path ceiling_file;
     std::optional<Camera> forced;
     View3D v;
     std::vector<std::string> pos;
@@ -169,6 +192,8 @@ int main(int argc, char** argv) {
         else if (arg("--no-glow")) v.opt.glow_lights = v.opt.flash_lights = false;
         else if (arg("--no-fixtures")) v.opt.fixture_lights = false;
         else if (arg("--alert")) alert = true;
+        else if (arg("--no-ceiling")) v.ceiling = false;
+        else if (arg("--ceiling-file") && i + 1 < argc) ceiling_file = argv[++i];
         else if (arg("--no-lamp")) v.opt.player_lamp = false;
         else if (arg("--no-smoke")) v.opt.smoke = false;
         else if (arg("--no-liquids")) v.opt.liquids = false;
@@ -202,6 +227,16 @@ int main(int argc, char** argv) {
         try {
             anims = AnimDat::load(data / "STATIC/ANIM.DAT");
         } catch (const std::exception&) {
+        }
+        // The ceiling lights' files: next to the executable, else the sources'.
+        {
+            std::vector<std::filesystem::path> dirs;
+            if (char* base = SDL_GetBasePath()) {
+                dirs.push_back(std::filesystem::path(base) / "ceiling_lights");
+                SDL_free(base);
+            }
+            dirs.push_back(CRUSADER_CEILING_LIGHTS_DIR);
+            set_ceiling_lights_dirs(std::move(dirs));
         }
         WorldLighting lighting(shapes, xform, anims ? &*anims : nullptr);
         // On the GPU unless --cpu (or none can be used).
@@ -237,6 +272,7 @@ int main(int argc, char** argv) {
         }
         if (forced) camera = *forced;
         if (alert) set_alert(*world, true);
+        v.ceiling_lights = load_ceiling(map, ceiling_file);
         std::vector<PointLight> lights;
         std::vector<std::uint32_t> argb;
         float mouse_height = 40;
@@ -335,6 +371,11 @@ int main(int argc, char** argv) {
                     case SDLK_e: v.opt.glow_lights = v.opt.flash_lights = !v.opt.glow_lights; break;
                     case SDLK_k: v.opt.fixture_lights = !v.opt.fixture_lights; break;
                     case SDLK_j: set_alert(*world, !world->state.alert_active); break;
+                    case SDLK_o: v.ceiling = !v.ceiling; break;
+                    case SDLK_F5:
+                        reload_ceiling_lights();
+                        v.ceiling_lights = load_ceiling(map, ceiling_file);
+                        break;
                     case SDLK_l: v.opt.player_lamp = !v.opt.player_lamp; break;
                     case SDLK_n: v.opt.show_normals = !v.opt.show_normals; break;
                     case SDLK_a: v.ambient = (v.ambient + 1) % 5; break;
@@ -360,6 +401,7 @@ int main(int argc, char** argv) {
                         world = load_map(map);
                         camera = map_centre(*world);
                         lights.clear();
+                        v.ceiling_lights = load_ceiling(map, ceiling_file);
                         break;
                     default: break;
                     }

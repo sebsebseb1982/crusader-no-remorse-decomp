@@ -9,3 +9,5 @@ isos/*.iso
 isos/*.bin
 isos/*.cue
 mods/
+# Screenshots of the ceiling lights, room by room (tools/lights/shoot_rooms.py)
+/lights/

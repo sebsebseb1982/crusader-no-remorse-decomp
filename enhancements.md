@@ -91,6 +91,7 @@ The original has nothing like it. This screen gathers every option the port adds
 | 3D LIGHTING / ECLAIRAGE 3D | Lights the world in 3D, with shadows (section 7d) | `lighting` |
 | VOLUMETRIC SMOKE / FUMEE 3D | With the 3D lighting: smoke of explosions and shots, steam of liquids (section 7d); on by default | `volumetricsmoke` |
 | FLASHLIGHT / LAMPE TORCHE | With the 3D lighting: the Silencer's lamp lights in front of him (section 7d); on by default, L or the controller's FLASHLIGHT action (LT) switches it in play | `flashlight` |
+| CEILING LIGHTS / PLAFONNIERS | With the 3D lighting: lamps under the rooms' ceilings light them, placed by hand room by room (section 7d); on by default | `ceilinglights` |
 | AMBIENT LIGHT / LUMIERE AMBIANTE | With the 3D lighting: how bright the scene stays where no lamp reaches, 0 to 100 % by 5 (left / right); 85 % by default | `ambientlight` |
 
 *EFFECTS / EFFETS*
@@ -439,7 +440,8 @@ The original ejects nothing. With this option every shot of a firearm throws out
 
 **Option:** 3D LIGHTING / ECLAIRAGE 3D (`lighting`), DISPLAY page, off by default. `--lighting` switches it on for one run.
 **Option:** VOLUMETRIC SMOKE / FUMEE 3D (`volumetricsmoke`, written only when off), DISPLAY page, on by default: the smoke and the liquids' steam below. Without the 3D lighting it does nothing.
-**Files:** `src/engine/world/lighting.*`, `src/platform/gl_lighting.*`, `src/game/game.cpp`, `src/platform/sdl_presenter.*`; the `lightview` tool and docs/LIGHTVIEW.md
+**Option:** CEILING LIGHTS / PLAFONNIERS (`ceilinglights`, written only when off), DISPLAY page, on by default: the ceiling lights below. Without the 3D lighting it does nothing.
+**Files:** `src/engine/world/lighting.*`, `src/engine/world/ceiling_lights.*`, `src/core/json.*`, `ceiling_lights/`, `src/platform/gl_lighting.*`, `src/game/game.cpp`, `src/platform/sdl_presenter.*`; the `lightview` tool and docs/LIGHTVIEW.md; the light plans in `tools/lights/`
 
 The original draws flat sprites under a fixed light. With this option the world is lit in 3D in true colour.
 
@@ -453,6 +455,7 @@ The original draws flat sprites under a fixed light. With this option the world 
 - Firearms flash at the muzzle: each shot of the BA-40, BA-41, RP-22, RP-32, SG-A1, AC-88 and GL-303, the player's or an enemy's, lights a warm flash at the end of the gun for a fifteenth of a second, which lights the shooter and the walls around; the shooter, the player or an enemy, casts its shadow behind it, on the floor and the walls. Where a bullet lands, the spark gives only a small light. Energy weapons and rockets need no flash: their shot glows by itself from the muzzle on.
 - The Silencer carries a lamp (FLASHLIGHT / LAMPE TORCHE option, on by default): a beam from his chest the way he faces, tipped down, that lights the floor and what stands in front of him (a cone of 40 degrees, full within 23). He never shadows it himself.
 - **L** switches the lamp on or off in play, the same setting as the option (saved); Ctrl+L stays the cheat. On the controller, the FLASHLIGHT action sends L; it is on **LT** by default. Without the 3D lighting, L does nothing, as in the original.
+- Ceiling lights (CEILING LIGHTS / PLAFONNIERS option, on by default): the original draws no ceiling, and its rooms have only the light painted in their sprites. Lamps placed by hand under each room's ceiling, a plan per mission (editable JSON next to the executable: `ceiling_lights/mapNNN.json` for the lamps, `ceiling_lights/kinds.json` for their kinds' colour, strength, reach and how much they lower the ambient light; read at start-up, a mod's own `ceiling_lights/` first; tools/lights/README.md), few and strong (some 1150 units apart, far reaching), light the floor in wide pools and the walls near them, and make crates, desks, machines and people cast long, dark shadows; round them the ambient light is much lower, so that the room is lit by its lamps. They are not drawn: the ceiling is not. Warm white in offices and quarters, cold white tubes in labs, corridors and machine rooms, orange sodium in stores and docks. Closets and recesses, the outside and the rooms that a radioactive pool already lights get none. So far: mission 1.
 - The rest of the scene keeps most of its light (AMBIENT LIGHT / LUMIERE AMBIANTE option, 85 % of its light by default), so the game stays readable. Lower, the lamps stand out more; 100 does not darken the scene at all.
 
 **Shadows**

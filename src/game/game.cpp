@@ -10,6 +10,7 @@
 #include "engine/world/actor_create.hpp"
 #include "engine/world/aim_mode.hpp"
 #include "engine/world/attack.hpp"
+#include "engine/world/ceiling_lights.hpp"
 #include "engine/world/cheats.hpp"
 #include "engine/world/auto_firer.hpp"
 #include "engine/world/gravity.hpp"
@@ -1888,7 +1889,10 @@ bool Game::render_lit(const Surface8& screen, std::vector<std::uint32_t>& argb) 
     // Port addition: the fires of the leaking barrels' pools light the scene.
     std::vector<PointLight> extra;
     if (config_.barrel_leaks) extra = barrel_leaks_.lights(*world_);
-    return lighting_->shade(*world_, screen, palette(), lighting_options(config_), std::move(extra), argb.data());
+    const LightingOptions options = lighting_options(config_);
+    // Port addition: lamps under the rooms' ceilings (GameConfig::ceiling_lights).
+    if (config_.ceiling_lights) add_ceiling_lights(ceiling_lights(world_->current_map()), options.ambient, extra);
+    return lighting_->shade(*world_, screen, palette(), options, std::move(extra), argb.data());
 }
 
 // @orig 1188:19C1

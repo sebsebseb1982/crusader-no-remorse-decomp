@@ -51,7 +51,8 @@ add_library(crusader_core
   src/core/amf_module.cpp
   src/core/png_writer.cpp
   src/core/avi_movie.cpp
-  src/core/movie_subtitles.cpp)
+  src/core/movie_subtitles.cpp
+  src/core/json.cpp)
 target_include_directories(crusader_core PUBLIC src)
 
 # Engine core: process kernel (KERNEL.C / PROCESS.C), no platform dependency.
@@ -87,6 +88,7 @@ add_library(crusader_engine
   src/engine/world/barrel_leaks.cpp
   src/engine/world/glass_debris.cpp
   src/engine/world/lighting.cpp
+  src/engine/world/ceiling_lights.cpp
   src/engine/world/death_loot.cpp
   src/engine/world/attack.cpp
   src/engine/world/activity.cpp
@@ -162,6 +164,10 @@ target_include_directories(crusader PRIVATE ${CMAKE_BINARY_DIR}/generated)
 # The language files (languages/), next to the executable.
 add_custom_command(TARGET crusader POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/languages $<TARGET_FILE_DIR:crusader>/languages)
+# The ceiling lights (ceiling_lights/: the lamps of each map and their kinds,
+# editable JSON), next to the executable.
+add_custom_command(TARGET crusader POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/ceiling_lights $<TARGET_FILE_DIR:crusader>/ceiling_lights)
 
 add_executable(shapeview src/tools/shapeview.cpp)
 target_link_libraries(shapeview PRIVATE crusader_platform)
@@ -235,6 +241,8 @@ endif()
 enable_testing()
 # The tests read the language files of the sources (the French texts).
 add_compile_definitions(CRUSADER_LANGUAGES_DIR="${CMAKE_SOURCE_DIR}/languages")
+# The tools and tests read the ceiling lights from the sources.
+add_compile_definitions(CRUSADER_CEILING_LIGHTS_DIR="${CMAKE_SOURCE_DIR}/ceiling_lights")
 # tests/: no game data needed, run by the GitHub CI.
 # e2e/: end-to-end tests on the original game data and on saved games, none of
 # which is in the repository. They are registered only with

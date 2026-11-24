@@ -153,7 +153,8 @@ void test_vibration_settings() {
     // Without the 3D lighting, its smoke, flashlight and ambient light are
     // greyed and stay as they are.
     CHECK(!config.lighting && config.volumetric_smoke && config.flashlight);
-    CHECK(smooth.inactive(Entry::Smoke) && smooth.inactive(Entry::Flashlight) && smooth.inactive(Entry::Ambient));
+    CHECK(smooth.inactive(Entry::Smoke) && smooth.inactive(Entry::Flashlight) &&
+          smooth.inactive(Entry::CeilingLights) && smooth.inactive(Entry::Ambient));
     CHECK(!smooth.inactive(Entry::Lighting) && !smooth.inactive(Entry::Smooth));
     choose(smooth, Entry::Smoke);
     choose(smooth, Entry::Flashlight);
@@ -193,7 +194,7 @@ void test_enhancements_pages() {
         EnhancementsScreen s(fonts, config, pad_focus);
         choose(s, page);
         CHECK(s.page() != Page::Main && s.focus() == 0 && s.entries().back() == Entry::Back);
-        CHECK(s.entries().size() <= 9 && s.row_rect(static_cast<int>(s.entries().size()) - 1).y1 < 460);
+        CHECK(s.entries().size() <= 10 && s.row_rect(static_cast<int>(s.entries().size()) - 1).y1 < 460);
     }
     // Effects: both toggles on their own.
     choose(screen, Entry::Effects);

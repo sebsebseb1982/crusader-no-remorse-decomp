@@ -1,0 +1,10 @@
+{
+ "about": "Kinds of ceiling lamps for the 3D lighting (CEILING LIGHTS option). colour: red, green, blue, 0..1; strength: times the colour (the game makes it brighter the brighter the ambient light); radius: reach, in lighting-space units (one world unit; a z unit is 3.266); dim: 0..1, how much the lamp lowers the ambient light round it (0.8: to 40 %). A map's lamps are in mapNNN.json; edit, then restart the game (or F5 in lightview).",
+ "kinds": {
+  "warm": {"colour": [1.0, 0.86, 0.66], "strength": 1.15, "radius": 1200, "dim": 0.8},
+  "neon": {"colour": [0.82, 0.93, 1.0], "strength": 1.15, "radius": 1200, "dim": 0.8},
+  "sodium": {"colour": [1.0, 0.68, 0.38], "strength": 1.15, "radius": 1200, "dim": 0.8},
+  "dim": {"colour": [1.0, 0.84, 0.62], "strength": 0.6, "radius": 800, "dim": 0.6},
+  "red": {"colour": [1.0, 0.22, 0.12], "strength": 0.9, "radius": 900, "dim": 0.8}
+ }
+}
