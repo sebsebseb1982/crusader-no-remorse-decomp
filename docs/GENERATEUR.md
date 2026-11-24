@@ -1,6 +1,6 @@
-# Procedural level generator
+# Crusader: No Limit
 
-The generator builds new levels for *Crusader: No Remorse* out of the game's own pieces: the floors, walls and objects of the original maps, and the scripts (usecode classes) that drive them. It writes them into a mod folder, like the level editor (`docs/EDITEUR.md`), and the game plays them with `--mod`.
+*Crusader: No Limit* is the procedural level generator of the port. It builds new levels for *Crusader: No Remorse* out of the game's own pieces: the floors, walls and objects of the original maps, and the scripts (usecode classes) that drive them. It writes them into a mod folder, like the level editor (`docs/EDITEUR.md`), and the game plays them with `--mod`.
 
 Goals:
 
@@ -64,6 +64,18 @@ crusader-no-remorse data --mod mods/gen-42 --map <map printed by the generator>
 
 `--levels N` chains N levels: each exit teleporter leads to the next level's start. `--biome N` picks the biome (default: drawn from the seed).
 
+### Saving the seed
+
+Every generation records its seeds in `NOLIMIT.JSON`, in the mod folder (next to the mod's `SAVEGAME` folder): for each generated map, the seed and the options it was generated with, and what they gave (biome, number of rooms). In the editor, the seed of a generated map shows under the map's number, and goes to `NOLIMIT.JSON` when the project is saved.
+
+That file is enough to share levels: copied alone into an empty folder,
+
+```sh
+crusader-no-remorse-editor data --regenerate mods/shared
+```
+
+generates the same levels again, byte for byte. A seed gives the same level only with the same generator version (`"version"` in the file, raised whenever the generator changes what a seed gives: `--regenerate` refuses another version) and the same game data.
+
 ## Milestones
 
 Each milestone ends with levels that can be played by hand, and tests that check them.
@@ -86,7 +98,8 @@ Each milestone ends with levels that can be played by hand, and tests that check
 - Layout: 6 to 10 rooms of 2 x 2 to 3 x 3 floor tiles, in slots of a 4 x 4 grid, grown from the start room; about one extra passage in five makes loops. The exit is the room farthest from the start.
 - Corridors of one tile, with an automatic door (`MDOOR_N` / `MDOOR_E` and their `DOOREGG`) at each end.
 - Start: arrival egg 0x1E in the first room. Exit: a `TELEPAD` with a departure egg to the next level's start (the last level leads back to the first).
-- Editor: *Map > Generate a level...* (seed, biome, number of rooms); command line `--generate SEED [--levels N] [--biome B] [--mod DIR]` (default mod folder: `mods/gen-SEED`).
+- Editor: *Map > Generate a level (Crusader: No Limit)...* (seed, biome, number of rooms); command line `--generate SEED [--levels N] [--biome B] [--mod DIR]` (default mod folder: `mods/gen-SEED`).
+- Seeds saved in the mod's `NOLIMIT.JSON`, shown in the editor; `--regenerate DIR` generates a shared file's levels again.
 - Tests: `editor_tests` (no data: determinism, layout, one start, one exit, doors and their eggs, 60 seeds); `generator_data_tests data [first_seed] [seeds]` (on the data, played in the engine: walking to every room and to the exit, a door that opens and is crossed, the exit teleport, the editor's level check).
 
 Next: milestone 2, locks and keys.

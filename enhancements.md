@@ -45,7 +45,7 @@ The changes fall into four groups:
 18. [Known deviations from the original](#18-known-deviations-from-the-original)
 19. [Platforms, technical base and distribution](#19-platforms-technical-base-and-distribution)
 20. [Level editor](#20-level-editor)
-   - [20b. Procedural level generator](#20b-procedural-level-generator)
+   - [20b. Crusader: No Limit (procedural levels)](#20b-crusader-no-limit-procedural-levels)
 
 ---
 
@@ -943,11 +943,11 @@ The original ships no editor. `crusader-no-remorse-editor` (Dear ImGui on SDL2, 
 - A file in the mod replaces the one in the data: `FIXED.DAT`, `GLOB.FLX`, `SHAPES.FLX`, `TYPEFLAG.DAT`, `DAMAGE.FLX`, `ANIM.DAT`, `DTABLE.FLX`, `EUSECODE.FLX`, `UNKDS.DAT`.
 - `--map N`: the new game plays out like the original's, but `MainActor_I_teleportToEgg` receives map N and egg `--egg` instead of 1 and 0x1E (`game_tests --editor-mod`).
 
-### 20b. Procedural level generator
+### 20b. Crusader: No Limit (procedural levels)
 
 **Files:** `src/editor/generator/`, `docs/GENERATEUR.md`
 
-New levels built from the game's own pieces. The generator learns the **biomes** (floor and wall families) from the globs of the original maps, lays out rooms and corridors, and places automatic doors, the mission start and an exit teleporter. `crusader-no-remorse-editor data --generate SEED [--levels N]` writes the levels to a mod folder; *Map > Generate a level...* does it in the editor. Work in progress: milestone 1 of 7 (locks and keys, storeys, enemies and supplies come next).
+*Crusader: No Limit* generates new levels from the game's own pieces. The generator learns the **biomes** (floor and wall families) from the globs of the original maps, lays out rooms and corridors, and places automatic doors, the mission start and an exit teleporter. `crusader-no-remorse-editor data --generate SEED [--levels N]` writes the levels to a mod folder; *Map > Generate a level (Crusader: No Limit)...* does it in the editor. The seeds are saved in the mod's `NOLIMIT.JSON`, which is enough to share the levels: `--regenerate DIR` generates them again, byte for byte. Work in progress: milestone 1 of 7 (locks and keys, storeys, enemies and supplies come next).
 
 **Rules**
 - Pieces follow the original globs: floors of 256 units, walls one storey (96 units) high; the walls on the camera side use the black frame the designers used there, so that rooms stay visible.

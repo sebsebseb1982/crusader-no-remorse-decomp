@@ -308,6 +308,9 @@ private:
     bool want_generate_ = false;
     int generate_seed_ = 1, generate_biome_ = -1, generate_rooms_ = 0;
     std::unique_ptr<gen::GameData> generator_data_;  // learnt from the data on first use
+    std::optional<gen::Manifest> manifest_;          // the mod's NOLIMIT.JSON, read on first use
+    bool manifest_dirty_ = false;
+    gen::Manifest& manifest();
     bool want_quit_confirm_ = false;
     int open_map_choice_ = 1;
     std::string mod_path_text_;

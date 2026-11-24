@@ -72,7 +72,8 @@ std::vector<GeneratedLevel> generate_levels(Project& project, const GameData& da
         o.biome = biome;
         o.map = maps[k];
         o.next_map = maps[(k + 1) % levels];
-        GeneratedLevel g{maps[k], generate(data.biomes, o)};
+        GeneratedLevel g{maps[k], generate(data.biomes, o), {}};
+        g.entry = manifest_level(o, g.result, data.biomes);
         const std::string problem = check_solvable(g.result);
         if (!problem.empty()) {
             error = "seed " + std::to_string(o.seed) + ": " + problem;
@@ -82,6 +83,40 @@ std::vector<GeneratedLevel> generate_levels(Project& project, const GameData& da
         out.push_back(std::move(g));
     }
     return out;
+}
+
+std::vector<GeneratedLevel> regenerate_levels(Project& project, const GameData& data, const Manifest& manifest,
+                                              std::string& error) {
+    if (manifest.version != kGeneratorVersion) {
+        error = std::string(kManifestFile) + " comes from generator version " + std::to_string(manifest.version) +
+                ", this is version " + std::to_string(kGeneratorVersion) + ": its seeds would give other levels";
+        return {};
+    }
+    std::vector<GeneratedLevel> out;
+    for (const ManifestLevel& l : manifest.levels) {
+        if (l.map <= 0 || static_cast<std::size_t>(l.map) >= project.map_slots()) {
+            error = "map " + std::to_string(l.map) + " does not fit FIXED.DAT";
+            return {};
+        }
+        const Options o = l.options();
+        GeneratedLevel g{l.map, generate(data.biomes, o), {}};
+        g.entry = manifest_level(o, g.result, data.biomes);
+        const std::string problem = check_solvable(g.result);
+        if (!problem.empty()) {
+            error = "seed " + std::to_string(o.seed) + ": " + problem;
+            return {};
+        }
+        out.push_back(std::move(g));
+    }
+    for (const GeneratedLevel& g : out) project.store_map(static_cast<std::size_t>(g.map), g.result.level);
+    return out;
+}
+
+void record_levels(const std::filesystem::path& mod, const std::vector<GeneratedLevel>& levels) {
+    Manifest manifest = Manifest::read(mod).value_or(Manifest{});
+    manifest.version = kGeneratorVersion;
+    for (const GeneratedLevel& g : levels) manifest.set(g.entry);
+    manifest.write(mod);
 }
 
 }  // namespace crusader::editor::gen

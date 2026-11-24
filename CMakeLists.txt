@@ -202,7 +202,8 @@ add_library(crusader_editor_core
   src/editor/project.cpp
   src/editor/generator/biome.cpp
   src/editor/generator/generator.cpp
-  src/editor/generator/campaign.cpp)
+  src/editor/generator/campaign.cpp
+  src/editor/generator/manifest.cpp)
 target_link_libraries(crusader_editor_core PUBLIC crusader_core)
 
 option(CRUSADER_BUILD_EDITOR "Build the level editor (fetches Dear ImGui)" ON)

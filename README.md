@@ -41,7 +41,7 @@ This repository contains **no game files**: you need your own copy of the origin
 - Release the game on PortMaster.
 - Support additional versions of *Crusader: No Remorse*, if there is interest.
 - Level editor: script (usecode) disassembly and assembly, sprite import, NPC type editing.
-- Procedural levels: the generator (`crusader-no-remorse-editor data --generate SEED`) builds rooms, corridors, doors and an exit from the game's own pieces; locks and keys, several storeys, enemies and supplies are next. See [docs/GENERATEUR.md](docs/GENERATEUR.md).
+- *Crusader: No Limit*, procedural levels: the generator (`crusader-no-remorse-editor data --generate SEED`) builds rooms, corridors, doors and an exit from the game's own pieces; locks and keys, several storeys, enemies and supplies are next. See [docs/GENERATEUR.md](docs/GENERATEUR.md).
 - Have an idea? Let me know what you'd like to see!
 
 Further improvements will come when my Claude subscription renews. If you'd like to help speed things up, feel free to leave a small tip (see [SPONSORING.md](SPONSORING.md)).
@@ -93,7 +93,8 @@ The maintainer does not own the Steam or EA releases, so this has not been teste
 ./crusader-no-remorse --version
 ./crusader-no-remorse data --mod mods/my-level --map 3   # plays a level made with the editor
 ./crusader-no-remorse-editor data --mod mods/my-level    # the level editor
-./crusader-no-remorse-editor data --generate 42 --levels 3   # three procedural levels in mods/gen-42
+./crusader-no-remorse-editor data --generate 42 --levels 3   # Crusader: No Limit, three levels in mods/gen-42
+./crusader-no-remorse-editor data --regenerate mods/shared   # the levels of a shared NOLIMIT.JSON
 ```
 
 ### 4. Language

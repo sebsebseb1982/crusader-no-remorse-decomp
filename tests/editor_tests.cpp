@@ -2,6 +2,7 @@
 // (no game data).
 
 #include "editor/generator/generator.hpp"
+#include "editor/generator/manifest.hpp"
 #include "editor/item_semantics.hpp"
 #include "editor/level.hpp"
 #include "editor/level_tools.hpp"
@@ -371,6 +372,42 @@ void check_generator() {
         check(arrivals == 1 && departures == 1, "one start, one exit");
         check(doors == static_cast<int>(2 * r.links.size()) && door_eggs == doors, "a door and its egg per corridor end");
     }
+    // NOLIMIT.JSON: the seeds written, read back, the same map replaced; the
+    // options read back give the same level.
+    {
+        const auto dir = std::filesystem::temp_directory_path() / "crusader_editor_tests_nolimit";
+        std::filesystem::remove_all(dir);
+        Options o;
+        o.seed = 4242;
+        o.rooms = 7;
+        o.map = 120;
+        o.next_map = 121;
+        const Result r = generate(biomes, o);
+        Manifest m;
+        m.set(manifest_level(o, r, biomes));
+        ManifestLevel other = manifest_level(o, r, biomes);
+        other.map = 121;
+        other.seed = 7;
+        other.biome_name = "a \"quoted\" name";
+        m.set(other);
+        other.seed = 8;
+        m.set(other);
+        m.write(dir);
+        const auto back = Manifest::read(dir);
+        check(back && back->version == kGeneratorVersion && back->levels.size() == 2, "manifest read back");
+        if (back && back->levels.size() == 2) {
+            const ManifestLevel& a = back->levels[0];
+            check(a.map == 120 && a.seed == 4242 && a.rooms == 7 && a.biome == -1 && a.next_map == 121 &&
+                      a.room_count == 7 && a.biome_name == biome.name(),
+                  "manifest level");
+            check(back->find(121) && back->find(121)->seed == 8 && back->find(121)->biome_name == "a \"quoted\" name",
+                  "manifest: a map's level replaced, names escaped");
+            check(generate(biomes, a.options()).level.serialize() == r.level.serialize(), "seed regenerates the level");
+        }
+        check(!Manifest::read(dir / "none"), "no manifest");
+        std::filesystem::remove_all(dir);
+    }
+
     Options o;
     o.biome = 3;  // out of range: drawn
     o.rooms = 2;

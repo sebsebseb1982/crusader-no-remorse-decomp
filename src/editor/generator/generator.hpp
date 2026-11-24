@@ -1,7 +1,7 @@
 #pragma once
-// Procedural level generator (docs/GENERATEUR.md): a mission graph of rooms,
-// laid out on a grid and built from the pieces of a biome, with the eggs and
-// scripted objects of the original maps.
+// Crusader: No Limit, the procedural level generator (docs/GENERATEUR.md):
+// a mission graph of rooms, laid out on a grid and built from the pieces of
+// a biome, with the eggs and scripted objects of the original maps.
 //
 // Milestone 1: one storey of rooms joined by corridors through automatic
 // doors (a door and its DOOREGG, as the original maps make them), the
