@@ -325,6 +325,33 @@ void EditorApp::new_empty_map() {
             tr(") et œuf de départ 0x1E.", ") and start egg 0x1E."));
 }
 
+void EditorApp::generate_level() {
+    commit_map();
+    const std::size_t slot = project_->free_map();
+    if (slot == 0) {
+        message(tr("Plus d'emplacement de carte libre.", "No free map slot left."));
+        return;
+    }
+    if (!generator_data_) generator_data_ = std::make_unique<gen::GameData>(gen::GameData::load(project_->data()));
+    gen::Options o;
+    o.seed = static_cast<std::uint32_t>(generate_seed_);
+    o.biome = generate_biome_;
+    o.rooms = generate_rooms_;
+    o.map = static_cast<int>(slot);
+    o.next_map = static_cast<int>(slot);  // the exit leads back to the start
+    const gen::Result result = gen::generate(generator_data_->biomes, o);
+    const std::string problem = gen::check_solvable(result);
+    if (!problem.empty() || result.level.items.empty()) {
+        message(std::string(tr("Génération impossible : ", "Generation failed: ")) + problem);
+        return;
+    }
+    project_->store_map(slot, result.level);
+    maps_changed();
+    open_map(static_cast<int>(slot));
+    message(std::string(tr("Niveau généré sur la carte ", "Level generated on map ")) + std::to_string(slot) + " (" +
+            (result.notes.empty() ? std::string() : result.notes.front()) + ")");
+}
+
 void EditorApp::copy_map_to_free_slot() {
     commit_map();
     const std::size_t slot = project_->free_map();
@@ -1887,6 +1914,10 @@ void EditorApp::main_menu() {
             open_map_choice_ = map_;
         }
         if (ImGui::MenuItem(tr("Nouvelle carte", "New map"))) new_empty_map();
+        if (ImGui::MenuItem(tr("Générer un niveau...", "Generate a level..."))) {
+            want_generate_ = true;
+            generate_seed_ = static_cast<int>(SDL_GetTicks() % 100000) + 1;
+        }
         if (ImGui::MenuItem(tr("Copier cette carte vers un emplacement libre", "Copy this map to a free slot"))) {
             copy_map_to_free_slot();
         }
@@ -3071,6 +3102,40 @@ void EditorApp::modal_popups() {
         ImGui::EndChild();
         if (ImGui::Button(tr("Ouvrir", "Open"))) {
             open_map(open_map_choice_);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(tr("Annuler", "Cancel"))) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+    if (want_generate_) {
+        ImGui::OpenPopup("generate_level");
+        want_generate_ = false;
+    }
+    if (ImGui::BeginPopupModal("generate_level", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (!generator_data_) generator_data_ = std::make_unique<gen::GameData>(gen::GameData::load(project_->data()));
+        ImGui::TextUnformatted(tr("Un niveau procédural sur une carte libre : salles, couloirs, portes, départ et\n"
+                                  "téléporteur de sortie (qui ramène au départ).",
+                                  "A procedural level on a free map: rooms, corridors, doors, start and exit\n"
+                                  "teleporter (back to the start)."));
+        ImGui::InputInt(tr("Graine", "Seed"), &generate_seed_);
+        if (generate_seed_ < 0) generate_seed_ = 0;
+        const auto& biomes = generator_data_->biomes;
+        const std::string current = generate_biome_ < 0 || generate_biome_ >= static_cast<int>(biomes.size())
+                                        ? std::string(tr("au hasard", "random"))
+                                        : biomes[static_cast<std::size_t>(generate_biome_)].name();
+        if (ImGui::BeginCombo(tr("Biome", "Biome"), current.c_str())) {
+            if (ImGui::Selectable(tr("au hasard", "random"), generate_biome_ < 0)) generate_biome_ = -1;
+            for (std::size_t i = 0; i < biomes.size(); ++i) {
+                if (ImGui::Selectable(biomes[i].name().c_str(), generate_biome_ == static_cast<int>(i))) {
+                    generate_biome_ = static_cast<int>(i);
+                }
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::SliderInt(tr("Salles (0 : au hasard)", "Rooms (0: random)"), &generate_rooms_, 0, 16);
+        if (ImGui::Button(tr("Générer", "Generate"))) {
+            generate_level();
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();

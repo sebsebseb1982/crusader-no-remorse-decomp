@@ -42,6 +42,7 @@ The original levels are made of numbers that must match: a teleporter names the 
 | **Level check** | status bar, *Map > Check the level* | Lists what would not work in the game, updated at each change; *Show* selects the item. |
 | **Tooltip** | pointer over the view | What the item is, where a teleporter leads, its link number. |
 | **Examples from the original maps** | *Properties*, *Edit* menu | Every place where the original maps use the selected object, the ones with the most linked items first. Click a row: the map opens with the object and its linked items selected, ready to copy (Ctrl+C) onto your map. |
+| **Generate a level** | *Map > Generate a level...* | A procedural level on a free map, from a seed and a biome: rooms, corridors, automatic doors, the mission start and an exit teleporter (see `docs/GENERATEUR.md`). |
 | **Prefabs** | *Edit > Save the selection as a prefab*, *Prefabs* tab | Saves a group of items (a switch and its doors, a guard post...) in the `prefabs` folder (`--prefabs DIR`), to place again on any map, at the work z, with its links renumbered. |
 
 The level check reports:

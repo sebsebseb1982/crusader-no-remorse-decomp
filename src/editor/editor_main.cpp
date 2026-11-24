@@ -15,6 +15,7 @@
 #include "core/data_info.hpp"
 #include "core/language.hpp"
 #include "editor/editor_app.hpp"
+#include "editor/generator/campaign.hpp"
 
 #include <SDL.h>
 #include <imgui.h>
@@ -56,6 +57,36 @@ std::filesystem::path game_executable() {
     return dir / CRUSADER_GAME_EXE;
 }
 
+// --generate: levels written into the mod folder, without a window.
+int generate(const std::filesystem::path& data, const std::filesystem::path& mod, std::uint32_t seed, int levels,
+             int biome) {
+    using namespace crusader::editor;
+    try {
+        const gen::GameData game = gen::GameData::load(data);
+        std::printf("%zu biomes:\n", game.biomes.size());
+        for (std::size_t i = 0; i < game.biomes.size(); ++i) {
+            std::printf("  %2zu  %s\n", i, game.biomes[i].name().c_str());
+        }
+        Project project(data, mod);
+        std::string error;
+        const auto generated = gen::generate_levels(project, game, seed, levels, biome, error);
+        if (generated.empty()) {
+            std::fprintf(stderr, "generation failed: %s\n", error.c_str());
+            return 1;
+        }
+        project.save();
+        for (const auto& g : generated) {
+            std::printf("map %d: %s\n", g.map, g.result.notes.empty() ? "" : g.result.notes.front().c_str());
+        }
+        std::printf("written to %s; play with:\n  crusader-no-remorse %s --mod %s --map %d\n", mod.string().c_str(),
+                    data.string().c_str(), mod.string().c_str(), generated.front().map);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "error: %s\n", e.what());
+        return 1;
+    }
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -63,8 +94,14 @@ int main(int argc, char** argv) {
     crusader::editor::EditorOptions options;
     std::string screenshot;
     int frames = 60;
+    long long generate_seed = -1;
+    int generate_count = 1, generate_biome = -1;
+    bool mod_given = false;
     for (int i = 1; i < argc; ++i) {
-        if (std::strcmp(argv[i], "--mod") == 0 && i + 1 < argc) options.mod = argv[++i];
+        if (std::strcmp(argv[i], "--mod") == 0 && i + 1 < argc) options.mod = argv[++i], mod_given = true;
+        else if (std::strcmp(argv[i], "--generate") == 0 && i + 1 < argc) generate_seed = std::stoll(argv[++i], nullptr, 0);
+        else if (std::strcmp(argv[i], "--levels") == 0 && i + 1 < argc) generate_count = std::stoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--biome") == 0 && i + 1 < argc) generate_biome = std::stoi(argv[++i]);
         else if (std::strcmp(argv[i], "--map") == 0 && i + 1 < argc) options.map = std::stoi(argv[++i], nullptr, 0);
         else if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshot = argv[++i];
         else if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc) frames = std::stoi(argv[++i]);
@@ -74,7 +111,8 @@ int main(int argc, char** argv) {
             options.select_shape = std::stoi(argv[++i], nullptr, 0);
         }
         else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
-            std::printf("crusader-no-remorse-editor [data] [--mod DIR] [--map N]\n");
+            std::printf("crusader-no-remorse-editor [data] [--mod DIR] [--map N]\n"
+                        "crusader-no-remorse-editor [data] --generate SEED [--levels N] [--biome B] [--mod DIR]\n");
             return 0;
         } else {
             options.data = argv[i];
@@ -87,6 +125,11 @@ int main(int argc, char** argv) {
         return 1;
     }
     crusader::set_text_language(crusader::detect_data_info(options.data).text_language());
+    if (generate_seed >= 0) {
+        if (!mod_given) options.mod = "mods/gen-" + std::to_string(generate_seed);
+        return generate(options.data, options.mod, static_cast<std::uint32_t>(generate_seed), generate_count,
+                        generate_biome);
+    }
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
         std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());

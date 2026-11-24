@@ -1,6 +1,7 @@
 // Level editor model: FIXED.DAT records, containers, globs, egg parameters
 // (no game data).
 
+#include "editor/generator/generator.hpp"
 #include "editor/item_semantics.hpp"
 #include "editor/level.hpp"
 #include "editor/level_tools.hpp"
@@ -314,12 +315,76 @@ void check_level_tools() {
 
 }  // namespace
 
+// The procedural generator on a made-up biome (docs/GENERATEUR.md).
+void check_generator() {
+    using namespace crusader::editor::gen;
+    Biome biome;
+    biome.floor = {0x100, 0};
+    biome.floor_variants = {{0x100, 0}, {0x100, 1}};
+    for (int side = 0; side < 2; ++side) {
+        for (int axis = 0; axis < 2; ++axis) {
+            for (int len = 0; len < 5; ++len) {
+                biome.walls[side][axis][len] = {static_cast<std::uint16_t>(0x200 + axis * 8 + len),
+                                                static_cast<std::uint8_t>(side * 2)};
+            }
+        }
+    }
+    // Wall runs: longest pieces first.
+    const auto run = biome.wall_run(kFront, kAlongY, 30);
+    check(run.size() == 4 && run[0].shape == 0x20C && run[3].shape == 0x209 && run[0].frame == 2, "wall run 30");
+    check(biome.can_build(kBack, kAlongX, 1) && biome.can_build(kBack, kAlongX, 0), "post, empty run");
+    Biome no_post = biome;
+    no_post.walls[kBack][kAlongX][0] = {};
+    check(!no_post.can_build(kBack, kAlongX, 3) && no_post.can_build(kBack, kAlongX, 6), "runs without posts");
+
+    const std::vector<Biome> biomes{biome};
+    for (std::uint32_t seed = 1; seed <= 60; ++seed) {
+        Options o;
+        o.seed = seed;
+        o.map = 100;
+        o.next_map = 101;
+        const Result r = generate(biomes, o);
+        check(check_solvable(r).empty(), "generated level solvable");
+        check(r.rooms.size() >= 6 && r.rooms.size() <= 10 && r.links.size() + 1 >= r.rooms.size(), "rooms and links");
+        check(r.exit_room != r.start_room && r.rooms[r.exit_room].depth >= 1, "exit away from the start");
+        // Same seed, same level.
+        check(generate(biomes, o).level.serialize() == r.level.serialize(), "generation is deterministic");
+        // Rooms apart from each other, on whole floor tiles.
+        for (std::size_t i = 0; i < r.rooms.size(); ++i) {
+            const Room& a = r.rooms[i];
+            check((a.x1 - a.x0) % kBlock == 0 && (a.y1 - a.y0) % kBlock == 0 && a.x1 - a.x0 >= 512, "room tiles");
+            for (std::size_t j = i + 1; j < r.rooms.size(); ++j) {
+                const Room& b = r.rooms[j];
+                check(a.x1 <= b.x0 || b.x1 <= a.x0 || a.y1 <= b.y0 || b.y1 <= a.y0, "rooms do not overlap");
+            }
+        }
+        int arrivals = 0, departures = 0, doors = 0, door_eggs = 0;
+        for (const LevelItem& i : r.level.items) {
+            check(i.x > 0 && i.y > 0 && i.x < kMapSize && i.y < kMapSize, "items on the map");
+            if (i.shape == kShapeTeleportEgg && i.frame == 1 && i.quality == kStartEgg) ++arrivals;
+            if (i.shape == kShapeTeleportEgg && i.frame == 0 && i.map_number == 101 && i.quality_low() == kStartEgg) {
+                ++departures;
+            }
+            if (i.shape == 0x0A9 || i.shape == 0x046) ++doors;
+            if (i.shape == kShapeTriggerEgg && i.quality == 0x0A && i.npc_number == 0x44) ++door_eggs;
+        }
+        check(arrivals == 1 && departures == 1, "one start, one exit");
+        check(doors == static_cast<int>(2 * r.links.size()) && door_eggs == doors, "a door and its egg per corridor end");
+    }
+    Options o;
+    o.biome = 3;  // out of range: drawn
+    o.rooms = 2;
+    const Result two = generate(biomes, o);
+    check(two.rooms.size() == 2 && check_solvable(two).empty(), "two rooms");
+}
+
 int main() {
     check_records();
     check_globs();
     check_semantics();
     check_level_tools();
     check_project_files();
+    check_generator();
     std::printf(failures ? "%d failure(s)\n" : "all checks passed\n", failures);
     return failures ? 1 : 0;
 }

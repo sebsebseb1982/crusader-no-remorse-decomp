@@ -7,6 +7,7 @@
 #include "core/typeflags.hpp"
 #include "core/xform.hpp"
 #include "core/dtable.hpp"
+#include "editor/generator/campaign.hpp"
 #include "editor/item_semantics.hpp"
 #include "editor/level.hpp"
 #include "editor/level_tools.hpp"
@@ -85,6 +86,8 @@ private:
     void test_in_game();
     void new_empty_map();
     void copy_map_to_free_slot();
+    // Map > Generate a level: a procedural level on a free map (docs/GENERATEUR.md).
+    void generate_level();
 
     // --- Undo.
     void push_undo();
@@ -302,6 +305,9 @@ private:
 
     // Popups.
     bool want_open_map_ = false;
+    bool want_generate_ = false;
+    int generate_seed_ = 1, generate_biome_ = -1, generate_rooms_ = 0;
+    std::unique_ptr<gen::GameData> generator_data_;  // learnt from the data on first use
     bool want_quit_confirm_ = false;
     int open_map_choice_ = 1;
     std::string mod_path_text_;

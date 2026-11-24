@@ -199,7 +199,10 @@ add_library(crusader_editor_core
   src/editor/level.cpp
   src/editor/item_semantics.cpp
   src/editor/level_tools.cpp
-  src/editor/project.cpp)
+  src/editor/project.cpp
+  src/editor/generator/biome.cpp
+  src/editor/generator/generator.cpp
+  src/editor/generator/campaign.cpp)
 target_link_libraries(crusader_editor_core PUBLIC crusader_core)
 
 option(CRUSADER_BUILD_EDITOR "Build the level editor (fetches Dear ImGui)" ON)
@@ -309,13 +312,18 @@ target_link_libraries(audio_data_tests PRIVATE crusader_engine)
 add_executable(editor_data_tests e2e/editor_data_tests.cpp)
 target_link_libraries(editor_data_tests PRIVATE crusader_editor_core crusader_engine)
 
+add_executable(generator_data_tests e2e/generator_data_tests.cpp)
+target_link_libraries(generator_data_tests PRIVATE crusader_game crusader_editor_core)
+target_include_directories(generator_data_tests PRIVATE e2e)
+target_compile_definitions(generator_data_tests PRIVATE CRUSADER_TEST_SAVES="${CRUSADER_TEST_SAVES_DIR}")
+
 add_executable(game_tests e2e/game_tests.cpp)
 target_link_libraries(game_tests PRIVATE crusader_game crusader_editor_core)
 target_include_directories(game_tests PRIVATE e2e)
 target_compile_definitions(game_tests PRIVATE CRUSADER_TEST_SAVES="${CRUSADER_TEST_SAVES_DIR}")
 
 if(CRUSADER_GAME_DATA_TESTS)
-    foreach(t core_data_tests world_data_tests audio_data_tests editor_data_tests game_tests)
+    foreach(t core_data_tests world_data_tests audio_data_tests editor_data_tests generator_data_tests game_tests)
         add_test(NAME ${t} COMMAND ${t} ${CRUSADER_DATA_DIR})
     endforeach()
 endif()
