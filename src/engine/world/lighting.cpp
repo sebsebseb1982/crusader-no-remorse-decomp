@@ -1237,6 +1237,26 @@ void WorldLighting::puff_states(std::vector<PuffState>& out) const {
               [](const PuffState& a, const PuffState& b) { return dot(a.centre, kToViewer) < dot(b.centre, kToViewer); });
 }
 
+// @orig none: port lighting (muzzle flash)
+Vec3 out_of_box(const World& world, ObjId item, Vec3 pos, const Vec3& ahead) {
+    constexpr float kClear = 4;
+    const Item* it = world.get(item);
+    const ShapeInfo* info = it ? world.shape_info(it->shape) : nullptr;
+    if (!info) return pos;
+    const bool mirrored = it->flags & kItemFlipped;
+    const float x = float(world_from_usecode(it->x)), y = float(world_from_usecode(it->y));
+    const float dx = float((mirrored ? info->footpad_y : info->footpad_x) * kFootpadXY);
+    const float dy = float((mirrored ? info->footpad_x : info->footpad_y) * kFootpadXY);
+    const float z0 = it->z * kLightZScale, z1 = (it->z + info->footpad_z * kFootpadZ) * kLightZScale;
+    const float lo[2] = {x - dx - kClear, y - dy - kClear}, hi[2] = {x + kClear, y + kClear};
+    const float p[2] = {pos.x, pos.y}, d[2] = {ahead.x, ahead.y};
+    if (p[0] <= lo[0] || p[0] >= hi[0] || p[1] <= lo[1] || p[1] >= hi[1] || pos.z < z0 || pos.z > z1) return pos;
+    float t = 1e9f;
+    for (int a = 0; a < 2; ++a)
+        if (std::abs(d[a]) > 1e-4f) t = std::min(t, ((d[a] > 0 ? hi[a] : lo[a]) - p[a]) / d[a]);
+    return t < 1e9f ? pos + ahead * t : pos;
+}
+
 // @orig none: port lighting
 void WorldLighting::shot_fired(ObjId shooter, std::int32_t x, std::int32_t y, std::int32_t z, int dir, int fire_type,
                                std::uint32_t ticks) {
@@ -1250,7 +1270,7 @@ void WorldLighting::shot_fired(ObjId shooter, std::int32_t x, std::int32_t y, st
                     ahead * 10.0f;
     // Each flash a little brighter or dimmer than the last.
     const float flicker = 0.85f + 0.3f * float(hash32(ticks * 2654435761u + shooter) & 0xFF) / 255.0f;
-    flashes_.push_back({at, kind->colour * (kind->strength * flicker), kind->radius, ticks, kind->life, shooter});
+    flashes_.push_back({at, ahead, kind->colour * (kind->strength * flicker), kind->radius, ticks, kind->life, shooter});
 }
 
 // @orig none: port lighting
@@ -1369,12 +1389,15 @@ void WorldLighting::gather_lights(const World& world, const LightingOptions& opt
         lights.push_back({centre, col * strength, 260.0f + std::min(f.glow_pixels, 200) * 2.0f, d.item->id});
     }
     if (opt.flash_lights) {
-        // Muzzle flashes: full on the tick of the shot, then fading out.
+        // Muzzle flashes: full on the tick of the shot, then fading out. Owned
+        // by no item: the shooter casts its shadow, behind it on the floor and
+        // the walls (issue #29), from just out of its box.
         for (const MuzzleFlash& f : flashes_) {
             const float age = float(ticks_ - f.born) / float(f.life);
             if (age >= 1) continue;
             const float k = (1 - age) * (1 - age);
-            lights.push_back({f.pos, f.colour * k, f.radius * (0.6f + 0.4f * k), f.owner});
+            lights.push_back({out_of_box(world, f.owner, f.pos, f.ahead), f.colour * k,
+                              f.radius * (0.6f + 0.4f * k), 0});
         }
     }
     if (opt.player_lamp) {

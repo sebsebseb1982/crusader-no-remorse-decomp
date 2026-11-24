@@ -69,6 +69,13 @@ struct PointLight {
     float dim = 0;
 };
 
+// `pos` (lighting space) moved along `ahead` (unit, level) out of the box of
+// `item` (TYPEFLAG footpads), a little beyond its face, when it is in it; as
+// it is otherwise. A muzzle flash's place: its shooter casts its shadow, and
+// a light in a box would be hidden by it from everything (the box's sprite
+// over the light on screen).
+Vec3 out_of_box(const World& world, ObjId item, Vec3 pos, const Vec3& ahead);
+
 struct LightingOptions {
     float ambient = 0.45f;
     bool shadows = true;
@@ -317,6 +324,7 @@ private:
     // Muzzle flashes: light for `life` ticks from `born`, fading.
     struct MuzzleFlash {
         Vec3 pos;
+        Vec3 ahead;  // the shot's way (unit, level)
         Vec3 colour;
         float radius;
         std::uint32_t born;

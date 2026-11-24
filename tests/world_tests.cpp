@@ -14,6 +14,7 @@
 #include "engine/world/collision.hpp"
 #include "engine/world/damage_marks.hpp"
 #include "engine/world/gravity.hpp"
+#include "engine/world/lighting.hpp"
 #include "engine/world/pathfind.hpp"
 #include "engine/world/render.hpp"
 #include "engine/world/world.hpp"
@@ -1526,6 +1527,43 @@ void test_blood_marks() {
     CHECK(marks.size() == 0);
 }
 
+// Port addition: a muzzle flash goes out of its shooter's box (out_of_box,
+// issue #29), so that the shooter casts its shadow.
+void test_flash_out_of_box() {
+    std::vector<ShapeInfo> tf = test_typeflags();
+    tf[10].footpad_x = 2;  // the Silencer's: 64 x 64, 40 high
+    tf[10].footpad_y = 2;
+    tf[10].footpad_z = 5;
+    World w(tf);
+    const ObjId id = w.create(10, 0);
+    w.pop_to_coords(1000, 1000, 0);  // box x, y 1936..2000 (lighting space), z 0..40
+    const float z = 32 * kLightZScale;
+    const float d = 0.70710678f;
+    const auto near = [](const Vec3& a, const Vec3& b) {
+        return std::abs(a.x - b.x) < 0.01f && std::abs(a.y - b.y) < 0.01f && std::abs(a.z - b.z) < 0.01f;
+    };
+    // Facing away from the camera (-x -y), the flash at the near corner: out
+    // through the far corner.
+    CHECK(near(out_of_box(w, id, {1995, 1995, z}, {-d, -d, 0}), {1932, 1932, z}));
+    // Facing +x: out through the +x face, y kept.
+    CHECK(near(out_of_box(w, id, {1990, 1950, z}, {1, 0, 0}), {2004, 1950, z}));
+    // Already out (beside the box, over it): as it is.
+    CHECK(near(out_of_box(w, id, {2010, 1990, z}, {-1, 0, 0}), {2010, 1990, z}));
+    CHECK(near(out_of_box(w, id, {1990, 1990, 50 * kLightZScale}, {1, 0, 0}), {1990, 1990, 50 * kLightZScale}));
+    // Flipped, the footpads swap: 3 x 1 becomes 1 x 3.
+    tf[11].footpad_x = 3;
+    tf[11].footpad_y = 1;
+    tf[11].footpad_z = 5;
+    World w2(tf);
+    const ObjId flipped = w2.create(11, 0);
+    w2.pop_to_coords(1000, 1000, 0);
+    w2.get(flipped)->flags |= kItemFlipped;  // x 1968..2000, y 1904..2000
+    CHECK(near(out_of_box(w2, flipped, {1990, 1990, z}, {0, -1, 0}), {1990, 1900, z}));
+    CHECK(near(out_of_box(w2, flipped, {1990, 1990, z}, {-1, 0, 0}), {1964, 1990, z}));
+    // No such item: as it is.
+    CHECK(near(out_of_box(w, 999, {1995, 1995, z}, {1, 0, 0}), {1995, 1995, z}));
+}
+
 // Port addition: the casings (casings.hpp).
 void test_casings() {
     // BA-40 / BA-41 (0xB), RP-22 / RP-32 (1): casings; SG-A1 (2), AC-88 (0xD):
@@ -1629,6 +1667,7 @@ int main() {
     test_impact_marks();
     test_blood_marks();
     test_casings();
+    test_flash_out_of_box();
     test_typeflag_decode();
     test_world_ids();
     test_create_npc_reuses_a_slot();
