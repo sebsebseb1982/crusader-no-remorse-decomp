@@ -98,15 +98,15 @@ std::vector<DrawItem> build_display_list(const World& world, ShapeCache& shapes,
                               w, h, stats);
 }
 
+namespace {
+
+// The items whose sprite falls on the w x h screen at `view` widened by
+// `margin` pixels on each side, placed on it, unsorted.
 // @orig ?: display list (DLIST.C), not located
-std::vector<DrawItem> build_display_list(const World& world, ShapeCache& shapes, const View& view, int w, int h,
-                                         RenderStats* stats, const DisplayExtras* extras) {
-    RenderStats local;
-    RenderStats& st = stats ? *stats : local;
-    st = {};
+std::vector<DrawItem> items_on_screen(const World& world, ShapeCache& shapes, const View& view, int w, int h,
+                                      int margin, RenderStats& st, const DisplayExtras* extras) {
     // Screen = projection - view corner.
     const int cam_sx = view.left + w / 2, cam_sy = view.top + h / 2;
-
     std::vector<DrawItem> items;
     world.for_each([&](const Item& item) {
         if (item.off_map || item.parent != 0 || (item.flags & (kItemInvisible | kItemContained | kItemEthereal))) return;
@@ -140,9 +140,31 @@ std::vector<DrawItem> build_display_list(const World& world, ShapeCache& shapes,
         d.top = d.sy - d.frame->yoff;
         d.right = d.left + fw;
         d.bottom = d.top + fh;
-        if (d.right <= 0 || d.bottom <= 0 || d.left >= w || d.top >= h) return;
+        if (d.right <= -margin || d.bottom <= -margin || d.left >= w + margin || d.top >= h + margin) return;
         items.push_back(d);
     });
+    return items;
+}
+
+}  // namespace
+
+// @orig none: port lighting
+std::vector<DrawItem> items_around_view(const World& world, ShapeCache& shapes, const View& view, int w, int h,
+                                        int margin) {
+    RenderStats st;
+    return items_on_screen(world, shapes, view, w, h, margin, st, nullptr);
+}
+
+// @orig ?: display list (DLIST.C), not located
+std::vector<DrawItem> build_display_list(const World& world, ShapeCache& shapes, const View& view, int w, int h,
+                                         RenderStats* stats, const DisplayExtras* extras) {
+    RenderStats local;
+    RenderStats& st = stats ? *stats : local;
+    st = {};
+    // Screen = projection - view corner.
+    const int cam_sx = view.left + w / 2, cam_sy = view.top + h / 2;
+
+    std::vector<DrawItem> items = items_on_screen(world, shapes, view, w, h, 0, st, extras);
     // Port addition: the extra sprites, placed as items are.
     if (extras) {
         for (const ExtraSprite& e : extras->sprites) {

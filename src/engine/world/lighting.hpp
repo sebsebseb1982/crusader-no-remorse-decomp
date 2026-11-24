@@ -300,6 +300,7 @@ private:
 
     // Capture.
     std::vector<DrawItem> list_;
+    std::vector<DrawItem> around_;        // the items just off screen (their lights only)
     int view_left_ = 0, view_top_ = 0, width_ = 0, height_ = 0;
     std::uint32_t ticks_ = 0;
     std::vector<std::uint8_t> world_;     // the world picture

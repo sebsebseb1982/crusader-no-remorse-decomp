@@ -359,6 +359,42 @@ void test_wall_lamp_lights(const std::filesystem::path& data) {
     CHECK(wisps == 0);
 }
 
+// Port lighting (issue #32): a light just off screen already lights the view
+// and the shadows it casts there; it does not pop in as its item shows. The
+// floodlight 7366 of map 1, 130 pixels left of the view: lit, not drawn; 1000
+// pixels off, out.
+void test_light_just_off_screen(const std::filesystem::path& data) {
+    constexpr ObjId kFlood = 7366;
+    const auto typeflags = load_typeflags(data / "STATIC/TYPEFLAG.DAT");
+    World w(typeflags);
+    w.load_fixed_map(FlexArchive::open(data / "STATIC/FIXED.DAT"), 1);
+    w.expand_glob_eggs(FlexArchive::open(data / "STATIC/GLOB.FLX"));
+    const auto shapes_flex = FlexArchive::open(data / "STATIC/SHAPES.FLX");
+    ShapeCache shapes(shapes_flex, ShapeLayout::World);
+    const auto xform = XformTable::load(data / "STATIC/XFORMPAL.DAT");
+    const auto palette = Palette::load(data / "STATIC/GAMEPAL.PAL");
+    const Item* flood = w.get(kFlood);
+    CHECK(flood != nullptr);
+    if (!flood) return;
+    WorldLighting lighting(shapes, xform);
+    // The camera `d` pixels right of the lamp (x - y grows by 4 per pixel).
+    auto camera_right_of = [&](int d) {
+        return Camera{world_from_usecode(flood->x) + 2 * d, world_from_usecode(flood->y) - 2 * d, flood->z};
+    };
+    auto drawn = [&](const Camera& c) {
+        const int left = ((c.x - c.y) >> 2) - 320, top = (((c.x + c.y) >> 3) - c.z) - 240;
+        for (const DrawItem& d : build_display_list(w, shapes, View{left, top}, 640, 480))
+            if (d.item->id == kFlood) return true;
+        return false;
+    };
+    const Camera near = camera_right_of(320 + 130), far = camera_right_of(320 + 1000);
+    CHECK(!drawn(near) && !drawn(far));
+    const auto lit = lights_owned_by(w, shapes, xform, palette, lighting, near, kFlood);
+    std::printf("floodlight 130 px off screen: %zu light(s)\n", lit.size());
+    CHECK(lit.size() == 1);
+    CHECK(lights_owned_by(w, shapes, xform, palette, lighting, far, kFlood).empty());
+}
+
 // Port lighting: the vending machine 4876 of map 1 (PEPSIEW 0x94, frame 0,
 // its glass on +x) is lit from inside: one light in front of its glass,
 // shining out of it (a spot along +x) with a glow over the glass, dimmed
@@ -500,9 +536,11 @@ void test_muzzle_flash(const std::filesystem::path& data) {
         lighting.capture(w, list, screen, left, top, palette, opt, ticks);
         std::vector<std::uint32_t> argb(640 * 480);
         lighting.shade(w, screen, palette, opt, {}, argb.data());
+        // The flashes are owned by no item (the shooter shadows them, issue
+        // #29), nor are the liquids' glows.
         std::vector<PointLight> out;
         for (const PointLight& l : lighting.lights())
-            if (l.owner == 1) out.push_back(l);
+            if (l.owner == 0 && !l.liquid) out.push_back(l);
         return out;
     };
     CHECK(player_lights(100).empty());
@@ -803,6 +841,7 @@ int main(int argc, char** argv) {
     test_original_maps(data);
     test_crate_stack_order(data);
     test_wall_lamp_lights(data);
+    test_light_just_off_screen(data);
     test_broken_charger_smoulders(data);
     test_vending_machine_lights(data);
     test_alarm_lights(data);

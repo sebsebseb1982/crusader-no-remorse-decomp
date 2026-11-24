@@ -706,6 +706,15 @@ void WorldLighting::capture(const World& world, const std::vector<DrawItem>& lis
         actor_[i] = is_actor(*list_[i].item, world.shape_info(list_[i].item->shape));
         liquid_[i] = opt.liquids && !actor_[i] && !list_[i].item->sprite_only && is_liquid(list_[i].item->shape);
     }
+    // The items just off screen: their lights reach into the view before
+    // they show (issue #32). A light of radius r reaches half r pixels from
+    // its own (the screen culling of shade), 450 for the largest (900).
+    constexpr int kLightMargin = 480;
+    around_ = items_around_view(world, shapes_, View{view_left, view_top}, width_, height_, kLightMargin);
+    std::erase_if(around_, [&](const DrawItem& d) {
+        return d.right > 0 && d.bottom > 0 && d.left < width_ && d.top < height_;  // in list_
+    });
+    for (const DrawItem& d : around_) decode(*d.frame);
     if (opt.liquids) gather_liquids(world);
     else liquids_.clear();
     if (opt.smoke) gather_jets(world);
@@ -1326,7 +1335,13 @@ void WorldLighting::shot_fired(ObjId shooter, std::int32_t x, std::int32_t y, st
 
 // @orig none: port lighting
 void WorldLighting::gather_lights(const World& world, const LightingOptions& opt, std::vector<PointLight>& lights) {
-    for (const DrawItem& d : list_) {
+    // The items drawn, and those just off screen.
+    std::vector<const DrawItem*> items;
+    items.reserve(list_.size() + around_.size());
+    for (const DrawItem& d : list_) items.push_back(&d);
+    for (const DrawItem& d : around_) items.push_back(&d);
+    for (const DrawItem* item : items) {
+        const DrawItem& d = *item;
         const Decoded& f = decoded(d.frame);
         if (d.item->sprite_only) {
             if (!opt.flash_lights) continue;
