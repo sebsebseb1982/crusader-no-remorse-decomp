@@ -2802,6 +2802,38 @@ void test_egg_hatched_before_save(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
+// Issue #33: the reporter's save (German 1.07, mission 1) was made while the
+// floating platform 819 (HOVER1) crossed the acid pool, on its way to
+// waypoint 1 (QHi 0x21, status 0x1000). HOVER's event 0x21 moves it from
+// waypoint to waypoint for good; its enterFastArea does not start it again
+// (busy bit set, and QHi bit 0x20). The processes are not loaded: it stood
+// still after the load. It travels again, and keeps on.
+void test_hover_platform_after_load(const std::filesystem::path& data) {
+    constexpr ObjId kPlatform = 819;
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "issue33-plateforme-flottante-immobile.sav");
+    World& w = game.world();
+    const Item* platform = w.get(kPlatform);
+    CHECK(w.current_map() == 1 && platform && platform->shape == 0x4F0);
+    if (!platform) return;
+    // Distinct places the platform went through, frame by frame.
+    auto travel = [&](int frames) {
+        std::set<std::pair<std::int32_t, std::int32_t>> places{{platform->x, platform->y}};
+        for (int f = 0; f < frames; ++f) {
+            game.update(kFrameUs);
+            places.emplace(platform->x, platform->y);
+        }
+        return places.size();
+    };
+    const std::size_t first = travel(600);
+    const std::size_t later = travel(600);
+    std::printf("hover platform after load: %zu then %zu places, at (%d, %d), status 0x%04X\n", first, later,
+                platform->x, platform->y, platform->flags);
+    CHECK(first > 10 && later > 10);
+    CHECK(platform->flags & 0x1000);
+    CHECK(game.machine().faults().empty());
+}
+
 // Status 0x1000 saved while a process of the item's class ran (the
 // processes are not loaded): a running timer (TIMER) and a rolling roller
 // (ROLLB_NS, ROLLB_EW) get their loop started again (events 0x20 and 0x21),
@@ -7711,6 +7743,10 @@ int main(int argc, char** argv) {
         test_egg_hatched_before_save(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--hover-platform") {
+        test_hover_platform_after_load(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--saved-busy") {
         test_saved_busy_items(data);
         return failures ? 1 : 0;
@@ -7909,6 +7945,7 @@ int main(int argc, char** argv) {
     test_keypad_door_after_reload(data);
     test_egg_hatched_before_save(data);
     test_saved_busy_items(data);
+    test_hover_platform_after_load(data);
     test_monitor(data);
     test_security_camera(data);
     test_camera_in_wide_view(data);
