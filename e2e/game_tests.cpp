@@ -2834,6 +2834,35 @@ void test_hover_platform_after_load(const std::filesystem::path& data) {
     CHECK(game.machine().faults().empty());
 }
 
+// Issue #33, the base: the reporter's save (map 40) caught the scenery guard
+// 673 (REB_GAR) halfway through his move, frame 31 for a rest frame of 24
+// (QLo). The rebuilt fast area made 31 his rest frame, and each move took
+// him through frames 32..38 (32 empty, the others missing): he blinked out
+// and back. His rest frame is 24 again; he only shows his frames 24..31, or
+// stays away (frame 32) when his enterFastArea draws it.
+void test_scenery_guard_after_load(const std::filesystem::path& data) {
+    constexpr ObjId kGuard = 673;
+    Game game(data, test_saves(data));
+    game.load_save_file(test_saves(data) / "issue33-base-resistance-objets-clignotent.sav");
+    World& w = game.world();
+    const Item* guard = w.get(kGuard);
+    CHECK(w.current_map() == 40 && guard && guard->shape == 0x4EC);
+    if (!guard) return;
+    const int rest = guard->quality & 0xFF;
+    std::set<int> frames{guard->frame};
+    for (int f = 0; f < 3000; ++f) {
+        game.update(kFrameUs);
+        frames.insert(guard->frame);
+    }
+    const bool away = frames == std::set<int>{32};
+    const bool own = *frames.begin() >= 24 && *frames.rbegin() <= 31;
+    std::printf("scenery guard after load: rest frame %d, %zu frames %d..%d%s\n", rest, frames.size(),
+                *frames.begin(), *frames.rbegin(), away ? " (away)" : "");
+    CHECK(rest == 24);
+    CHECK(away || (own && frames.size() == 8));
+    CHECK(game.machine().faults().empty());
+}
+
 // Status 0x1000 saved while a process of the item's class ran (the
 // processes are not loaded): a running timer (TIMER) and a rolling roller
 // (ROLLB_NS, ROLLB_EW) get their loop started again (events 0x20 and 0x21),
@@ -7743,6 +7772,10 @@ int main(int argc, char** argv) {
         test_egg_hatched_before_save(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--scenery-guard") {
+        test_scenery_guard_after_load(data);
+        return failures ? 1 : 0;
+    }
     if (argc > 2 && std::string(argv[2]) == "--hover-platform") {
         test_hover_platform_after_load(data);
         return failures ? 1 : 0;
@@ -7946,6 +7979,7 @@ int main(int argc, char** argv) {
     test_egg_hatched_before_save(data);
     test_saved_busy_items(data);
     test_hover_platform_after_load(data);
+    test_scenery_guard_after_load(data);
     test_monitor(data);
     test_security_camera(data);
     test_camera_in_wide_view(data);

@@ -697,6 +697,23 @@ void Game::load_save_file(const std::filesystem::path& path) {
             world_->hooks().call_class_event("HOVER", 0x21, id, args);
         }
     }
+    // The resistance's scenery guards (REB_GAR) keep their rest frame in
+    // QLo: enterFastArea copies the current frame there, then the guard
+    // either leaves (frame 32, empty) or moves forever, 7 frames up and back
+    // down; leaveFastArea puts the rest frame back. Saved halfway through a
+    // move (issue #33, item 673 of map 40: frame 31, rest 24), the fast area
+    // rebuilt below took frame 31 for the rest frame: from then on he went
+    // up through 32 (empty) and 33..38 (no such frames), blinking out at
+    // each move. The guards saved in the fast area leave it first, as their
+    // process ends: their rest frame back, they enter it again as on arrival.
+    if (world_->hooks().start_event) {
+        std::vector<ObjId> guards;
+        world_->for_each([&](const Item& i) {
+            if (!(i.flags & kItemFastArea) || i.parent || !usecode.has_class(i.shape)) return;
+            if (usecode.class_name(i.shape) == "REB_GAR") guards.push_back(i.id);
+        });
+        for (ObjId id : guards) world_->hooks().start_event(id, 0x10);
+    }
     world_->clear_fast_area();
     // The eggs' hatchers stand for the saved ones: an egg the player stands
     // in had hatched already (start_egg_hatcher, issue #26).
