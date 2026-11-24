@@ -7,6 +7,7 @@
 //        mapview [data_dir] [map] --find S                items of shape S, on the map or contained
 //        mapview [data_dir] [map] --item N                item N and the items it contains
 //        mapview [data_dir] [map] --near X Y R            items within R world units of (X, Y), with their class
+//        mapview [data_dir] [map] --dump                  every item on the map as CSV (boxes, type flags, class)
 //   Right click: prints the items under the cursor (draw order, boxes).
 //   Arrows / mouse drag  scroll        PageUp/PageDown  previous/next map
 //   Home                 recentre      Esc              quit
@@ -91,10 +92,12 @@ int main(int argc, char** argv) {
     std::optional<int> find_shape;
     std::optional<int> show_item;
     std::optional<std::array<int, 3>> near;
+    bool dump = false;
     std::vector<std::string> pos;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--png") == 0 && i + 1 < argc) png = argv[++i];
         else if (std::strcmp(argv[i], "--cycles") == 0) show_cycles = true;
+        else if (std::strcmp(argv[i], "--dump") == 0) dump = true;
         else if (std::strcmp(argv[i], "--find") == 0 && i + 1 < argc) find_shape = std::stoi(argv[++i], nullptr, 0);
         else if (std::strcmp(argv[i], "--item") == 0 && i + 1 < argc) show_item = std::stoi(argv[++i], nullptr, 0);
         else if (std::strcmp(argv[i], "--near") == 0 && i + 3 < argc) {
@@ -159,6 +162,43 @@ int main(int argc, char** argv) {
                 else
                     std::printf("id %-5u frame %3u  quality %u  flags 0x%04x  in missing item %u\n", i.id, i.frame,
                                 i.quality, i.flags, i.parent);
+            });
+            return 0;
+        }
+        if (dump) {
+            // The map for scripts (rooms, light plans): one line an item on the map.
+            const auto usecode = UsecodeFile::from_flex(FlexArchive::open(data / "USECODE/EUSECODE.FLX"));
+            std::printf("id,shape,frame,x_left,x,y_far,y,z,z_top,flags,quality,typeflags,family,class,lum\n");
+            // How bright a frame is (0..255, its opaque pixels; -1 none): black floors are the void.
+            std::map<std::pair<std::uint16_t, std::uint32_t>, int> lums;
+            const auto lum = [&](const Item& i) {
+                const auto key = std::pair{i.shape, static_cast<std::uint32_t>(i.frame)};
+                if (const auto it = lums.find(key); it != lums.end()) return it->second;
+                long sum = 0, count = 0;
+                if (const Shape* sh = shapes.get(i.shape); sh && i.frame < sh->frames().size()) {
+                    const ShapeFrame& f = sh->frames()[i.frame];
+                    for (int y = 0; y < f.height; y += 2)
+                        for (int x = 0; x < f.width; x += 2)
+                            if (const int c = f.pixel(x, y); c >= 0) {
+                                const Rgb& rgb = palette.colors[c];
+                                sum += (rgb.r * 30 + rgb.g * 59 + rgb.b * 11) / 100;
+                                ++count;
+                            }
+                }
+                return lums[key] = count ? static_cast<int>(sum / count) : -1;
+            };
+            world->for_each([&](const Item& i) {
+                if (i.parent || i.off_map) return;
+                const ShapeInfo* si = world->shape_info(i.shape);
+                const bool flip = i.flags & kItemFlipped;
+                const int fx = si ? (flip ? si->footpad_y : si->footpad_x) : 0;
+                const int fy = si ? (flip ? si->footpad_x : si->footpad_y) : 0;
+                const int fz = si ? si->footpad_z : 0;
+                const int x = world_from_usecode(i.x), y = world_from_usecode(i.y);
+                const std::string cls = usecode.has_class(i.shape) ? usecode.class_name(i.shape) : "";
+                std::printf("%u,%u,%u,%d,%d,%d,%d,%d,%d,0x%04x,%u,0x%08x,%u,%s,%d\n", i.id, i.shape, i.frame,
+                            x - fx * kFootpadXY, x, y - fy * kFootpadXY, y, i.z, i.z + fz * kFootpadZ, i.flags,
+                            i.quality, si ? si->flags : 0u, world->family_of(i.shape), cls.c_str(), lum(i));
             });
             return 0;
         }
