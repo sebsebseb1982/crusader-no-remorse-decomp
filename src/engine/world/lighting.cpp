@@ -1468,6 +1468,10 @@ void WorldLighting::gather_occluders(const World& world) {
     });
     for (std::size_t l = 0; l < lights_.size(); ++l) {
         const PointLight& L = lights_[l];
+        // A liquid's glow comes from its whole surface, not from the point
+        // high over it that stands for it: it casts no shadow (issue #29: the
+        // walkways over the acid threw long hard shadows across the floor).
+        if (L.liquid) continue;
         for (std::uint32_t i = 0; i < boxes_.size(); ++i) {
             const Box& b = boxes_[i];
             if (b.hi.x < L.pos.x - L.radius || b.lo.x > L.pos.x + L.radius || b.hi.y < L.pos.y - L.radius ||
