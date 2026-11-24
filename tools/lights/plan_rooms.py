@@ -60,6 +60,9 @@ def main():
     # Remorse's upper rooms), or the lowest (No Regret: a machinery roof lies
     # over everything round the rooms, 96 and 192 z units up).
     ap.add_argument("--floor", choices=("highest", "lowest"), default="highest")
+    # A stretch whose edge is less walled than this is outside. Open plan
+    # offices and corridors that open wide on rooms can fall under 0.5: lower it.
+    ap.add_argument("--min-walled", type=float, default=0.5)
     ap.add_argument("--overview")
     a = ap.parse_args()
     global LIQUIDS
@@ -193,7 +196,7 @@ def main():
             room["skip"] = "small"
         elif liq > 0.4:
             room["skip"] = "liquid"
-        elif walled < 0.5:
+        elif walled < a.min_walled:
             room["skip"] = "outside"
         elif ceil < 40:
             # Nothing stands above it: a roof (No Regret's machinery round the

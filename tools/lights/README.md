@@ -7,7 +7,7 @@ The original draws no ceilings and has no light there. With the 3D lighting (CEI
 
 Edit them next to the executable (or in the sources, then build) and restart the game; in `lightview`, F5 reads them again. A file that does not parse is told on the error output (line and column) and gives no lamps. A mod (`--mod DIR`) can bring its own: `DIR/ceiling_lights/` is read first.
 
-Done: mission 1 (map 1). The screenshots of its rooms are in `lights/mission01/` (not in git: about 85 MB).
+Done: missions 1 to 15, on maps 1, 3, 5, 7, 10, 11, 13, 15, 17, 19, 21, 23, 25, 27 and 29, and the variant maps 6 (mission 3), 14 (7), 16 (8), 24 (12), 26 (13) and 28 (14). The screenshots of their rooms are in `lights/missionNN/` and `lights/missionNN-mapMMM/` for the variants (not in git).
 
 ## A plan
 
@@ -32,6 +32,7 @@ Done: mission 1 (map 1). The screenshots of its rooms are in `lights/mission01/`
 mapview data 1 --dump > map1.csv                       # every item: boxes, type flags, class, brightness
 tools/lights/plan_rooms.py map1.csv plan.json          # rooms and proposed lights (+ plan.json.lab.npy, the room grid)
                                                        # --game remorse|regret (the liquids' shapes), --floor highest|lowest
+                                                       # --min-walled 0.05: open-plan offices (mission 9) are not outside
 tools/lights/shoot_rooms.py plan.json --prune          # drops the lights over a floor not seen
 tools/lights/shoot_rooms.py plan.json shots --labels plan.json.lab.npy   # a screenshot per lit room
 tools/lights/sheets.py plan.json shots sheets          # 6 to a sheet, to review them
