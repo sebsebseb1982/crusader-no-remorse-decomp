@@ -1564,6 +1564,21 @@ void test_flash_out_of_box() {
     CHECK(near(out_of_box(w, 999, {1995, 1995, z}, {1, 0, 0}), {1995, 1995, z}));
 }
 
+// Port addition: soft shadows of a spread source (beam_meets, issue #29): a
+// box between the point and the level source meets the beam; one beside it,
+// over the source or low beside the point does not.
+void test_beam_meets() {
+    const Vec3 o{0, 0, 0}, c{0, 0, 500};  // a 400 x 400 source 500 over the point
+    CHECK(beam_meets({-10, -10, 200}, {10, 10, 220}, o, c, 200, 200));    // in the middle
+    CHECK(beam_meets({150, -10, 400}, {170, 10, 420}, o, c, 200, 200));   // high, near the edge
+    CHECK(!beam_meets({150, -10, 50}, {170, 10, 70}, o, c, 200, 200));   // as far out, low
+    CHECK(!beam_meets({-10, -10, 600}, {10, 10, 620}, o, c, 200, 200));  // over the source
+    CHECK(!beam_meets({500, 500, 0}, {600, 600, 400}, o, c, 200, 200));  // beside
+    // A point at the source's height: only boxes at that height.
+    CHECK(!beam_meets({-10, -10, 0}, {10, 10, 100}, {0, 0, 500}, {300, 0, 500}, 50, 50));
+    CHECK(beam_meets({100, -10, 450}, {120, 10, 550}, {0, 0, 500}, {300, 0, 500}, 50, 50));
+}
+
 // Port addition: the casings (casings.hpp).
 void test_casings() {
     // BA-40 / BA-41 (0xB), RP-22 / RP-32 (1): casings; SG-A1 (2), AC-88 (0xD):
@@ -1668,6 +1683,7 @@ int main() {
     test_blood_marks();
     test_casings();
     test_flash_out_of_box();
+    test_beam_meets();
     test_typeflag_decode();
     test_world_ids();
     test_create_npc_reuses_a_slot();

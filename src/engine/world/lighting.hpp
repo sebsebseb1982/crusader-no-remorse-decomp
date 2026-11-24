@@ -67,7 +67,21 @@ struct PointLight {
     // A liquid's: how much (0..1) it lowers the ambient light round it, so
     // that its glow lights the place (liquid_dim).
     float dim = 0;
+    // A source spread level round `pos`: its half sizes in x and y (lighting
+    // space; zero: a point). Its shadows are soft: a point is lit by the share
+    // of the source it sees (kAreaSamples points of it), a liquid's glow.
+    float area_x = 0, area_y = 0;
 };
+
+// Whether a box (lo, hi) can hide part of a level rectangle source (centre
+// c, half sizes ax, ay) from o: conservative, it leaves out the boxes beside
+// the beam before each segment is tested (soft shadows).
+bool beam_meets(const Vec3& lo, const Vec3& hi, const Vec3& o, const Vec3& c, float ax, float ay);
+
+// Points of a spread source a shadow is tested against (PointLight::area_x):
+// the first kAreaFirst, then the others only where those disagree.
+constexpr int kAreaSamples = 12;
+constexpr int kAreaFirst = 4;
 
 // `pos` (lighting space) moved along `ahead` (unit, level) out of the box of
 // `item` (TYPEFLAG footpads), a little beyond its face, when it is in it; as
@@ -144,8 +158,9 @@ struct LitFrame {
     // 16 floats an item: box (x_left, x, y_far, y), (z, z_top, flags, id),
     // atlas rectangle (x, y, w, h), frame rectangle (left, top, 0, 0) on screen.
     std::vector<float> items;
-    // 20 floats a light: position, radius; colour, owner; first and count of its occluders, liquid,
-    // spot cos_inner; spot direction (zero: all round), cos_outer; halo, halo gain, dim, 0.
+    // 24 floats a light: position, radius; colour, owner; first and count of its occluders, liquid,
+    // spot cos_inner; spot direction (zero: all round), cos_outer; halo, halo gain, dim, 0;
+    // source half sizes x, y (zero: a point), 0, 0.
     std::vector<float> lights;
     // 16 floats a box: lo, owner; hi, mirrored; atlas rectangle; sprite left, top, has sprite.
     std::vector<float> boxes;
@@ -256,10 +271,14 @@ private:
     bool on_surface(const Vec3& p) const;
     void puff_states(std::vector<PuffState>& out) const;
     bool occluded(const Vec3& p, const Vec3& n, ObjId self, std::size_t light, bool sprite_cut,
-                  const std::vector<std::uint32_t>& boxes) const;
+                  const std::vector<std::uint32_t>& boxes, const Vec3* at = nullptr) const;
+    static bool box_hides(const Box& b, const Vec3& o, const Vec3& dir, const Vec3& inv, bool sprite_cut);
+    float seen_share(const Vec3& p, const Vec3& n, ObjId self, std::size_t light, bool sprite_cut,
+                     const std::vector<std::uint32_t>& boxes, float jitter) const;
     Vec3 shade_point(int c, const Vec3& p, const Vec3& n, ObjId self, const LightingOptions& opt,
                      const std::vector<std::uint32_t>& tile_lights,
-                     const std::vector<std::vector<std::uint32_t>>* tile_boxes, bool liquid = false) const;
+                     const std::vector<std::vector<std::uint32_t>>* tile_boxes, bool liquid = false,
+                     float jitter = 0.5f) const;
     Vec3 halo_over(Vec3 colour, int px, int py, bool clip, float surface_s, ObjId self, bool billboard,
                    const std::vector<std::uint32_t>& ids) const;
     Vec3 smoke_over(Vec3 colour, int px, int py, bool clip, float surface_s, const LightingOptions& opt,

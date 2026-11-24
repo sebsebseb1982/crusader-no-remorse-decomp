@@ -67,9 +67,9 @@ const vec3 RIGHT = vec3(0.7071, -0.7071, 0.0);
 const vec3 UP = vec3(-0.3536, -0.3536, 0.8660);
 const vec3 RAY_STEP = vec3(0.5, 0.5, K / 8.0);
 const int SHADOWS = 1, SPRITE_CUT = 2, BUMP = 4, SMOKE = 8;
-const vec3 LIQUID_TINT = vec3(0.45, 1.0, 0.35);
-const float LIQUID_GLOW = 1.4;
-const float LIQUID_DIM = 0.75;  // kLiquidDim
+const vec3 LIQUID_TINT = vec3(0.35, 1.0, 0.15);
+const float LIQUID_GLOW = 2.0;
+const float LIQUID_DIM = 0.9;  // kLiquidDim
 const float HALO_GAIN = 0.1, HALO_DEPTH = 16.0;  // kHaloGain, kHaloDepth
 
 vec4 fetchf(highp sampler2D t, int i) { return texelFetch(t, ivec2(i & 1023, i >> 10), 0); }
@@ -124,37 +124,114 @@ void surfacePoint(int item, ivec2 pix, out vec3 p, out vec3 n) {
 }
 
 // Whether a box hides the light from p (boxes cut by their sprites).
+vec3 inverseDir(vec3 d) {
+    return vec3(1.0 / (abs(d.x) > 1e-6 ? d.x : 1e-6), 1.0 / (abs(d.y) > 1e-6 ? d.y : 1e-6),
+                1.0 / (abs(d.z) > 1e-6 ? d.z : 1e-6));
+}
+
+// Whether box bi (b0, b1 its first texels) hides the segment from o to o + dir
+// (inv = inverseDir(dir); box_hides in lighting.cpp).
+bool boxHides(int bi, vec4 b0, vec4 b1, vec3 o, vec3 dir, vec3 inv) {
+    vec3 ta = (b0.xyz - o) * inv, tb = (b1.xyz - o) * inv;
+    vec3 tmin = min(ta, tb), tmax = max(ta, tb);
+    float t0 = max(max(max(tmin.x, tmin.y), tmin.z), 1e-3);
+    float t1 = min(min(min(tmax.x, tmax.y), tmax.z), 0.98);
+    if (t0 > t1) return false;
+    if ((uFlags & SPRITE_CUT) == 0) return true;
+    vec4 at = fetchf(uBoxes, bi * 4 + 2), fr = fetchf(uBoxes, bi * 4 + 3);
+    if (fr.z == 0.0) return true;
+    for (int s = 0; s < 5; ++s) {
+        float t = t0 + (t1 - t0) * (float(s) + 0.5) / 5.0;
+        vec3 q = o + dir * t;
+        int sx = int(floor((q.x - q.y) * 0.25)), sy = int(floor((q.x + q.y) * 0.125 - q.z / K));
+        int fx = b1.w != 0.0 ? int(fr.x) + int(at.z) - 1 - sx : sx - int(fr.x);
+        int fy = sy - int(fr.y);
+        if (fx < 0 || fy < 0 || fx >= int(at.z) || fy >= int(at.w)) continue;
+        if (texelFetch(uAtlas, ivec2(int(at.x) + fx, int(at.y) + fy), 0).r > 0.5) return true;
+    }
+    return false;
+}
+
 bool occluded(vec3 p, vec3 n, float self, vec3 lpos, float lowner, int first, int count) {
     vec3 o = p + n * 3.0;
-    vec3 dir = lpos - o;
-    vec3 inv = vec3(1.0 / (abs(dir.x) > 1e-6 ? dir.x : 1e-6), 1.0 / (abs(dir.y) > 1e-6 ? dir.y : 1e-6),
-                    1.0 / (abs(dir.z) > 1e-6 ? dir.z : 1e-6));
+    vec3 dir = lpos - o, inv = inverseDir(dir);
     for (int k = 0; k < count; ++k) {
         int i = first + k;
         int bi = texelFetch(uLightBoxes, ivec2(i & 1023, i >> 10), 0).r;
         vec4 b0 = fetchf(uBoxes, bi * 4), b1 = fetchf(uBoxes, bi * 4 + 1);
         if (b0.w == self || b0.w == lowner) continue;
-        vec3 ta = (b0.xyz - o) * inv, tb = (b1.xyz - o) * inv;
-        vec3 tmin = min(ta, tb), tmax = max(ta, tb);
-        float t0 = max(max(max(tmin.x, tmin.y), tmin.z), 1e-3);
-        float t1 = min(min(min(tmax.x, tmax.y), tmax.z), 0.98);
-        if (t0 > t1) continue;
-        if ((uFlags & SPRITE_CUT) == 0) return true;
-        vec4 at = fetchf(uBoxes, bi * 4 + 2), fr = fetchf(uBoxes, bi * 4 + 3);
-        if (fr.z == 0.0) return true;
-        for (int s = 0; s < 5; ++s) {
-            float t = t0 + (t1 - t0) * (float(s) + 0.5) / 5.0;
-            vec3 q = o + dir * t;
-            int sx = int(floor((q.x - q.y) * 0.25)), sy = int(floor((q.x + q.y) * 0.125 - q.z / K));
-            int fx = b1.w != 0.0 ? int(fr.x) + int(at.z) - 1 - sx : sx - int(fr.x);
-            int fy = sy - int(fr.y);
-            if (fx < 0 || fy < 0 || fx >= int(at.z) || fy >= int(at.w)) continue;
-            if (texelFetch(uAtlas, ivec2(int(at.x) + fx, int(at.y) + fy), 0).r > 0.5) return true;
-        }
+        if (boxHides(bi, b0, b1, o, dir, inv)) return true;
     }
     return false;
 }
 
+// How the soft shadow's samples are turned at a pixel (pixel_jitter in lighting.cpp).
+float jitterAt(ivec2 pix) {
+    return fract(52.9829189 * fract(0.06711056 * float(uViewX + pix.x) + 0.00583715 * float(uViewY + pix.y)));
+}
+
+// Whether a box can hide part of a level rectangle source (centre c, half
+// sizes a) from o (beam_meets in lighting.cpp).
+bool beamMeets(vec3 lo, vec3 hi, vec3 o, vec3 c, vec2 a) {
+    float t0 = 1e-3, t1 = 0.98;
+    float dz = c.z - o.z;
+    if (abs(dz) > 1e-3) {
+        float ta = (lo.z - o.z) / dz, tb = (hi.z - o.z) / dz;
+        t0 = max(t0, min(ta, tb));
+        t1 = min(t1, max(ta, tb));
+        if (t0 > t1) return false;
+    } else if (o.z < lo.z || o.z > hi.z) {
+        return false;
+    }
+    vec2 near = c.xy - a - o.xy, far = c.xy + a - o.xy;
+    vec2 from = o.xy + min(t0 * near, t1 * near), to = o.xy + max(t0 * far, t1 * far);
+    return !(any(lessThan(to, lo.xy)) || any(greaterThan(from, hi.xy)));
+}
+
+// The share of light l that p sees (seen_share in lighting.cpp): a spread
+// source (L5.xy its half sizes) by AREA_SAMPLES points of it.
+const int AREA_SAMPLES = 12, AREA_FIRST = 4;  // kAreaSamples, kAreaFirst
+float seenShare(vec3 p, vec3 n, float self, int l, vec4 L0, float lowner, vec4 L2, float jitter) {
+    vec4 L5 = fetchf(uLights, l * 6 + 5);
+    if (L5.x <= 0.0 && L5.y <= 0.0) return occluded(p, n, self, L0.xyz, lowner, int(L2.x), int(L2.y)) ? 0.0 : 1.0;
+    int first = int(L2.x), count = int(L2.y);
+    if (count == 0) return 1.0;
+    vec3 o = p + n * 3.0;
+    vec3 dirs[AREA_SAMPLES], invs[AREA_SAMPLES];
+    for (int k = 0; k < AREA_SAMPLES; ++k) {
+        float u = fract(jitter + float(k) * 0.7548776662);
+        float v = fract(jitter * 0.618034 + float(k) * 0.5698402910);
+        dirs[k] = L0.xyz + vec3((2.0 * u - 1.0) * L5.x, (2.0 * v - 1.0) * L5.y, 0.0) - o;
+        invs[k] = inverseDir(dirs[k]);
+    }
+    bool hidden[AREA_SAMPLES];
+    for (int k = 0; k < AREA_SAMPLES; ++k) hidden[k] = false;
+    int nhidden = 0;
+    // The first AREA_FIRST points, then the others only where those disagree.
+    for (int pass = 0; pass < 2; ++pass) {
+        int k0 = pass == 0 ? 0 : AREA_FIRST, k1 = pass == 0 ? AREA_FIRST : AREA_SAMPLES;
+        int found = 0;
+        for (int j = 0; j < count; ++j) {
+            int i = first + j;
+            int bi = texelFetch(uLightBoxes, ivec2(i & 1023, i >> 10), 0).r;
+            vec4 b0 = fetchf(uBoxes, bi * 4), b1 = fetchf(uBoxes, bi * 4 + 1);
+            if (b0.w == self || b0.w == lowner) continue;
+            if (!beamMeets(b0.xyz, b1.xyz, o, L0.xyz, L5.xy)) continue;
+            for (int k = k0; k < k1; ++k) {
+                if (hidden[k] || !boxHides(bi, b0, b1, o, dirs[k], invs[k])) continue;
+                hidden[k] = true;
+                ++found;
+            }
+            if (found == k1 - k0) break;
+        }
+        nhidden += found;
+        if (pass == 0 && (found == 0 || found == AREA_FIRST)) return found == 0 ? 1.0 : 0.0;
+    }
+    return 1.0 - float(nhidden) / float(AREA_SAMPLES);
+}
+
+)"  // two literals: MSVC takes no longer one
+R"(
 // The smoke's noise (smoke_noise in lighting.cpp).
 uint hash32(uint x) {
     x ^= x >> 16u;
@@ -201,9 +278,9 @@ float spotOf(vec4 L2, vec4 L3, vec3 to, float dist) {
 float ambientAt(vec3 p) {
     float most = 0.0;
     for (int l = 0; l < uLightCount; ++l) {
-        float dim = fetchf(uLights, l * 5 + 4).z;
+        float dim = fetchf(uLights, l * 6 + 4).z;
         if (dim <= 0.0) continue;
-        vec4 L0 = fetchf(uLights, l * 5);
+        vec4 L0 = fetchf(uLights, l * 6);
         vec3 to = L0.xyz - p;
         float f = 1.0 - dot(to, to) / (L0.w * L0.w);
         if (f > 0.0) most = max(most, dim * smoothstep(0.0, 0.5, f));
@@ -215,8 +292,8 @@ vec3 lightAt(vec3 p) {
     float a = ambientAt(p);
     vec3 light = vec3(a, a * 1.02, a * 1.12);
     for (int l = 0; l < uLightCount; ++l) {
-        vec4 L0 = fetchf(uLights, l * 5), L1 = fetchf(uLights, l * 5 + 1);
-        vec4 L2 = fetchf(uLights, l * 5 + 2), L3 = fetchf(uLights, l * 5 + 3);
+        vec4 L0 = fetchf(uLights, l * 6), L1 = fetchf(uLights, l * 6 + 1);
+        vec4 L2 = fetchf(uLights, l * 6 + 2), L3 = fetchf(uLights, l * 6 + 3);
         vec3 to = L0.xyz - p;
         float d2 = dot(to, to), r2 = L0.w * L0.w;
         if (d2 >= r2) continue;
@@ -232,9 +309,9 @@ vec3 haloOver(vec3 colour, ivec2 pix, bool clip, float surfaceS, float self, boo
     vec3 A = vec3(2.0 * sx, -2.0 * sx, -sy * K);
     float bb = dot(RAY_STEP, RAY_STEP);
     for (int l = 0; l < uLightCount; ++l) {
-        vec4 L4 = fetchf(uLights, l * 5 + 4);
+        vec4 L4 = fetchf(uLights, l * 6 + 4);
         if (L4.x <= 0.0) continue;
-        vec4 L0 = fetchf(uLights, l * 5), L1 = fetchf(uLights, l * 5 + 1);
+        vec4 L0 = fetchf(uLights, l * 6), L1 = fetchf(uLights, l * 6 + 1);
         vec3 d = A - L0.xyz;
         float mid = -dot(RAY_STEP, d) / bb;
         float behind = 1.0;
@@ -317,9 +394,10 @@ void main() {
         // The liquid itself is the light: its ambient stays.
         float a = liquid ? uAmbient : ambientAt(p);
         vec3 light = vec3(a, a * 1.02, a * 1.12);
+        float jitter = jitterAt(pix);
         for (int l = 0; l < uLightCount; ++l) {
-            vec4 L0 = fetchf(uLights, l * 5), L1 = fetchf(uLights, l * 5 + 1), L2 = fetchf(uLights, l * 5 + 2);
-            vec4 L3 = fetchf(uLights, l * 5 + 3);
+            vec4 L0 = fetchf(uLights, l * 6), L1 = fetchf(uLights, l * 6 + 1), L2 = fetchf(uLights, l * 6 + 2);
+            vec4 L3 = fetchf(uLights, l * 6 + 3);
             if (liquid && L2.z > 0.5) continue;
             vec3 to = L0.xyz - p;
             float d2 = dot(to, to), r2 = L0.w * L0.w;
@@ -330,8 +408,12 @@ void main() {
             float cone = spotOf(L2, L3, to, dist);
             if (cone <= 0.0) continue;
             float f = 1.0 - d2 / r2;
-            if ((uFlags & SHADOWS) != 0 && occluded(p, n, self, L0.xyz, L1.w, int(L2.x), int(L2.y))) continue;
-            light += L1.rgb * (ndl * f * f * cone);
+            float w = ndl * f * f * cone;
+            if ((uFlags & SHADOWS) != 0) {
+                w *= seenShare(p, n, self, l, L0, L1.w, L2, jitter);
+                if (w <= 0.0) continue;
+            }
+            light += L1.rgb * w;
         }
         col = lin(c) * light;
         if (c >= 1u && c <= 14u) col += lin(c);
@@ -644,7 +726,7 @@ bool GlLighting::shade(const LitFrame& f, std::uint32_t* argb) {
     g.Uniform1i(g.u_view_y, f.view_top);
     g.Uniform1i(g.u_width, f.width);
     g.Uniform1i(g.u_height, f.height);
-    g.Uniform1i(g.u_lights, static_cast<GLint>(f.lights.size() / 20));
+    g.Uniform1i(g.u_lights, static_cast<GLint>(f.lights.size() / 24));
     g.Uniform1i(g.u_puffs, static_cast<GLint>(f.puffs.size() / 12));
     g.Uniform1i(g.u_flags, (o.shadows ? 1 : 0) | (o.sprite_shadows ? 2 : 0) | (o.bump ? 4 : 0) | (o.smoke ? 8 : 0));
     g.Uniform1f(g.u_ambient, o.ambient);

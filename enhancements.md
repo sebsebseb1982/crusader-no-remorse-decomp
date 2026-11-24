@@ -456,7 +456,7 @@ The original draws flat sprites under a fixed light. With this option the world 
 - The rest of the scene keeps most of its light (AMBIENT LIGHT / LUMIERE AMBIANTE option, 85 % of its light by default), so the game stays readable. Lower, the lamps stand out more; 100 does not darken the scene at all.
 
 **Shadows**
-- Item boxes cast shadows, cut by their sprites: railings, grids and bodies cast their outline. A light is never shadowed by the item that gives it, except a muzzle flash, whose shooter casts its shadow; lasers, electrified floors and flat items (floors, grates, mats) cast none.
+- Item boxes cast shadows, cut by their sprites: railings, grids and bodies cast their outline; the liquids' glow, spread over their surface, casts soft ones. A light is never shadowed by the item that gives it, except a muzzle flash, whose shooter casts its shadow; lasers, electrified floors and flat items (floors, grates, mats) cast none.
 
 **Smoke** (VOLUMETRIC SMOKE option)
 - Explosions leave a dark cloud: six puffs of noise that glow orange for the first second (lit from inside by the explosion), then rise, grow and thin out over five or six seconds. It stays see-through, as much for a big blast as for a small one (the bigger, the thinner), so that what happens in it can be followed.
@@ -468,9 +468,9 @@ The original draws flat sprites under a fixed light. With this option the world 
 - It follows the game's clock: it stops with the game (menus, pause), goes on a map change. It only reads the world and uses its own numbers, never the game's random generators.
 
 **Liquids**
-- The green liquids (the pools, their strips and edges, ripples and bubbles: shapes 0x150, 0x59E, 0x227, 0x228, 0x5A2, 0x55A, 0x56D, 0x56E, 0x1D6, 0x539, 0x54C, 0x580; no TYPEFLAG bit marks them) glow a faint radioactive green, in slow patches that drift and breathe.
-- They light what stands around them (walls, rims, floors, machines, pillars, people at the edge) in green, with one light for each 1024 x 1024 cell of liquid, high over it so that it falls on the floors past the rims and reaches 1600 units; it does not light the liquid itself, and casts no shadow (a glow from the whole surface, not from that point).
-- Around them the ambient light is lower (down to 25 % of it over most of that reach, the strongest liquid near counting, not their sum), so that a room with a pool or a canal is lit by its green glow rather than by the general light. The liquid itself and the lit points away from it keep the ambient light chosen.
+- The green liquids (the pools, their strips and edges, ripples and bubbles: shapes 0x150, 0x59E, 0x227, 0x228, 0x5A2, 0x55A, 0x56D, 0x56E, 0x1D6, 0x539, 0x54C, 0x580; no TYPEFLAG bit marks them) glow a radioactive green, in slow patches that drift and breathe.
+- They light what stands around them (walls, rims, floors, machines, pillars, people at the edge) in green, with one light for each 1024 x 1024 cell of liquid, high over it so that it falls on the floors past the rims and reaches 1600 units; it does not light the liquid itself. Its shadows are soft: the glow comes from the whole surface, so a point is lit by the share of the liquid it sees (twelve points of it, four first and the others only in the penumbra); a walkway over the acid darkens the floor under it softly instead of throwing a hard shadow far away.
+- Around them the ambient light is lower (down to 10 % of it over most of that reach, the strongest liquid near counting, not their sum), so that a room with a pool or a canal is lit by its green glow rather than by the general light. The liquid itself and the lit points away from it keep the ambient light chosen.
 - The pools give off a thin steam: wisps that rise from the surface, drift and fade out over seven to eleven seconds, faintly green. They need no memory (each comes back from the game's clock and the pool's place), so they are there as soon as a pool is in view; they go with the smoke (VOLUMETRIC SMOKE option).
 
 **What is not lit**
