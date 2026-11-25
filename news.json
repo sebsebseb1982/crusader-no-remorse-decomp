@@ -4,6 +4,19 @@
     {
       "date": "2026-11-25",
       "title": {
+        "en": "Crusader: No Limit",
+        "fr": "Crusader : No Limit",
+        "de": "Crusader: No Limit"
+      },
+      "body": {
+        "en": "A new mode generates a mission from a random seed, built from the designers' own rooms: arrival, contact, key room, card door, lifts, guards, extraction. Try it with the CRUSADER / NO LIMIT button of the main menu.",
+        "fr": "Un nouveau mode génère une mission à partir d'une graine aléatoire, construite avec les salles des concepteurs : arrivée, contact, salle de la clé, porte à carte, ascenseurs, gardes, extraction. À essayer avec le bouton CRUSADER / NO LIMIT du menu principal.",
+        "de": "Ein neuer Modus erzeugt aus einem Zufallswert eine Mission, gebaut aus den Räumen der Entwickler: Ankunft, Kontakt, Schlüsselraum, Kartentür, Aufzüge, Wachen, Evakuierung. Probiere ihn mit der Taste CRUSADER / NO LIMIT im Hauptmenü."
+      }
+    },
+    {
+      "date": "2026-11-25",
+      "title": {
         "en": "News and update notice",
         "fr": "Nouveautés et avis de mise à jour",
         "de": "Neuigkeiten und Update-Hinweis"
