@@ -86,6 +86,7 @@ std::string RoomPiece::describe() const {
     }
     if (overhang) s += ", floor past its walls " + std::to_string(overhang);
     if (unfloored) s += ", cells with no floor " + std::to_string(unfloored);
+    if (squared) s += ", squared " + std::to_string(squared) + "%";
     return s;
 }
 
@@ -452,6 +453,44 @@ std::vector<RoomPiece> extract_rooms(const GameData& data, int map, std::int32_t
                 }
             }
         }
+        // Square: a rectangle, or an L (the rectangle less its largest empty
+        // corner), never a run of steps (where the cutting parted an open
+        // space on a slant). The cells it adds are bare floor of the room.
+        {
+            const int R = room.rows, C = room.cols;
+            auto marked = [&](int r, int c) { return room.outline[static_cast<std::size_t>(r * C + c)] != 0; };
+            int best = 0, best_corner = -1, best_h = 0, best_w = 0;
+            for (int corner = 0; corner < 4; ++corner) {
+                const bool top = corner < 2, left = corner % 2 == 0;
+                int width = C;  // the empty run from the corner, over the rows so far
+                for (int height = 1; height <= R && width > 0; ++height) {
+                    const int r = top ? height - 1 : R - height;
+                    int run = 0;
+                    while (run < width && !marked(r, left ? run : C - 1 - run)) ++run;
+                    width = run;
+                    if (width * height > best) best = width * height, best_corner = corner, best_h = height, best_w = width;
+                }
+            }
+            // A notch of 64 x 64 units at least makes an L; a smaller one is filled.
+            const bool notch = best_corner >= 0 && best_h >= 4 && best_w >= 4;
+            int added = 0, total = 0;
+            for (int r = 0; r < R; ++r) {
+                for (int c = 0; c < C; ++c) {
+                    bool in = true;
+                    if (notch) {
+                        const bool top = best_corner < 2, left = best_corner % 2 == 0;
+                        const bool rows = top ? r < best_h : r >= R - best_h;
+                        const bool cols = left ? c < best_w : c >= C - best_w;
+                        in = !(rows && cols);
+                    }
+                    std::uint8_t& o = room.outline[static_cast<std::size_t>(r * C + c)];
+                    total += in;
+                    added += in && !o;
+                    o = in;
+                }
+            }
+            room.squared = total ? 100 * added / total : 0;
+        }
         auto outlined = [&](int r, int c) {
             return in_box(r, c) && room.outline[static_cast<std::size_t>((r - b.r0) * room.cols + (c - b.c0))];
         };
@@ -508,7 +547,7 @@ std::vector<RoomPiece> extract_rooms(const GameData& data, int map, std::int32_t
             for (int r = r0; r <= r1; ++r) {
                 for (int c = c0; c <= c1; ++c) {
                     ++cells, near += borders(r, c);
-                    if (support ? in_room(r, c) : within(r, c) || (!wall && thin && faces(r, c))) cd.take = true;
+                    if (support ? outlined(r, c) : within(r, c) || (!wall && thin && faces(r, c))) cd.take = true;
                 }
             }
             if (wall) cd.take = near * 2 >= cells;

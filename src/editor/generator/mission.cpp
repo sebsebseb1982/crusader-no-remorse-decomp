@@ -123,6 +123,9 @@ int suits(const RoomPiece& r, Purpose p, int openings_needed) {
     if (r.open_border * 5 > r.border) return -1;
     // Nor a balcony or a catwalk: railings along a tenth of its border.
     if (r.low_border * 10 > r.border) return -1;
+    // Square (a rectangle or an L): not a room that had to grow by a
+    // quarter for it, nor one whose square has cells with no floor.
+    if (r.squared > 25 || r.unfloored > 0) return -1;
     // Furnished rooms: their furniture per 512 x 512 (16 squares), what hangs
     // on the walls aside; below 4,
     // a bare hall.
@@ -1185,7 +1188,18 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
                 return room && clear;
             };
             const bool post = sh.footpad_x == 1 && sh.footpad_y == 1;
-            if (!(post ? (facing(true) || facing(false)) : facing(axis == kAlongX))) continue;
+            // A post at a room's near corner: the room north-west of it,
+            // nothing south nor east.
+            auto corner = [&] {
+                if (!outlined(wr0 - 1, wc0 - 1)) return false;
+                for (int k = 1; k <= 3; ++k) {
+                    for (int t = -1; t <= 3; ++t) {
+                        if (outlined(wr1 + k, wc0 + t) || outlined(wr0 + t, wc1 + k)) return false;
+                    }
+                }
+                return true;
+            };
+            if (!(post ? (facing(true) || facing(false) || corner()) : facing(axis == kAlongX))) continue;
             if (it != black.end()) {
                 i.frame = it->second;
                 continue;

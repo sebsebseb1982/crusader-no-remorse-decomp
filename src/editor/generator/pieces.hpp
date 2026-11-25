@@ -53,9 +53,9 @@ struct RoomPiece {
     int cols = 0, rows = 0;              // cells of 16 units from (x0, y0)
     std::vector<std::uint8_t> cells;     // walkable cells of the room, rows * cols
     // Its outline, rows * cols: its inside (cells and what its walls enclose
-    // with them) closed by 48 units, so that a dent narrower than a doorway
-    // (a passage left behind) is taken in; the walls that close the room
-    // follow it, and its floor covers it.
+    // with them), squared: its bounding rectangle, less its largest empty
+    // corner (64 x 64 units at least) for an L. The walls that close the
+    // room follow it, and its floor covers it; what it adds is bare floor.
     std::vector<std::uint8_t> outline;
     std::vector<LevelItem> items;        // at their positions on the original map
     std::vector<Opening> openings;
@@ -74,6 +74,7 @@ struct RoomPiece {
     // (south, east): over the void once the room stands alone.
     int overhang = 0;
     int unfloored = 0;  // cells of its outline that no floor of it bears
+    int squared = 0;    // share of its outline (in %) added to square it (a rectangle or an L)
     bool cell(std::int32_t x, std::int32_t y) const;  // a walkable cell of the room at (x, y)
     std::string describe() const;
 };
