@@ -58,6 +58,18 @@ constexpr std::uint8_t kCodeMessages[] = {10, 18, 19};  // TEXTFILE texts that g
 constexpr std::uint8_t kTriggerOff = 7;          // map number bits: action 3 (into a marker), at the first use
 constexpr std::uint8_t kArgDoor = 3, kArgWall = 1;
 constexpr std::int32_t kReaderZ = 40, kSwitchZ = 48;
+// Lifts (map 5): the platform and its pad, call boxes, railings.
+constexpr std::uint16_t kShapeLiftPlatform = 0x12F;  // ELEVPLAT, 8 x 8 x 1
+constexpr std::uint16_t kShapeLiftPad = 0x4CD;       // TRIGPAD, 8 x 8 x 0, on the platform
+constexpr std::uint16_t kShapeCallBoxNS = 0x081;     // BOX_NS, 2 x 1 x 4
+constexpr std::uint16_t kShapeCallBoxEW = 0x080;     // BOX_EW, 1 x 2 x 4
+constexpr std::uint16_t kShapeTriggerRelay = 0x4B1;  // 2 x 2 x 0, invisible: TRIGGER's second state
+constexpr std::uint8_t kTriggerEquip = 6;            // map number bits: action 2 (equip), bit 2
+constexpr std::uint8_t kTriggerState1 = 8;           // map number bit 3: acts in state 1
+constexpr std::int32_t kLiftSize = 8 * kUnit;
+constexpr std::int32_t kLiftBottom = 1;              // the platform's z at the bottom (88 at the top)
+// Railings 6 high, 1 thick, by length (8, 4, 2, 1): along x, along y.
+constexpr std::uint16_t kRailings[2][4] = {{0x08B, 0x08C, 0x08D, 0x093}, {0x091, 0x092, 0x070, 0x093}};
 // Links (quality low) of doors and switches start above the card numbers:
 // a DOOREGG opens every door of its link, a locked door included.
 constexpr int kFirstLink = 32;
@@ -109,6 +121,27 @@ public:
             pos = g.to;
         }
         run(side, axis, fixed, pos, to, z);
+    }
+
+    // An item whose footprint is the rectangle (x1, y1 excluded).
+    LevelItem& rect(std::uint16_t shape, std::int32_t x0, std::int32_t y0, std::int32_t x1, std::int32_t y1,
+                    std::int32_t z) {
+        (void)x0, (void)y0;
+        return add(shape, 0, x1 - 1, y1 - 1, z);
+    }
+
+    // A railing filling the rectangle, one unit thick, along `axis`.
+    void railing(int axis, std::int32_t x0, std::int32_t y0, std::int32_t x1, std::int32_t y1, std::int32_t z) {
+        std::int32_t pos = axis == kAlongX ? x0 : y0;
+        const std::int32_t end = axis == kAlongX ? x1 : y1;
+        for (int i = 0; i < 4; ++i) {
+            const std::int32_t len = (8 >> i) * kUnit;
+            while (end - pos >= len) {
+                if (axis == kAlongX) add(kRailings[axis][i], 0, pos + len - 1, y1 - 1, z);
+                else add(kRailings[axis][i], 0, x1 - 1, pos + len - 1, z);
+                pos += len;
+            }
+        }
     }
 
 private:
@@ -326,6 +359,42 @@ Result generate(const std::vector<Biome>& biomes, const Options& options) {
         }
     }
 
+    // Storeys: the rooms from a depth drawn on the way to the exit up are on
+    // the upper storey (z 96), so that the level climbs to its exit; the
+    // passages between storeys become lifts.
+    {
+        const int storeys = options.storeys >= 1 ? std::min(options.storeys, 2) : (rng.chance(75) ? 2 : 1);
+        const int exit_depth = r.rooms[r.exit_room].depth;
+        if (storeys == 2 && exit_depth >= 1) {
+            const int cut = rng.range(1, exit_depth);
+            for (Room& room : r.rooms) room.z = room.depth >= cut ? kStorey : 0;
+            r.storeys = 2;
+        }
+        for (std::size_t li = 0; li < r.links.size(); ++li) {
+            Link& l = r.links[li];
+            if (r.rooms[l.a].z == r.rooms[l.b].z) continue;
+            const bool lower_a = r.rooms[l.a].z < r.rooms[l.b].z;
+            Lift lift;
+            lift.link = static_cast<int>(li);
+            lift.lower_room = lower_a ? l.a : l.b;
+            lift.upper_room = lower_a ? l.b : l.a;
+            l.lift = static_cast<int>(r.lifts.size());
+            r.lifts.push_back(lift);
+            // A lift corridor has two tiles at least: the shaft and a landing.
+            Room& ra = r.rooms[l.a];
+            Room& rb = r.rooms[l.b];
+            if (ra.slot_y == rb.slot_y) {
+                Room& lo = ra.slot_x < rb.slot_x ? ra : rb;
+                const Room& hi = ra.slot_x < rb.slot_x ? rb : ra;
+                if (hi.x0 - lo.x1 < 2 * kBlock) lo.x1 -= kBlock;
+            } else {
+                Room& lo = ra.slot_y < rb.slot_y ? ra : rb;
+                const Room& hi = ra.slot_y < rb.slot_y ? rb : ra;
+                if (hi.y0 - lo.y1 < 2 * kBlock) lo.y1 -= kBlock;
+            }
+        }
+    }
+
     // Building.
     Builder b(biome, rng, r.level);
     int next_link = kFirstLink;
@@ -335,7 +404,7 @@ Result generate(const std::vector<Biome>& biomes, const Options& options) {
     std::vector<std::array<std::vector<Gap>, 4>> gaps(r.rooms.size());
     struct Door {
         int axis;
-        std::int32_t x, y;
+        std::int32_t x, y, z;
         std::uint8_t link;
     };
     std::vector<Door> doors;
@@ -345,7 +414,7 @@ Result generate(const std::vector<Biome>& biomes, const Options& options) {
     struct Doorway {
         int lock;
         int axis;  // of the wall it is in
-        std::int32_t x, y;
+        std::int32_t x, y, z;
         Spot reader;
     };
     std::vector<Doorway> locked;
@@ -363,50 +432,134 @@ Result generate(const std::vector<Biome>& biomes, const Options& options) {
         const std::uint8_t hi_door = locked_end == hi_index ? 0 : new_link();
         if (first == l.a) l.door_a = lo_door, l.door_b = hi_door;
         else l.door_a = hi_door, l.door_b = lo_door;
-        auto place = [&](int axis, std::int32_t x, std::int32_t y, std::uint8_t link, Spot reader) {
-            if (link) doors.push_back({axis, x, y, link});
-            else locked.push_back({l.lock, axis, x, y, reader});
+        auto place = [&](int axis, std::int32_t x, std::int32_t y, std::int32_t z, std::uint8_t link, Spot reader) {
+            if (link) doors.push_back({axis, x, y, z, link});
+            else locked.push_back({l.lock, axis, x, y, z, reader});
         };
-        if (horizontal) {
-            // Corridor along x, on tile 1 of the row.
-            const std::int32_t yc = slot_y0(lo.slot_y) + kBlock;
-            const Gap gap{yc + kDoorOffset, yc + kDoorOffset + kDoorWidth};
-            gaps[lo_index][1].push_back(gap);
-            gaps[hi_index][3].push_back(gap);
-            b.floor(lo.x1, yc, hi.x0, yc + kBlock, 0);
-            b.wall(kBack, kAlongX, yc + kWall - 1, lo.x1, hi.x0, 0);
-            b.wall(kFront, kAlongX, yc + kBlock - 1, lo.x1, hi.x0, 0);
-            place(kAlongY, lo.x1 - 1, gap.to - 1, lo_door, {lo.x1 + 63, yc + 2 * kWall - 1, kReaderZ});
-            place(kAlongY, hi.x0 + kWall - 1, gap.to - 1, hi_door, {hi.x0 - 48, yc + 2 * kWall - 1, kReaderZ});
+        // Corridor coordinates: u along it (x for a corridor along x, on tile
+        // 1 of the row; y otherwise, on tile 1 of the column), v across it,
+        // from `c` to c + 256.
+        const int along = horizontal ? kAlongX : kAlongY, across = 1 - along;
+        const std::int32_t c = horizontal ? slot_y0(lo.slot_y) + kBlock : slot_x0(lo.slot_x) + kBlock;
+        const std::int32_t u0 = horizontal ? lo.x1 : lo.y1, u1 = horizontal ? hi.x0 : hi.y0;
+        auto x_of = [&](std::int32_t u, std::int32_t v) { return horizontal ? u : v; };
+        auto y_of = [&](std::int32_t u, std::int32_t v) { return horizontal ? v : u; };
+        auto spot = [&](std::int32_t u, std::int32_t v, std::int32_t z) { return Spot{x_of(u, v), y_of(u, v), z}; };
+        // An item on the rectangle [ua, ub) x [va, vb).
+        auto rect = [&](std::uint16_t shape, std::int32_t ua, std::int32_t ub, std::int32_t va, std::int32_t vb,
+                        std::int32_t z) -> LevelItem& {
+            return b.rect(shape, x_of(ua, va), y_of(ua, va), x_of(ub, vb), y_of(ub, vb), z);
+        };
+        auto railing = [&](bool along_u, std::int32_t ua, std::int32_t ub, std::int32_t va, std::int32_t vb) {
+            b.railing(along_u ? along : across, x_of(ua, va), y_of(ua, va), x_of(ub, vb), y_of(ub, vb), kStorey);
+        };
+        auto floor_part = [&](std::int32_t ua, std::int32_t ub, std::int32_t z) {
+            b.floor(x_of(ua, c), y_of(ua, c), x_of(ub, c + kBlock), y_of(ub, c + kBlock), z);
+        };
+        auto sides = [&](std::int32_t ua, std::int32_t ub, std::int32_t z) {
+            b.wall(kBack, along, c + kWall - 1, ua, ub, z);
+            b.wall(kFront, along, c + kBlock - 1, ua, ub, z);
+        };
+        const Gap gap{c + kDoorOffset, c + kDoorOffset + kDoorWidth};
+        gaps[lo_index][horizontal ? 1 : 2].push_back(gap);
+        gaps[hi_index][horizontal ? 3 : 0].push_back(gap);
+        if (l.lift < 0) {
+            floor_part(u0, u1, lo.z);
+            sides(u0, u1, lo.z);
+            if (lo.z > 0) sides(u0, u1, 0);  // under a corridor of the upper storey
         } else {
-            const std::int32_t xc = slot_x0(lo.slot_x) + kBlock;
-            const Gap gap{xc + kDoorOffset, xc + kDoorOffset + kDoorWidth};
-            gaps[lo_index][2].push_back(gap);
-            gaps[hi_index][0].push_back(gap);
-            b.floor(xc, lo.y1, xc + kBlock, hi.y0, 0);
-            b.wall(kBack, kAlongY, xc + kWall - 1, lo.y1, hi.y0, 0);
-            b.wall(kFront, kAlongY, xc + kBlock - 1, lo.y1, hi.y0, 0);
-            place(kAlongX, gap.to - 1, lo.y1 - 1, lo_door, {xc + 2 * kWall - 1, lo.y1 + 63, kReaderZ});
-            place(kAlongX, gap.to - 1, hi.y0 + kWall - 1, hi_door, {xc + 2 * kWall - 1, hi.y0 - 48, kReaderZ});
+            // The lower part ends with the shaft's tile, the platform against
+            // the upper part (boundary `bu`), whose floor its top meets.
+            Lift& lift = r.lifts[static_cast<std::size_t>(l.lift)];
+            const bool lower_lo = lo.z < hi.z;
+            const int tiles = (u1 - u0) / kBlock;
+            const int low_tiles = tiles - tiles / 2;
+            const std::int32_t bu = lower_lo ? u0 + low_tiles * kBlock : u1 - low_tiles * kBlock;
+            const std::int32_t dir = lower_lo ? 1 : -1;  // from the lower part to the upper one
+            floor_part(lower_lo ? u0 : bu, lower_lo ? bu : u1, 0);
+            floor_part(lower_lo ? bu : u0, lower_lo ? u1 : bu, kStorey);
+            sides(u0, u1, 0);
+            sides(lower_lo ? bu : u0, lower_lo ? u1 : bu, kStorey);
+            // The lower part closed under the upper one.
+            b.wall(lower_lo ? kFront : kBack, across, lower_lo ? bu - 1 : bu + kWall - 1, c + kWall,
+                   c + kBlock - kWall, 0);
+            const std::int32_t pu0 = lower_lo ? bu - kLiftSize : bu, pu1 = pu0 + kLiftSize;
+            const std::int32_t pv0 = c + 4 * kUnit, pv1 = pv0 + kLiftSize;
+            lift.number = new_link();
+            lift.x0 = x_of(pu0, pv0), lift.y0 = y_of(pu0, pv0);
+            lift.x1 = x_of(pu1, pv1), lift.y1 = y_of(pu1, pv1);
+            lift.platform = {lift.x1 - 1, lift.y1 - 1, kLiftBottom};
+            auto lift_trigger = [&](LevelItem& item) {
+                set_trigger_target(item, kShapeLiftPlatform);
+                item.map_number = static_cast<std::uint8_t>(item.map_number | kTriggerEquip);
+                item.quality = lift.number;
+            };
+            rect(kShapeLiftPlatform, pu0, pu1, pv0, pv1, kLiftBottom).quality = lift.number;
+            lift_trigger(rect(kShapeLiftPad, pu0, pu1, pv0, pv1, kLiftBottom + 8));
+            // Railings round the shaft at the top: beside the platform, at
+            // its lower end, and from the corridor's walls to them where the
+            // upper floor ends.
+            const std::int32_t ru0 = lower_lo ? bu - kLiftSize - kUnit : bu;
+            const std::int32_t ru1 = ru0 + kLiftSize + kUnit;
+            railing(true, ru0, ru1, pv0 - kUnit, pv0);
+            railing(true, ru0, ru1, pv1, pv1 + kUnit);
+            const std::int32_t end_u = lower_lo ? ru0 : ru1 - kUnit;
+            railing(false, end_u, end_u + kUnit, pv0, pv1);
+            const std::int32_t edge_u = lower_lo ? bu : bu - kUnit;
+            railing(false, edge_u, edge_u + kUnit, c + kWall, pv0 - kUnit);
+            railing(false, edge_u, edge_u + kUnit, pv1 + kUnit, c + kBlock - kWall);
+            // Call boxes on the corridor's far wall: below, in the shaft's
+            // tile before the platform; above, past the upper floor's edge.
+            lift.box_shape = horizontal ? kShapeCallBoxNS : kShapeCallBoxEW;
+            const std::int32_t bottom_u = bu - dir * (kLiftSize + kUnit) - (lower_lo ? 2 * kUnit : 0);
+            const std::int32_t top_u = bu + dir * 3 * kUnit - (lower_lo ? 0 : 2 * kUnit);
+            // A box acts through TRIGGER in its first state (frame 0); in the
+            // other one, TRIGGER passes the use on to the 0x4B1 objects of
+            // its link within 160 units whose map number has bit 3 (state 1),
+            // so each box has one beside it, as on map 1: every use calls.
+            auto call_box = [&](std::int32_t u, std::int32_t z) {
+                LevelItem& box = rect(lift.box_shape, u, u + 2 * kUnit, c + kWall, c + 2 * kWall, z);
+                lift_trigger(box);
+                const Spot at{box.x, box.y, box.z};
+                LevelItem& relay = b.add(kShapeTriggerRelay, 0, at.x, at.y, at.z + 2 * kUnit);
+                lift_trigger(relay);
+                relay.map_number = static_cast<std::uint8_t>(relay.map_number | kTriggerState1);
+                return at;
+            };
+            lift.bottom_box = call_box(bottom_u, kSwitchZ);
+            lift.top_box = call_box(top_u, kStorey + kSwitchZ);
+            // In front of the platform (the player's far corner), clear of it.
+            const std::int32_t v_mid = c + kBlock / 2 + 24;
+            lift.bottom = spot(lower_lo ? pu0 - kUnit : pu1 + kUnit + 47, v_mid, 0);
+            lift.top = spot(lower_lo ? bu + kUnit + 47 : bu - kUnit, v_mid, kStorey);
         }
+        place(across, x_of(u0 - 1, gap.to - 1), y_of(u0 - 1, gap.to - 1), lo.z, lo_door,
+              spot(u0 + 63, c + 2 * kWall - 1, lo.z + kReaderZ));
+        place(across, x_of(u1 + kWall - 1, gap.to - 1), y_of(u1 + kWall - 1, gap.to - 1), hi.z, hi_door,
+              spot(u1 - 48, c + 2 * kWall - 1, hi.z + kReaderZ));
     }
     for (std::size_t i = 0; i < r.rooms.size(); ++i) {
         const Room& room = r.rooms[i];
         b.floor(room.x0, room.y0, room.x1, room.y1, room.z);
         // Walls along x span the whole side; walls along y fit between them.
-        b.wall(kBack, kAlongX, room.y0 + kWall - 1, room.x0, room.x1, room.z, gaps[i][0]);
-        b.wall(kFront, kAlongX, room.y1 - 1, room.x0, room.x1, room.z, gaps[i][2]);
-        b.wall(kFront, kAlongY, room.x1 - 1, room.y0 + kWall, room.y1 - kWall, room.z, gaps[i][1]);
-        b.wall(kBack, kAlongY, room.x0 + kWall - 1, room.y0 + kWall, room.y1 - kWall, room.z, gaps[i][3]);
+        // Under a room of the upper storey, walls without doorways.
+        for (std::int32_t z = 0; z <= room.z; z += kStorey) {
+            const bool top = z == room.z;
+            auto g = [&](int side) { return top ? gaps[i][side] : std::vector<Gap>{}; };
+            b.wall(kBack, kAlongX, room.y0 + kWall - 1, room.x0, room.x1, z, g(0));
+            b.wall(kFront, kAlongX, room.y1 - 1, room.x0, room.x1, z, g(2));
+            b.wall(kFront, kAlongY, room.x1 - 1, room.y0 + kWall, room.y1 - kWall, z, g(1));
+            b.wall(kBack, kAlongY, room.x0 + kWall - 1, room.y0 + kWall, room.y1 - kWall, z, g(3));
+        }
     }
     // Automatic doors: the door, linked by its quality low to a DOOREGG at
     // its centre whose map number names it (original maps 3 and 4).
     for (const Door& d : doors) {
-        LevelItem& door = b.add(d.axis == kAlongX ? kShapeDoorN : kShapeDoorE, 0, d.x, d.y, 0);
+        LevelItem& door = b.add(d.axis == kAlongX ? kShapeDoorN : kShapeDoorE, 0, d.x, d.y, d.z);
         door.quality = d.link;
         const std::int32_t ex = d.axis == kAlongX ? d.x - kDoorWidth / 2 : d.x - kWall / 2;
         const std::int32_t ey = d.axis == kAlongX ? d.y - kWall / 2 : d.y - kDoorWidth / 2;
-        LevelItem& egg = b.add(kShapeTriggerEgg, 0, ex, ey, 0);
+        LevelItem& egg = b.add(kShapeTriggerEgg, 0, ex, ey, d.z);
         egg.quality = kDoorEggType;
         egg.npc_number = kDoorEggZone;
         egg.map_number = d.link;
@@ -452,12 +605,12 @@ Result generate(const std::vector<Biome>& biomes, const Options& options) {
         Lock& lock = r.locks[d.lock];
         const bool along_x = d.axis == kAlongX;
         const std::uint16_t door_shape = along_x ? kShapeDoorN : kShapeDoorE;
-        lock.barrier = {d.x, d.y, 0};
+        lock.barrier = {d.x, d.y, d.z};
         switch (lock.kind) {
             case LockKind::kCardDoor: {
                 lock.number = static_cast<std::uint8_t>((next_card++ - 1) % 31 + 1);
                 lock.barrier_shape = door_shape;
-                b.add(door_shape, 0, d.x, d.y, 0).quality = lock.number;
+                b.add(door_shape, 0, d.x, d.y, d.z).quality = lock.number;
                 // The reader on the corridor's far wall: along x for a door
                 // in a wall along y, and the other way round.
                 lock.reader_shape = along_x ? kShapeCardEW : kShapeCardNS;
@@ -472,7 +625,7 @@ Result generate(const std::vector<Biome>& biomes, const Options& options) {
             case LockKind::kSwitchWall: {
                 lock.number = new_link();
                 lock.barrier_shape = along_x ? kShapeEwallNS : kShapeEwallEW;
-                b.add(lock.barrier_shape, 0, d.x, d.y, 0).quality = lock.number;
+                b.add(lock.barrier_shape, 0, d.x, d.y, d.z).quality = lock.number;
                 lock.key_shape = kShapeSwitchNS;
                 lock.key = wall_spot(lock.key_room);
                 trigger(b.add(kShapeSwitchNS, 0, lock.key.x, lock.key.y, lock.key.z), lock.barrier_shape,
@@ -482,13 +635,13 @@ Result generate(const std::vector<Biome>& biomes, const Options& options) {
             case LockKind::kKeypadDoor: {
                 lock.number = new_link();
                 lock.barrier_shape = door_shape;
-                b.add(door_shape, 0, d.x, d.y, 0).quality = lock.number;
+                b.add(door_shape, 0, d.x, d.y, d.z).quality = lock.number;
                 lock.reader_shape = along_x ? kShapeKeypadEW : kShapeKeypadNS;
                 lock.reader = d.reader;
                 trigger(b.add(lock.reader_shape, 0, d.reader.x, d.reader.y, d.reader.z), door_shape, lock.number,
                         kArgDoor);
-                lock.code_box = {d.reader.x, d.reader.y, 0};
-                b.add(kShapeValueBox, 0, lock.code_box.x, lock.code_box.y, 0).quality = lock.number;
+                lock.code_box = {d.reader.x, d.reader.y, d.z};
+                b.add(kShapeValueBox, 0, lock.code_box.x, lock.code_box.y, lock.code_box.z).quality = lock.number;
                 // The monitor on its desk, against the key room's north wall
                 // (as on the original maps: 32 and 48 units from the desk's
                 // far corner, on its top).
@@ -505,7 +658,7 @@ Result generate(const std::vector<Biome>& biomes, const Options& options) {
             case LockKind::kPanelDoor: {
                 lock.number = new_link();
                 lock.barrier_shape = door_shape;
-                b.add(door_shape, 0, d.x, d.y, 0).quality = lock.number;
+                b.add(door_shape, 0, d.x, d.y, d.z).quality = lock.number;
                 lock.key_shape = kShapePanelNS;
                 lock.key = wall_spot(lock.key_room);
                 trigger(b.add(kShapePanelNS, 0, lock.key.x, lock.key.y, lock.key.z), door_shape, lock.number,
@@ -530,18 +683,118 @@ Result generate(const std::vector<Biome>& biomes, const Options& options) {
         departure.map_number = static_cast<std::uint8_t>(options.next_map);
     }
 
+    // Guards: MONSTER pairs in the rooms but the start one, more of them
+    // deeper in the level and in the exit room, some only from difficulty 2
+    // or 3; clear of doorways, keys, controls and the exit pad, facing the
+    // room the player comes from.
+    if (options.guards != 0) {
+        std::vector<std::pair<Spot, std::int32_t>> reserved;  // spot, clearance
+        for (const Door& d : doors) reserved.push_back({{d.x, d.y, d.z}, 128});
+        for (const Doorway& d : locked) reserved.push_back({{d.x, d.y, d.z}, 128});
+        for (const Lock& lock : r.locks) {
+            reserved.push_back({lock.key, 112});
+            if (lock.kind == LockKind::kKeypadDoor) reserved.push_back({lock.desk, 144});
+        }
+        reserved.push_back({r.start, 160});
+        reserved.push_back({{r.exit.x + 56, r.exit.y + 56, r.exit.z}, 176});
+        // The level's NPC types, among the fighters most used on the original
+        // maps: guards, soldiers and storm troopers, sometimes elites (not the
+        // chemsuits, 190 pairs: workers, they loiter and surrender).
+        constexpr int kTypes[] = {4, 9, 8, 15};  // GUARD, SOLDIER, STORMTRO, ELITE
+        constexpr int kWeights[] = {5, 4, 4, 2};
+        auto draw_type = [&] {
+            int roll = rng.below(15);
+            for (int t = 0; t < 4; ++t) {
+                if ((roll -= kWeights[t]) < 0) return kTypes[t];
+            }
+            return kTypes[0];
+        };
+        for (std::size_t i = 0; i < r.rooms.size(); ++i) {
+            const Room& room = r.rooms[i];
+            if (static_cast<int>(i) == r.start_room) continue;
+            int count = rng.range(0, 1) + (room.depth >= 2) + (static_cast<int>(i) == r.exit_room);
+            const int extra = rng.chance(50) ? 1 : 0;  // only at higher difficulties
+            // Where the player comes in (from a neighbour nearer the start).
+            const Spot door = entry(r, static_cast<int>(i));
+            for (int n = 0; n < count + extra && next_link < 250; ++n) {
+                // A free spot: the NPC's far corner, 64 units from the walls.
+                std::vector<Spot> free;
+                for (std::int32_t x = room.x0 + 96; x <= room.x1 - 48; x += 32) {
+                    for (std::int32_t y = room.y0 + 96; y <= room.y1 - 48; y += 32) {
+                        const bool clear = std::none_of(reserved.begin(), reserved.end(), [&](const auto& res) {
+                            return res.first.z == room.z && std::abs(res.first.x - x) < res.second &&
+                                   std::abs(res.first.y - y) < res.second;
+                        });
+                        if (clear) free.push_back({x, y, room.z});
+                    }
+                }
+                if (free.empty()) break;
+                Guard g;
+                g.room = static_cast<int>(i);
+                g.place = free[rng.below(static_cast<int>(free.size()))];
+                reserved.push_back({g.place, 96});
+                g.npc_type = draw_type();
+                g.min_difficulty = n < count ? 1 : rng.range(2, 3);
+                {
+                    // Facing the doorway (both far corners). Eight directions
+                    // from north (-y), clockwise.
+                    const std::int32_t dx = door.x - g.place.x, dy = door.y - g.place.y;
+                    const int sx = dx > std::abs(dy) / 2 ? 1 : dx < -std::abs(dy) / 2 ? -1 : 0;
+                    const int sy = dy > std::abs(dx) / 2 ? 1 : dy < -std::abs(dx) / 2 ? -1 : 0;
+                    constexpr int kDir[3][3] = {{7, 6, 5}, {0, 0, 4}, {1, 2, 3}};  // [sx + 1][sy + 1]
+                    g.direction = kDir[sx + 1][sy + 1];
+                }
+                g.link = new_link();
+                auto [place, kind] = make_monster_pair(g.place.x, g.place.y, g.place.z, g.npc_type, g.link);
+                MonsterPair m = read_monster_pair(place, kind);
+                m.direction = g.direction;
+                m.min_difficulty = g.min_difficulty;
+                m.on_enter = true;
+                m.other_weapon = rng.chance(20);
+                write_monster_pair(place, kind, m);
+                r.level.items.push_back(place);
+                r.level.items.push_back(kind);
+                r.guards.push_back(g);
+            }
+        }
+    }
+
     char note[200];
     std::snprintf(note, sizeof note,
-                  "seed %u: %s, %zu rooms, %zu passages, %zu locks, exit %d links from the start, %zu items",
-                  options.seed, biome.name().c_str(), r.rooms.size(), r.links.size(), r.locks.size(), exit.depth,
-                  r.level.record_count());
+                  "seed %u: %s, %zu rooms, %zu passages, %zu locks, %d storey(s), %zu lift(s), %zu guard(s), exit %d "
+                  "links from the start, %zu items",
+                  options.seed, biome.name().c_str(), r.rooms.size(), r.links.size(), r.locks.size(), r.storeys,
+                  r.lifts.size(), r.guards.size(), exit.depth, r.level.record_count());
     r.notes.push_back(note);
     for (const Lock& lock : r.locks) {
         std::snprintf(note, sizeof note, "  %s %u: passage to room %d, key in room %d", lock_name(lock.kind),
                       lock.number, lock.room, lock.key_room);
         r.notes.push_back(note);
     }
+    for (const Lift& lift : r.lifts) {
+        std::snprintf(note, sizeof note, "  lift %u: from room %d up to room %d", lift.number, lift.lower_room,
+                      lift.upper_room);
+        r.notes.push_back(note);
+    }
     return r;
+}
+
+Spot entry(const Result& result, int room_index) {
+    const Room& room = result.rooms[static_cast<std::size_t>(room_index)];
+    if (room.entrance.x > 0) return room.entrance;
+    for (const Link& l : result.links) {
+        const int o = other_end(l, room_index);
+        if (o < 0 || result.rooms[o].depth >= room.depth) continue;
+        const Room& from = result.rooms[o];
+        // The doorway's middle across, on tile 1 of the row or column.
+        if (from.slot_y == room.slot_y) {
+            const std::int32_t y = slot_y0(room.slot_y) + kBlock + kDoorOffset + kDoorWidth / 2 + 24;
+            return {from.slot_x < room.slot_x ? room.x0 + kWall + 80 + 47 : room.x1 - kWall - 80, y, room.z};
+        }
+        const std::int32_t x = slot_x0(room.slot_x) + kBlock + kDoorOffset + kDoorWidth / 2 + 24;
+        return {x, from.slot_y < room.slot_y ? room.y0 + kWall + 80 + 47 : room.y1 - kWall - 80, room.z};
+    }
+    return {room.centre_x(), room.centre_y(), room.z};
 }
 
 std::string check_solvable(const Result& result, std::vector<int>* order) {

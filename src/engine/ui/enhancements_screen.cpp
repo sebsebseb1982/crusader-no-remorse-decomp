@@ -19,10 +19,16 @@ constexpr std::uint8_t kFrameColour = 0x57, kGreen = 0x0C, kDimGreen = 0x75;
 // A row that does nothing as things are (MISC.PAL): focused, not.
 constexpr std::uint8_t kInactiveFocused = 0x1C, kInactive = 0x7F;
 
-// Text in one colour: drawn on a scratch surface, copied in `tint`.
 // @orig none: screen of the port's enhancements
 void print_tinted(Surface8& screen, const FontSet& fonts, int x, int y, const std::string& text, int tint) {
-    TextWriter writer(fonts, EnhancementsScreen::kFont);
+    crusader::print_tinted(screen, fonts, EnhancementsScreen::kFont, x, y, text, tint);
+}
+
+}  // namespace
+
+// @orig none: screen of the port's enhancements
+void print_tinted(Surface8& screen, const FontSet& fonts, int font, int x, int y, const std::string& text, int tint) {
+    TextWriter writer(fonts, font);
     constexpr int kPad = 4, kAbove = 32, kHeight = 48;
     const int width = writer.measure(text).width + 2 * kPad;
     Surface8 scratch(width, kHeight);
@@ -36,8 +42,6 @@ void print_tinted(Surface8& screen, const FontSet& fonts, int x, int y, const st
         }
     }
 }
-
-}  // namespace
 
 // @orig none: port-only enhancements window
 void draw_rounded_box(Surface8& screen, int x0, int y0, int x1, int y1, int fill, std::uint8_t colour) {
@@ -80,7 +84,7 @@ constexpr Entry kDisplayEntries[] = {Entry::Native,   Entry::Zoom,  Entry::Smoot
                                      Entry::Back};
 constexpr Entry kEffectsEntries[] = {Entry::Impact,      Entry::Blood,       Entry::Casings,
                                      Entry::BarrelLeaks, Entry::GlassDebris, Entry::Back};
-constexpr Entry kGameEntries[] = {Entry::Autosave, Entry::FixBugs, Entry::Language, Entry::Back};
+constexpr Entry kGameEntries[] = {Entry::Autosave, Entry::FixBugs, Entry::Language, Entry::Online, Entry::Back};
 constexpr Entry kCheatsEntries[] = {Entry::RemainsLoot, Entry::Back};
 
 // The name of a row that opens something (a page, the controller screen,
@@ -293,6 +297,10 @@ void EnhancementsScreen::draw(Surface8& screen) const {
             name = tr("LANGUAGE");
             value = selected_language().id.empty() ? tr("AUTO") : selected_language().name;
             break;
+        case Entry::Online:
+            name = tr("ONLINE NEWS");
+            on = config_->check_updates == 1;
+            break;
         case Entry::RemainsLoot:
             name = tr("LOOT FROM REMAINS");
             on = config_->remains_loot;
@@ -397,6 +405,7 @@ void EnhancementsScreen::activate(int row) {
         select_language(config_->language);
         break;
     }
+    case Entry::Online: config_->check_updates = config_->check_updates == 1 ? 0 : 1; break;
     case Entry::Back: back(); break;
     }
 }

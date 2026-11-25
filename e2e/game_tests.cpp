@@ -31,6 +31,7 @@
 #include "engine/world/sprite_process.hpp"
 #include "engine/world/projectile.hpp"
 #include "engine/world/teleport.hpp"
+#include "editor/generator/manifest.hpp"
 #include "editor/level.hpp"
 #include "editor/project.hpp"
 #include "game/game.hpp"
@@ -41,6 +42,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -1038,11 +1040,11 @@ void test_options(const std::filesystem::path& data) {
         game.mouse_button(true, dz.x0 + 5, dz.y0 + 5);
         game.mouse_button(false, dz.x0 + 5, dz.y0 + 5);
         CHECK(ps.dead_zone == PadSettings::kDefaultDeadZone - 1);
-        game.render(screen);
         // Issue #34: the ">" of the text, at the left of the wide value box, goes forward.
         game.mouse_button(true, dz.x0 + 8 + 70, dz.y0 + 5);
         game.mouse_button(false, dz.x0 + 8 + 70, dz.y0 + 5);
         CHECK(ps.dead_zone == PadSettings::kDefaultDeadZone);
+        game.render(screen);
         CHECK(screen.row(pad->row_rect(G::kDeadZoneRow).y0)[pad->row_rect(G::kDeadZoneRow).x0 + 5] == 0x0C);
         // "Par defaut" resets everything; "retour" closes the screen, not the options.
         const auto reset = pad->row_rect(G::kDefaultRow);
@@ -1168,6 +1170,7 @@ void test_credits(const std::filesystem::path& data) {
     game.load_save(1);
     press(game, 0x01, false, 0x1B);  // menu
     press(game, 0x4D, true);         // right: options
+    press(game, 0x50, true);         // down: crusader / no limit (port addition)
     press(game, 0x50, true);         // down: credits
     CHECK(game.menu() && game.menu()->selected() == MainMenu::kCredits);
     press(game, 0x1C, false, 0x0D);
@@ -1209,6 +1212,212 @@ void test_credits(const std::filesystem::path& data) {
     CHECK(const_cast<MainMenu*>(game.menu())->credits() == nullptr);
     game.update(kFrameUs);
     CHECK(game.audio()->music.current() == Music::kMenu);
+}
+
+// Port addition: "CRUSADER / NO LIMIT" in the menu, between "options" and
+// "credits": the difficulty screen, then a level of the generator played in
+// its own mod folder, with its own saves; "new game" goes back to the game's.
+// Port addition (GitHub issue #36): the main menu's online question, update
+// notice and news (news_screen.hpp), with a fetch that reads no network.
+void test_online_menu(const std::filesystem::path& data) {
+    Game game(data, test_saves(data));
+    game.config().check_updates = -1;  // the user's CRUSADER.CFG may hold an answer
+    game.config().news_read = 0;
+    game.set_port_version("v1.77.0");
+    const auto utc = [](std::int64_t t) {
+        const std::time_t tt = static_cast<std::time_t>(t);
+        std::tm tm{};
+#ifdef _WIN32
+        gmtime_s(&tm, &tt);
+#else
+        gmtime_r(&tt, &tm);
+#endif
+        char text[32];
+        std::strftime(text, sizeof text, "%Y-%m-%dT%H:%M:%SZ", &tm);
+        return std::string(text);
+    };
+    const std::int64_t now = std::time(nullptr);
+    const std::string news_json = R"({"news": [{"date": ")" + utc(now - 86400) +
+                                  R"(", "title": {"en": "Yesterday", "fr": "Hier"}, "body": "Texte"},
+        {"date": ")" + utc(now - 3 * 86400) + R"(", "title": "Before"},
+        {"date": ")" + utc(now + 86400) + R"(", "title": "Tomorrow"}]})";
+    int fetches = 0;
+    std::string opened;
+    game.enable_online(
+        [&](const std::string& url) -> std::optional<std::string> {
+            ++fetches;
+            if (url == kLatestReleaseUrl) return R"({"tag_name": "v1.79.0", "html_url": "https://example.org/r"})";
+            return news_json;
+        },
+        [&](const std::string& url) { opened = url; }, true);
+    CHECK(fetches == 0);  // not before the player agreed
+    game.load_save(1);
+
+    // The question first: right to "no", Enter.
+    press(game, 0x01, false, 0x1B);
+    const MainMenu* m = game.menu();
+    CHECK(m && m->updates_question() && m->updates_question()->yes_focused());
+    if (!m) return;
+    CHECK(!m->has_news() && m->update_line().x1 < m->update_line().x0);
+    press(game, 0x4D, true);
+    CHECK(m->updates_question() && !m->updates_question()->yes_focused());
+    press(game, 0x1C, false, 0x0D);
+    CHECK(!m->updates_question() && game.config().check_updates == 0 && fetches == 0);
+    press(game, 0x01, false, 0x1B);  // back to the game: not asked again
+    press(game, 0x01, false, 0x1B);
+    m = game.menu();
+    CHECK(m && !m->updates_question());
+
+    // Asked again, yes (focused): the release and the news fetched.
+    press(game, 0x01, false, 0x1B);
+    game.config().check_updates = -1;
+    press(game, 0x01, false, 0x1B);
+    m = game.menu();
+    CHECK(m && m->updates_question());
+    if (!m) return;
+    press(game, 0x1C, false, 0x0D);
+    CHECK(game.config().check_updates == 1 && fetches == 2);
+    CHECK(game.latest_release() && game.news().size() == 2);  // tomorrow's is not shown yet
+    CHECK(m->has_news() && !game.news().empty() && game.news()[0].title == "HIER");
+
+    // The update notice: a press opens the release's page.
+    const MainMenu::Rect line = m->update_line();
+    CHECK(line.x1 > line.x0 && line.y0 > 360 && line.y1 < 438);
+    game.mouse_button(true, (line.x0 + line.x1) / 2, (line.y0 + line.y1) / 2);
+    game.mouse_button(false, (line.x0 + line.x1) / 2, (line.y0 + line.y1) / 2);
+    CHECK(opened == "https://example.org/r");
+
+    // The news button, in the black band above the background, with the red
+    // disc of the 2 news not read on its corner.
+    const MainMenu::Rect b = m->button(MainMenu::kNews);
+    CHECK(b.y1 < 120 && b.x0 > 320);
+    auto reds = [&] {
+        Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+        game.render(screen);
+        int n = 0;
+        for (int y = std::max(b.y0 - 12, 0); y <= b.y0 + 12; ++y)
+            for (int x = b.x1 - 14; x <= b.x1 + 10; ++x) n += screen.row(y)[x] == menu_colour::kRed;
+        return n;
+    };
+    CHECK(reds() > 150);
+    // Pressed: the news, the newest first and new; Escape closes them, read.
+    game.mouse_button(true, b.x0 + 4, b.y0 + 4);
+    game.mouse_button(false, b.x0 + 4, b.y0 + 4);
+    const NewsScreen* news = m->news_screen();
+    CHECK(news && !news->lines().empty() && news->lines()[0].unread && news->lines()[1].text == "HIER");
+    press(game, 0x01, false, 0x1B);
+    CHECK(!m->news_screen() && game.config().news_read == game.news()[0].date && reds() == 0);
+    // Keys: it is selected; down to "options", up back, Enter opens it.
+    CHECK(m->selected() == MainMenu::kNews);
+    press(game, 0x50, true);
+    CHECK(m->selected() == MainMenu::kOptions);
+    press(game, 0x48, true);
+    CHECK(m->selected() == MainMenu::kNews);
+    press(game, 0x1C, false, 0x0D);
+    news = m->news_screen();
+    CHECK(news && !news->lines()[0].unread);
+    press(game, 0x1C, false, 0x0D);
+    CHECK(!m->news_screen() && game.menu() == m);
+
+    // Switched off in the enhancements window: no notice, no news.
+    game.config().check_updates = 0;
+    CHECK(!m->has_news() && m->update_line().x1 < m->update_line().x0);
+}
+
+void test_no_limit_menu(const std::filesystem::path& data) {
+    const auto dir = std::filesystem::temp_directory_path() / "crusader_no_limit_test";
+    std::filesystem::remove_all(dir);
+    Game game(data, test_saves(data));
+    game.set_no_limit_dir(dir);
+    game.set_no_limit_seed(42);
+    game.load_save(1);
+    press(game, 0x01, false, 0x1B);  // menu
+    const MainMenu* m = game.menu();
+    CHECK(m && m->has_no_limit());
+    if (!m) return;
+    const MainMenu::Rect b = m->button(MainMenu::kNoLimit);
+    CHECK(b.y0 > m->button(MainMenu::kOptions).y1 && b.y1 < m->button(MainMenu::kCredits).y0);
+    CHECK(b.x0 > 320 && b.x1 < 630);
+    // Its letters: the buttons' green, brighter once selected.
+    auto greens = [&](std::uint8_t colour) {
+        Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+        game.render(screen);
+        int n = 0;
+        for (int y = b.y0; y <= b.y1; ++y)
+            for (int x = b.x0; x <= b.x1; ++x) n += screen.row(y)[x] == colour;
+        return n;
+    };
+    CHECK(greens(MenuLettering::kFace) > 500 && greens(MenuLettering::kFaceSelected) == 0);
+    // The keys: right to "options", down to it, down to "credits", up back,
+    // left to "load game", right back.
+    press(game, 0x4D, true);
+    press(game, 0x50, true);
+    CHECK(m->selected() == MainMenu::kNoLimit);
+    CHECK(greens(MenuLettering::kFaceSelected) > 500);
+    press(game, 0x50, true);
+    CHECK(m->selected() == MainMenu::kCredits);
+    press(game, 0x48, true);
+    CHECK(m->selected() == MainMenu::kNoLimit);
+    press(game, 0x4B, true);
+    CHECK(m->selected() == MainMenu::kLoad);
+    press(game, 0x4D, true);
+    CHECK(m->selected() == MainMenu::kNoLimit);
+    press(game, 0x48, true);
+    CHECK(m->selected() == MainMenu::kOptions);
+    press(game, 0x50, true);
+    // Enter: the difficulty screen; level 2 clicked starts the level.
+    press(game, 0x1C, false, 0x0D);
+    const DifficultyScreen* ds = m->difficulty_screen();
+    CHECK(ds != nullptr);
+    if (!ds) return;
+    const auto level2 = ds->button(2);
+    game.mouse_button(true, level2.x0 + 10, level2.y0 + 5);
+    game.mouse_button(false, level2.x0 + 10, level2.y0 + 5);
+    CHECK(!game.menu());
+    game.update(kFrameUs);  // the level generated, then the new game's first slice: the arrival egg
+    const auto mod = dir / "mission-42";
+    CHECK(game.no_limit() && game.no_limit_seed() == 42 && game.mod() == mod);
+    CHECK(std::filesystem::exists(mod / "STATIC/FIXED.DAT") && std::filesystem::exists(mod / "NOLIMIT.JSON"));
+    const auto manifest = editor::gen::Manifest::read(mod);
+    CHECK(manifest && manifest->levels.size() == 1 && manifest->levels[0].seed == 42 &&
+          manifest->levels[0].source_map == 1);
+    const int map = manifest ? manifest->levels[0].map : -1;
+    World& w = game.world();
+    CHECK(w.current_map() == map && w.state.difficulty == 2);
+    const ObjId arrival = find_teleport_egg(w, kTeleportStartEgg);
+    CHECK(arrival && w.get(1)->x == w.get(arrival)->x && w.get(1)->y == w.get(arrival)->y);
+    for (int i = 0; i < 120; ++i) game.update(kFrameUs);
+    CHECK(game.machine().faults().empty() && w.current_map() == map);
+    // Saved in the level's own folder.
+    game.set_save_name(1, "NO LIMIT");
+    game.save_game(1);
+    CHECK(std::filesystem::exists(mod / "SAVEGAME" / "SAVEGAME.1"));
+    // The same seed again (Enter: "no limit" stays selected): the folder
+    // already made is played, not made again, its save kept.
+    const auto written = std::filesystem::last_write_time(mod / "STATIC/FIXED.DAT");
+    game.set_no_limit_seed(42);
+    press(game, 0x01, false, 0x1B);
+    CHECK(game.menu() && game.menu()->selected() == MainMenu::kNoLimit);
+    press(game, 0x1C, false, 0x0D);
+    press(game, 0x1C, false, 0x0D);  // the difficulty screen
+    CHECK(!game.menu());
+    game.update(kFrameUs);
+    CHECK(game.no_limit_seed() == 42 && game.world().current_map() == map);
+    CHECK(std::filesystem::last_write_time(mod / "STATIC/FIXED.DAT") == written);
+    CHECK(std::filesystem::exists(mod / "SAVEGAME" / "SAVEGAME.1"));
+    // "New game" (clicked: the menu has "no limit" selected): the game's own
+    // maps and saves again.
+    press(game, 0x01, false, 0x1B);
+    if (!game.menu()) return;
+    const MainMenu::Rect new_game = game.menu()->button(MainMenu::kNewGame);
+    game.mouse_button(true, new_game.x0 + 5, new_game.y0 + 5);
+    game.mouse_button(false, new_game.x0 + 5, new_game.y0 + 5);
+    ds = game.menu() ? game.menu()->difficulty_screen() : nullptr;
+    CHECK(ds != nullptr);
+    if (ds) press(game, 0x1C, false, 0x0D);
+    game.update(kFrameUs);
+    CHECK(!game.no_limit() && game.mod().empty() && game.world().current_map() == 1);
+    std::filesystem::remove_all(dir);
 }
 
 // Milestone 4: firing the shotgun of SAVEGAME.13 (shape 818, 1 round, 16 clips).
@@ -7941,6 +8150,13 @@ int main(int argc, char** argv) {
         test_fades(data);
         return failures ? 1 : 0;
     }
+    if (argc > 2 && std::string(argv[2]) == "--no-limit") {
+        test_credits(data);
+        test_no_limit_menu(data);
+    test_online_menu(data);
+        test_online_menu(data);
+        return failures ? 1 : 0;
+    }
     test_load_and_run(data);
     test_alert(data);
     test_player_walks(data);
@@ -7958,6 +8174,7 @@ int main(int argc, char** argv) {
 
     test_fades(data);
     test_credits(data);
+    test_no_limit_menu(data);
     test_options(data);
     test_firing(data);
     test_remains_loot(data);

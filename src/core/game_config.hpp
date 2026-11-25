@@ -13,6 +13,7 @@
 
 #include "core/pad_config.hpp"
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -129,6 +130,14 @@ public:
     // lighting, the light the scene keeps where no lamp reaches, in percent
     // (0: only the lamps light it, 100: the scene is not darkened at all).
     int ambient_light = 85;
+    // Port addition, written once answered: "checkupdates", the game looks
+    // online for a newer version of the port and for its news (news.hpp).
+    // -1 (no key) asks the player on the main menu, then 1 or 0.
+    int check_updates = -1;
+    // Port addition, written when not 0: "newsread", the date of the last
+    // news the player saw (UTC seconds); the newer ones are counted on the
+    // main menu's news button.
+    std::int64_t news_read = 0;
     // Port addition, written when changed: controller rumble and its strength
     // (0..100 percent).
     bool vibration = true;

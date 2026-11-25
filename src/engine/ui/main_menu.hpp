@@ -43,11 +43,39 @@
 //
 // Port addition (@orig none): from 24 to 31 December, a Christmas hat on the
 // Silencer, drawn over the background (christmas_hat.hpp).
+//
+// Port addition (@orig none): with Resources::no_limit, a seventh button,
+// "CRUSADER / NO LIMIT" (button 7), in the right column between "options"
+// and "credits", drawn in the buttons' lettering (menu_lettering.hpp). Down
+// from "options" and up from "credits" go through it, right from "load game"
+// goes to it and left from it to "load game"; the other keys keep the
+// original's moves. Like "new game", it opens the difficulty screen: a level
+// chosen closes the menu with 7 and new_game_difficulty() tells which. The
+// caller then starts a level of the procedural generator, Crusader: No
+// Limit (docs/GENERATEUR.md). Without no_limit, the menu is the original's.
+//
+// Port addition (@orig none): with Resources::online (news_screen.hpp,
+// GitHub issue #36):
+//   - while the player has not said whether the game may go online, the
+//     menu opens with the UpdatesQuestion over it, which gets every event
+//     until answered (MenuOnline::answer);
+//   - when a newer release of the port is known, a green line above the
+//     version lines, "NEW VERSION x.y.z AVAILABLE": a press on it opens the
+//     release's page (MenuOnline::open_release);
+//   - when there are news, a "NEWS" button (button 8) in the black band
+//     above the background, on the right, with a red disc and the count of
+//     the news not read yet on its corner when there are some. Up from
+//     "options" goes to it, down from it back to "options"; the other keys
+//     do nothing there but Enter (opens it) and Escape. It opens the
+//     NewsScreen; once closed, the news are marked read
+//     (MenuOnline::mark_news_read).
 
 #include "core/surface.hpp"
 #include "engine/ui/credits.hpp"
 #include "engine/ui/difficulty_screen.hpp"
 #include "engine/ui/load_screen.hpp"
+#include "engine/ui/menu_lettering.hpp"
+#include "engine/ui/news_screen.hpp"
 #include "engine/ui/options_screen.hpp"
 #include "engine/world/render.hpp"
 
@@ -66,6 +94,11 @@ public:
     static constexpr std::uint16_t kFirstBackground = 54;
     static constexpr std::uint16_t kFirstButton = 58;
     static constexpr int kNewGame = 0, kLoad = 1, kSave = 2, kOptions = 3, kCredits = 4, kQuit = 5, kBack = 6;
+    static constexpr int kNoLimit = 7;  // port addition
+    static constexpr int kNews = 8;     // port addition
+    // The "CRUSADER / NO LIMIT" button: centred on x kNoLimitCentreX (between
+    // the centres of "options" and "credits"), its top at kNoLimitTop.
+    static constexpr int kNoLimitCentreX = 537, kNoLimitTop = 222;
 
     struct Rect {
         int x0 = 0, y0 = 0, x1 = 0, y1 = 0;  // inclusive
@@ -98,6 +131,11 @@ public:
         std::function<std::string()> auto_save_name;
         // Port addition: the Christmas hat on the background.
         bool christmas_hat = false;
+        // Port addition: the "CRUSADER / NO LIMIT" button.
+        bool no_limit = false;
+        // Port addition: the online question, update notice and news; null
+        // for none of them.
+        MenuOnline* online = nullptr;
     };
     MainMenu(const Resources& res, Shared& shared, bool no_game);
 
@@ -116,11 +154,12 @@ public:
         if (options_) options_->pad_button(button);
     }
 
-    // Set once the menu has closed: kQuit, kBack, kLoad, kSave or kNewGame.
+    // Set once the menu has closed: kQuit, kBack, kLoad, kSave, kNewGame or
+    // kNoLimit.
     std::optional<int> result() const { return result_; }
     int load_slot() const { return load_slot_; }  // DS:0C94, for kLoad and kSave
     const std::string& save_name() const { return save_name_; }  // for kSave
-    int new_game_difficulty() const { return new_game_difficulty_; }  // DS:7E19, for kNewGame
+    int new_game_difficulty() const { return new_game_difficulty_; }  // DS:7E19, for kNewGame and kNoLimit
     const DifficultyScreen* difficulty_screen() const { return difficulty_.get(); }
     const LoadScreen* load_screen() const { return load_.get(); }
     const OptionsScreen* options() const { return options_.get(); }
@@ -132,13 +171,25 @@ public:
     void show_credits() { activate(kCredits); }
     void end_credits() { credits_.reset(); }
     int selected() const { return *selected_; }
-    const Rect& button(int i) const { return buttons_[i]; }
+    // kNewGame..kQuit, and kNoLimit when the menu has it.
+    const Rect& button(int i) const {
+        return i == kNoLimit ? no_limit_button_ : i == kNews ? news_button_ : buttons_[i];
+    }
+    bool has_no_limit() const { return res_.no_limit; }
+    // Port addition: the news button is shown (there are news).
+    bool has_news() const { return res_.online && !res_.online->news().empty(); }
+    const UpdatesQuestion* updates_question() const { return question_.get(); }
+    const NewsScreen* news_screen() const { return news_.get(); }
+    // The "new version" line, empty when it is not shown.
+    Rect update_line() const;
 
 private:
     void select(int i) { *selected_ = i; }
     void activate(int i);
 
     void after_sub_screen();
+    // The button under (x, y), -1 for none.
+    int button_at(int x, int y) const;
     void draw_version(Surface8& screen, int y, const std::string& text) const;
 
     Resources res_;
@@ -153,6 +204,16 @@ private:
     std::string save_name_;
 
     int new_game_difficulty_ = 0;
+    bool difficulty_for_no_limit_ = false;  // the difficulty screen opened by kNoLimit
+    MenuLettering no_limit_label_{{"CRUSADER", "NO LIMIT"}};
+    Rect no_limit_button_{};
+    // Port addition: the online part.
+    void draw_online(Surface8& screen) const;
+    // A key for the news button or its neighbours; true when used.
+    bool news_key(std::uint16_t code);
+    std::unique_ptr<UpdatesQuestion> question_;
+    std::unique_ptr<NewsScreen> news_;
+    Rect news_button_{};
     bool no_game_;
     std::array<Rect, kButtons> buttons_{};
     int captured_ = -1;  // button holding the mouse

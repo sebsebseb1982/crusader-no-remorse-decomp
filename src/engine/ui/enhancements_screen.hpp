@@ -32,7 +32,9 @@
 //   (GameConfig::fix_original_bugs): bugs of the original game's scripts are
 //   corrected, and "langue" (GameConfig::language): the
 //   language of the port's texts, auto (the data's), then the others offered
-//   (language.hpp), in turn;
+//   (language.hpp), in turn, and "nouveautes en ligne" (GameConfig::
+//   check_updates): the update notice and news of the main menu
+//   (news_screen.hpp);
 // - "triche": "butin des restes" (GameConfig::remains_loot): an enemy burnt,
 //   blown apart or vaporised drops its loot beside its remains
 //   (death_loot.hpp).
@@ -63,6 +65,10 @@ namespace crusader {
 // (a palette index) unless it is negative.
 void draw_rounded_box(Surface8& screen, int x0, int y0, int x1, int y1, int fill, std::uint8_t colour);
 
+// `text` in font `font`, every pixel of it in palette index `tint`; (x, y)
+// is the pen position (glyphs hang from their baseline).
+void print_tinted(Surface8& screen, const FontSet& fonts, int font, int x, int y, const std::string& text, int tint);
+
 // A "+" in a square frame of `size` pixels, top-left at (x, y).
 void draw_plus_icon(Surface8& screen, int x, int y, int size, std::uint8_t colour);
 
@@ -79,7 +85,7 @@ public:
         // Effects.
         Impact, Blood, Casings, BarrelLeaks, GlassDebris,
         // Game.
-        Autosave, FixBugs, Language,
+        Autosave, FixBugs, Language, Online,
         // Cheats.
         RemainsLoot,
         // Last on every page.

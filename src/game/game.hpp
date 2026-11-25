@@ -11,6 +11,7 @@
 #include "core/anim_dat.hpp"
 #include "core/data_files.hpp"
 #include "core/game_config.hpp"
+#include "core/news.hpp"
 #include "core/dtable.hpp"
 #include "core/font.hpp"
 #include "core/xform.hpp"
@@ -50,9 +51,14 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
+
+namespace crusader::editor::gen {
+struct GameData;  // editor/generator/campaign.hpp
+}
 
 namespace crusader {
 
@@ -137,6 +143,25 @@ public:
         start_map_ = map;
         start_egg_ = egg;
     }
+
+    // Port addition: Crusader: No Limit, the main menu's "CRUSADER / NO
+    // LIMIT" (main_menu.hpp). A level of the procedural generator
+    // (docs/GENERATEUR.md) is generated from a random seed into its own mod
+    // folder, "gen-SEED" in the No Limit folder ("mods" next to the data
+    // folder, as the editor's --generate writes it), its seed in the folder's
+    // NOLIMIT.JSON; the game then plays that folder as with --mod (its
+    // FIXED.DAT, its SAVEGAME folder for the load and save screens) and a new
+    // game starts at the level's arrival egg. The menu's "new game" goes back
+    // to the game's own files and saves. False when no level could be made
+    // (the game is left as it was).
+    bool start_no_limit(int difficulty);
+    void set_no_limit_dir(const std::filesystem::path& dir) { no_limit_dir_ = dir; }
+    // The seed of the next level (tests); 0: a random one.
+    void set_no_limit_seed(std::uint32_t seed) { no_limit_next_seed_ = seed; }
+    // While a No Limit level is played: its seed and mod folder.
+    bool no_limit() const { return no_limit_seed_ != 0; }
+    std::uint32_t no_limit_seed() const { return no_limit_seed_; }
+    const std::filesystem::path& mod() const { return mod_; }
 
     // Advances the clock by `elapsed_us` and runs one kernel slice. While the
     // menu is open, only the processes that run at any level do.
@@ -297,6 +322,18 @@ public:
     // program from the clock: the main menu's Silencer wears a Christmas hat
     // until Ctrl+M turns the Christmas mode off (christmas_hat.hpp).
     void set_christmas(bool on) { christmas_ = on; }
+    // Port addition (core/news.hpp, engine/ui/news_screen.hpp, GitHub issue
+    // #36): the game may go online. `fetch` gets the body at a URL
+    // (http_get), on a thread of the game's unless `synchronous` (tools);
+    // `open_url` opens a page in the browser. Without it (tests, tools) the
+    // main menu has no online part. When the player agreed
+    // (GameConfig::check_updates), the latest release and the news are
+    // fetched at once; until the player has said, the main menu asks.
+    using UrlFetch = std::function<std::optional<std::string>(const std::string& url)>;
+    void enable_online(UrlFetch fetch, std::function<void(const std::string&)> open_url, bool synchronous = false);
+    // What was fetched (once arrived).
+    const std::optional<ReleaseInfo>& latest_release() const { return latest_release_; }
+    const std::vector<NewsItem>& news() const { return news_; }
     // CRUSYS_1050_093D: the "-laurie" argument enables the cheats (DS:08F0),
     // without turning them on (cheats.hpp).
     void enable_cheats() { world_->state.cheats.enabled = true; }
@@ -458,6 +495,36 @@ private:
     std::deque<std::vector<std::int8_t>> movie_sounds_;
 
     std::unique_ptr<MainMenu> menu_;
+    // Port addition: the main menu's online part (enable_online).
+    class OnlineMenu final : public MenuOnline {
+    public:
+        explicit OnlineMenu(Game& game) : game_(&game) {}
+        bool ask() const override;
+        void answer(bool check) override;
+        std::string new_version() const override;
+        void open_release() override;
+        const std::vector<NewsItem>& news() const override;
+        std::int64_t news_read() const override;
+        void mark_news_read() override;
+
+    private:
+        Game* game_;
+    };
+    struct OnlineState;
+    void start_online_check();
+    // What the check brought, once it has ended; the news selected again
+    // when the language changes.
+    void poll_online();
+    UrlFetch online_fetch_;
+    std::function<void(const std::string&)> open_url_;
+    bool online_synchronous_ = false;
+    std::shared_ptr<OnlineState> online_state_;
+    bool online_received_ = false;
+    std::optional<ReleaseInfo> latest_release_;
+    std::string news_json_;
+    std::string news_language_;
+    std::vector<NewsItem> news_;
+    OnlineMenu online_menu_{*this};
     Process* menu_process_ = nullptr;  // modal placeholder, owned by the kernel
     MainMenu::Shared menu_shared_;     // DS:5BE8, DS:0098
     LoadScreen::Names save_names_;     // DS:7964
@@ -475,6 +542,20 @@ private:
     std::vector<std::uint8_t> floppy_;    // its palette indices (0xFF: transparent), built when first drawn
     int pending_load_ = 0;             // save to load at the next update (1-based)
     int pending_new_game_ = 0;         // difficulty of a new game to start at the next update
+    int pending_no_limit_ = 0;         // difficulty of a No Limit level to start at the next update
+    bool menu_no_game_ = false;        // the menu open was opened without a game (DS:5BEE)
+    // Crusader: No Limit (start_no_limit).
+    std::filesystem::path no_limit_dir_;
+    std::uint32_t no_limit_next_seed_ = 0;
+    std::uint32_t no_limit_seed_ = 0;
+    std::shared_ptr<const editor::gen::GameData> no_limit_data_;  // learnt from the data once
+    struct Campaign {
+        std::filesystem::path mod, save_dir;
+        int start_map = 1;
+        std::uint16_t start_egg = 0x1E;
+    } campaign_;  // what a No Limit level replaced
+    void use_mod(const std::filesystem::path& mod, const std::filesystem::path& save_dir);
+    void leave_no_limit();
     bool end_credits_pending_ = false; // Game::I_playCredits: its process has not run yet
     bool end_credits_ = false;         // the credits running are the end of the game's
     std::vector<std::string> next_movies_;  // Game_start: movies to play after the current one

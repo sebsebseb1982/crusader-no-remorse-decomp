@@ -3,11 +3,12 @@
 // a mission graph of rooms, laid out on a grid and built from the pieces of
 // a biome, with the eggs and scripted objects of the original maps.
 //
-// Milestone 1: one storey of rooms joined by corridors through automatic
-// doors (a door and its DOOREGG, as the original maps make them), the
-// mission start (arrival egg 0x1E) in the first room and, in the room
-// farthest from it, a teleporter pad whose departure egg leads to the next
-// level.
+// Rooms joined by corridors through automatic doors (a door and its
+// DOOREGG, as the original maps make them), the mission start (arrival egg
+// 0x1E) in the first room and, in the room farthest from it, a teleporter
+// pad whose departure egg leads to the next level (milestone 1); locks on
+// the way and their keys (milestone 2); two storeys joined by lifts, the
+// exit upstairs (milestone 3).
 
 #include "editor/generator/biome.hpp"
 #include "editor/level.hpp"
@@ -36,6 +37,8 @@ struct Options {
     int biome = -1;           // index in the biomes; -1: drawn from the seed
     int rooms = 0;            // 0: drawn (6 to 10)
     int locks = -1;           // locks on the way to the exit; -1: drawn (1 to 3)
+    int storeys = -1;         // 1 or 2 (z 0 and 96); -1: drawn (2 in three levels out of four)
+    int guards = -1;          // NPCs in the rooms: 0 none, -1 or 1 as drawn from the seed
     int map = 0;              // the level's own map number
     int next_map = 0;         // where the exit teleporter leads (0: no exit teleport)
     std::uint8_t next_egg = 0x1E;
@@ -51,8 +54,10 @@ struct Spot {
 // A room: a rectangle of whole floor tiles (usecode units, x1 / y1 excluded).
 struct Room {
     int slot_x = 0, slot_y = 0;
-    std::int32_t x0 = 0, y0 = 0, x1 = 0, y1 = 0, z = 0;
+    std::int32_t x0 = 0, y0 = 0, x1 = 0, y1 = 0, z = 0;  // z: the storey's floor (0 or 96)
     int depth = 0;  // links from the start room
+    Spot entrance;  // where the player comes in, when the layout gives it (missions); else see entry()
+    Spot source;    // missions: the set piece's origin on its original map (x0, y0, storey)
     std::int32_t centre_x() const { return (x0 + x1) / 2; }
     std::int32_t centre_y() const { return (y0 + y1) / 2; }
 };
@@ -95,6 +100,42 @@ struct Link {
     int a = 0, b = 0;
     std::uint8_t door_a = 0, door_b = 0;  // the automatic doors' links (0: no automatic door at that end)
     int lock = -1;                          // in Result::locks
+    int lift = -1;                          // in Result::lifts, when its rooms are on different storeys
+};
+
+// A passage between storeys, built as on the original maps (map 5): the
+// corridor runs at z 0 from the lower room to a lift platform ELEVPLAT
+// (8 x 8 x 1, at z 1, its top 9 above the floor: a step) that bears a
+// TRIGPAD; past the platform, the corridor goes on at z 96 to the upper
+// room, its underside closed by walls. The pad and a call box (BOX_NS /
+// BOX_EW) at each end act through TRIGGER on the platform: shape 0x12F,
+// action 2 with bit 2 (equip, argument 0), which sends it from one end of
+// its run to the other (z 1 and 88, its top level with the upper floor).
+// Railings (YR*X6, 48 high) stand round the shaft at the top, on the sides
+// where the platform does not touch the upper floor.
+struct Lift {
+    int link = 0;
+    int lower_room = 0, upper_room = 0;
+    std::uint8_t number = 0;     // the link (quality low) of platform, pad and call boxes
+    Spot platform;               // far corner, at the bottom (z 1)
+    std::int32_t x0 = 0, y0 = 0, x1 = 0, y1 = 0;  // the platform's footprint
+    Spot bottom_box, top_box;    // the call boxes (far corners)
+    std::uint16_t box_shape = 0;
+    Spot bottom, top;            // where the player stands in front of the platform, below and above
+};
+
+// An NPC of the level: a MONSTER pair of the original maps (the place, frame
+// 0, and the kind, frame 1, linked by their quality low): the NPC appears at
+// the place when it comes near the player (map number bit 3), from the
+// lowest difficulty given, guards there, attacks on seeing the player and
+// when shot at (activities 8, 5, 5).
+struct Guard {
+    int room = 0;
+    Spot place;
+    int npc_type = 0;         // DTABLE.FLX record
+    int min_difficulty = 1;   // 1 to 4
+    int direction = 0;        // 0 to 7 (north, north-east...)
+    std::uint8_t link = 0;
 };
 
 struct Result {
@@ -103,12 +144,20 @@ struct Result {
     std::vector<Room> rooms;
     std::vector<Link> links;
     std::vector<Lock> locks;  // in the order they are met on the way to the exit
+    std::vector<Lift> lifts;
+    std::vector<Guard> guards;
+    int storeys = 1;
     int start_room = 0, exit_room = 0;
     Spot start, exit;  // the arrival egg; the exit pad's centre
     std::vector<std::string> notes;
 };
 
 Result generate(const std::vector<Biome>& biomes, const Options& options);
+
+// Where the player stands on coming into a room from the start's side: 80
+// units inside its doorway from a neighbour nearer the start (the room's
+// centre for the start room). A far corner, as the player's position.
+Spot entry(const Result& result, int room);
 
 // Logical check, the solver: from the start, a lock opens once its key room
 // is reached (the card picked up, the switch or panel used, the code read;

@@ -1,6 +1,6 @@
 // crusader-no-remorse-editor: level editor for Crusader: No Remorse maps.
 //
-//   crusader-no-remorse-editor [data | game folder] [--mod DIR] [--map N] [--new-map] [--select-shape S]
+//   crusader-no-remorse-editor [data | game folder] [--mod DIR] [--map N] [--new-map] [--select-shape S] [--center X,Y[,Z]]
 //                               [--prefabs DIR]
 //                              [--screenshot out.bmp [--frames N]]
 //
@@ -16,6 +16,7 @@
 #include "core/language.hpp"
 #include "editor/editor_app.hpp"
 #include "editor/generator/campaign.hpp"
+#include "editor/generator/pieces.hpp"
 
 #include <SDL.h>
 #include <imgui.h>
@@ -23,6 +24,7 @@
 #include <imgui_impl_sdlrenderer2.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <filesystem>
@@ -109,24 +111,38 @@ int main(int argc, char** argv) {
     int generate_count = 1, generate_biome = -1;
     bool mod_given = false;
     std::filesystem::path regenerate_from;
+    int pieces_map = -1;
+    long long mission_seed = -1;
+    int mission_source = 1;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--mod") == 0 && i + 1 < argc) options.mod = argv[++i], mod_given = true;
         else if (std::strcmp(argv[i], "--generate") == 0 && i + 1 < argc) generate_seed = std::stoll(argv[++i], nullptr, 0);
         else if (std::strcmp(argv[i], "--regenerate") == 0 && i + 1 < argc) regenerate_from = argv[++i];
         else if (std::strcmp(argv[i], "--levels") == 0 && i + 1 < argc) generate_count = std::stoi(argv[++i]);
         else if (std::strcmp(argv[i], "--biome") == 0 && i + 1 < argc) generate_biome = std::stoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--pieces") == 0 && i + 1 < argc) pieces_map = std::stoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--mission") == 0 && i + 1 < argc) mission_seed = std::stoll(argv[++i], nullptr, 0);
+        else if (std::strcmp(argv[i], "--source") == 0 && i + 1 < argc) mission_source = std::stoi(argv[++i]);
         else if (std::strcmp(argv[i], "--map") == 0 && i + 1 < argc) options.map = std::stoi(argv[++i], nullptr, 0);
         else if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshot = argv[++i];
         else if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc) frames = std::stoi(argv[++i]);
         else if (std::strcmp(argv[i], "--new-map") == 0) options.new_map = true;
         else if (std::strcmp(argv[i], "--prefabs") == 0 && i + 1 < argc) options.prefabs = argv[++i];
+        else if (std::strcmp(argv[i], "--center") == 0 && i + 1 < argc) {
+            char* at = argv[++i];
+            options.center_x = static_cast<int>(std::strtol(at, &at, 10));
+            if (*at == ',') options.center_y = static_cast<int>(std::strtol(at + 1, &at, 10));
+            if (*at == ',') options.center_z = static_cast<int>(std::strtol(at + 1, &at, 10));
+        }
         else if (std::strcmp(argv[i], "--select-shape") == 0 && i + 1 < argc) {
             options.select_shape = std::stoi(argv[++i], nullptr, 0);
         }
         else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
             std::printf("crusader-no-remorse-editor [data] [--mod DIR] [--map N]\n"
                         "crusader-no-remorse-editor [data] --generate SEED [--levels N] [--biome B] [--mod DIR]\n"
-                        "crusader-no-remorse-editor [data] --regenerate DIR [--mod DIR]   (DIR/NOLIMIT.JSON)\n");
+                        "crusader-no-remorse-editor [data] --regenerate DIR [--mod DIR]   (DIR/NOLIMIT.JSON)\n"
+                        "crusader-no-remorse-editor [data] --pieces MAP   (the map's rooms as set pieces)\n"
+                        "crusader-no-remorse-editor [data] --mission SEED [--source MAP] [--mod DIR]\n");
             return 0;
         } else {
             options.data = argv[i];
@@ -139,6 +155,45 @@ int main(int argc, char** argv) {
         return 1;
     }
     crusader::set_text_language(crusader::detect_data_info(options.data).text_language());
+    if (pieces_map >= 0) {
+        // The set pieces of a map: its rooms, as the generator cuts them out.
+        const auto game = crusader::editor::gen::GameData::load(options.data);
+        for (int z : {0, 96}) {
+            const auto rooms = crusader::editor::gen::extract_rooms(game, pieces_map, z);
+            for (std::size_t r = 0; r < rooms.size(); ++r) {
+                std::printf("%2zu  %s\n", r, rooms[r].describe().c_str());
+                for (const auto& o : rooms[r].openings) {
+                    std::printf("      %c %5d..%5d at %5d%s\n", "NESW"[o.side], o.from, o.to, o.edge, o.door ? " door" : o.cut ? " cut" : "");
+                }
+            }
+        }
+        return 0;
+    }
+    if (mission_seed >= 0) {
+        // A mission from the rooms of an original map (mission.hpp).
+        using namespace crusader::editor;
+        if (!mod_given) options.mod = "mods/mission-" + std::to_string(mission_seed);
+        try {
+            const gen::GameData game = gen::GameData::load(options.data);
+            Project project(options.data, options.mod);
+            std::string error;
+            const auto levels = gen::generate_mission_levels(project, game, static_cast<std::uint32_t>(mission_seed),
+                                                             mission_source, error);
+            if (levels.empty()) {
+                std::fprintf(stderr, "mission failed: %s\n", error.c_str());
+                return 1;
+            }
+            project.save();
+            for (const std::string& note : levels.front().result.notes) std::printf("%s\n", note.c_str());
+            std::printf("written to %s; play with:\n  crusader-no-remorse %s --mod %s --map %d\n",
+                        options.mod.string().c_str(), options.data.string().c_str(), options.mod.string().c_str(),
+                        levels.front().map);
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "error: %s\n", e.what());
+            return 1;
+        }
+        return 0;
+    }
     if (generate_seed >= 0 || !regenerate_from.empty()) {
         if (!mod_given) {
             options.mod = !regenerate_from.empty() ? regenerate_from

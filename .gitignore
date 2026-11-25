@@ -5,6 +5,7 @@ data_us/
 data_de/
 __pycache__/
 private/
+isos/*
 isos/*.iso
 isos/*.bin
 isos/*.cue

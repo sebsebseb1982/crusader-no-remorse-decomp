@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "news": [
+    {
+      "date": "2026-11-25",
+      "title": {
+        "en": "News and update notice",
+        "fr": "Nouveautés et avis de mise à jour",
+        "de": "Neuigkeiten und Update-Hinweis"
+      },
+      "body": {
+        "en": "The main menu now tells when a new version of the port is out, and the news of the port show up here. The enhancements window (game page) turns this on or off.",
+        "fr": "Le menu principal signale désormais la sortie d'une nouvelle version du portage, et les nouveautés du portage s'affichent ici. La fenêtre des améliorations (page jeu) l'active ou le désactive.",
+        "de": "Das Hauptmenü meldet jetzt, wenn eine neue Version der Portierung erscheint, und die Neuigkeiten der Portierung erscheinen hier. Das Verbesserungsfenster (Seite Spiel) schaltet das ein oder aus."
+      }
+    }
+  ]
+}

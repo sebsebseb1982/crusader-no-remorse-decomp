@@ -1,7 +1,7 @@
 // crusader: runs the game from a saved game (milestone 1: the world runs, the
 // camera moves with the arrow keys).
 //
-//   crusader [data | game.iso | GAME.GOG] [--mod DIR] [--save N | --new-game | --map N [--egg E]] [-laurie] [--fullscreen] [--auto-save-names]  (neither: the start-up movies, then the menu) [--movie NAME | --movie-overlay NAME] [--frames N [--scroll DX DY] [--walk] [--fire] [--use ID] [--hit ID] [--menu | --menu-load | --menu-credits | --menu-options | --menu-gamepad | --menu-display | --menu-new] --png out.png [--wav out.wav] [--save-to FILE]]
+//   crusader [data | game.iso | GAME.GOG] [--mod DIR] [--save N | --new-game | --map N [--egg E]] [-laurie] [--fullscreen] [--auto-save-names]  (neither: the start-up movies, then the menu) [--movie NAME | --movie-overlay NAME] [--frames N [--scroll DX DY] [--walk] [--fire] [--use ID] [--hit ID] [--menu | --menu-load | --menu-credits | --menu-options | --menu-gamepad | --menu-display | --menu-new | --menu-no-limit] --png out.png [--wav out.wav] [--save-to FILE]]
 //
 // With --png, runs N frames of 1/60 s without a window, moving the camera by
 // (DX, DY) usecode units per frame or making the player walk, and writes the
@@ -13,6 +13,12 @@
 // --movie-overlay as I_playMovieOverlay. --save-to writes a saved game of
 // the state after the frames to FILE (named after it), e.g. with --map and
 // --egg to make a save at a teleport egg.
+// Online news and update notice (core/news.hpp): --offline leaves them out;
+// --check-online fetches them, prints what the main menu would show and
+// exits; --online-from DIR reads DIR/release.json (the GitHub API's answer)
+// and DIR/news.json instead of the network, as if the player agreed
+// (--online-ask: as if not asked yet); --menu-news, with --png, opens the
+// news from the menu.
 // --mod loads a folder made by the level editor (crusader-no-remorse-editor): its
 // files replace those of the data. --map starts a new game on that map, on
 // its teleport egg E (frame 1, quality low byte E; 0x1E by default, where
@@ -26,8 +32,10 @@
 
 #include "core/iso_image.hpp"
 #include "core/language.hpp"
+#include "core/news.hpp"
 #include "core/png_writer.hpp"
 #include "platform/gl_lighting.hpp"
+#include "platform/http_get.hpp"
 #include "crusader_version.hpp"
 #include "engine/ui/christmas_hat.hpp"
 #include "engine/world/ceiling_lights.hpp"
@@ -48,7 +56,9 @@
 #include <ctime>
 #include <exception>
 #include <fstream>
+#include <iterator>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <filesystem>
 #include <string>
@@ -99,6 +109,42 @@ void write_wav(const std::string& path, const std::vector<std::int16_t>& samples
     out.write(reinterpret_cast<const char*>(samples.data()), bytes);
 }
 
+// --check-online: what the main menu would show, from the network.
+// @orig none: port's online news
+int check_online() {
+    const auto release_json = http_get(kLatestReleaseUrl);
+    const auto news_json = http_get(kNewsUrl);
+    const auto current = parse_semver(CRUSADER_VERSION);
+    std::printf("this version: %s\n", CRUSADER_VERSION);
+    if (!release_json) std::printf("latest release: could not be fetched\n");
+    else if (const auto latest = parse_latest_release(*release_json)) {
+        std::printf("latest release: %s (%s)%s\n", latest->version.text().c_str(), latest->url.c_str(),
+                    current && latest->version > *current ? " - newer, the menu tells it" : "");
+    } else {
+        std::printf("latest release: unreadable answer\n");
+    }
+    if (!news_json) {
+        std::printf("news: could not be fetched\n");
+        return 1;
+    }
+    for (const char* language : {"en", "fr", "de"}) {
+        const auto news = select_news(*news_json, static_cast<std::int64_t>(std::time(nullptr)), current, language);
+        std::printf("news (%s): %zu\n", language, news.size());
+        for (const NewsItem& n : news) std::printf("  %s  %s\n", format_day(n.date).c_str(), n.title.c_str());
+    }
+    return release_json ? 0 : 1;
+}
+
+// The browser, on a page (the release of the update notice).
+// @orig none: port's online news
+void open_url(const std::string& url) {
+#if SDL_VERSION_ATLEAST(2, 0, 14)
+    if (SDL_OpenURL(url.c_str()) != 0) std::fprintf(stderr, "cannot open %s: %s\n", url.c_str(), SDL_GetError());
+#else
+    std::fprintf(stderr, "cannot open %s: SDL too old\n", url.c_str());
+#endif
+}
+
 void print_faults(Game& game) {
     for (const auto& f : game.machine().faults()) {
         std::fprintf(stderr, "usecode fault: %s (class 0x%04X ip 0x%04X)\n", f.message.c_str(), f.class_id, f.ip);
@@ -122,7 +168,9 @@ int main(int argc, char** argv) {
     double gamma = 1.0;
     std::int32_t scroll_x = 0, scroll_y = 0;
     bool walk = false, fire = false, menu = false, menu_load = false, menu_credits = false, menu_options = false, menu_gamepad = false, menu_display = false,
-         menu_new = false;
+         menu_new = false, menu_no_limit = false, menu_news = false;
+    bool offline = false, online_ask = false;
+    std::filesystem::path online_from;  // --online-from DIR: release.json and news.json, not the network
     std::string png, wav, movie;
     std::filesystem::path save_to;  // --save-to FILE: the state after the frames, saved there
     int use = 0;
@@ -168,6 +216,12 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--menu-gamepad") == 0) menu = menu_options = menu_gamepad = true;
         else if (std::strcmp(argv[i], "--menu-display") == 0) menu = menu_options = menu_display = true;
         else if (std::strcmp(argv[i], "--menu-new") == 0) menu = menu_new = true;
+        else if (std::strcmp(argv[i], "--menu-no-limit") == 0) menu = menu_no_limit = true;
+        else if (std::strcmp(argv[i], "--menu-news") == 0) menu = menu_news = true;
+        else if (std::strcmp(argv[i], "--offline") == 0) offline = true;
+        else if (std::strcmp(argv[i], "--check-online") == 0) return check_online();
+        else if (std::strcmp(argv[i], "--online-from") == 0 && i + 1 < argc) online_from = argv[++i];
+        else if (std::strcmp(argv[i], "--online-ask") == 0) online_ask = true;
         else if (std::strcmp(argv[i], "--scroll") == 0 && i + 2 < argc) {
             scroll_x = std::stoi(argv[++i]);
             scroll_y = std::stoi(argv[++i]);
@@ -219,6 +273,21 @@ int main(int argc, char** argv) {
         } sdl_quit_last;
         Game game(data, {}, mod);
         game.set_port_version(CRUSADER_VERSION);
+        // The online news and update notice (port addition): in play, from
+        // the network once the player agreed; --online-from reads files.
+        if (!online_from.empty()) {
+            game.config().check_updates = online_ask ? -1 : 1;
+            game.enable_online(
+                [online_from](const std::string& url) -> std::optional<std::string> {
+                    std::ifstream in(online_from / (url == kLatestReleaseUrl ? "release.json" : "news.json"),
+                                     std::ios::binary);
+                    if (!in) return std::nullopt;
+                    return std::string(std::istreambuf_iterator<char>(in), {});
+                },
+                open_url, true);
+        } else if (!offline && png.empty()) {
+            game.enable_online([](const std::string& url) { return http_get(url); }, open_url);
+        }
         if (lighting) game.config().lighting = true;
         // The 3D lighting on the GPU when there is one (else on the processor),
         // made the first time the option is on; --cpu-lighting keeps it on the
@@ -292,13 +361,25 @@ int main(int argc, char** argv) {
                 game.key(0x01, false, true, 0, 0x1B);
                 game.mouse_move(320, 240);
             }
+            if (menu_news) {  // right to "options", up to "news", Enter
+                for (const std::uint8_t scancode : {std::uint8_t{0x4D}, std::uint8_t{0x48}}) {
+                    game.key(scancode, true, true, 0);
+                    game.key(scancode, true, false, 0);
+                }
+                game.key(0x1C, false, true, 0, 0x0D);
+                game.key(0x1C, false, false, 0);
+            }
             if (menu_load) {  // then down to "load" and Enter
                 game.key(0x50, true, true, 0);
                 game.key(0x1C, false, true, 0, 0x0D);
             }
-            if (menu_credits) {  // right, down to "credits", Enter, then --frames N
+            if (menu_credits || menu_no_limit) {  // right, down to "crusader / no limit"
                 game.key(0x4D, true, true, 0);
                 game.key(0x4D, true, false, 0);
+                game.key(0x50, true, true, 0);
+                game.key(0x50, true, false, 0);
+            }
+            if (menu_credits) {  // down to "credits", Enter, then --frames N
                 game.key(0x50, true, true, 0);
                 game.key(0x50, true, false, 0);
                 game.key(0x1C, false, true, 0, 0x0D);

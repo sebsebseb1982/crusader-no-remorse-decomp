@@ -37,6 +37,7 @@ The changes fall into four groups:
 11. [Window, fullscreen, mouse and picture](#11-window-fullscreen-mouse-and-picture)
 12. [Version lines on the main menu](#12-version-lines-on-the-main-menu)
    - [12b. Christmas hat](#12b-christmas-hat)
+   - [12c. Update notice and news](#12c-update-notice-and-news)
 13. [Game versions: French 1.08, US 1.23 and German 1.07](#13-game-versions-french-108-us-123-and-german-107)
 14. [Installing from a CD image, no CD needed](#14-installing-from-a-cd-image-no-cd-needed)
 15. [Start-up, command line and tools](#15-start-up-command-line-and-tools)
@@ -112,6 +113,7 @@ The original has nothing like it. This screen gathers every option the port adds
 | AUTOSAVE / SAUVEGARDE AUTO | Toggles the autosave | `autosave` |
 | ORIGINAL BUG FIXES / CORRECTIFS ORIGINAL | Corrects bugs of the original game that can block a mission | `fixoriginalbugs` |
 | LANGUAGE / LANGUE | Cycles the language: AUTO → each folder of `languages` → AUTO; a language's game files need a restart (section 8b) | `language` |
+| ONLINE NEWS / NOUVEAUTES EN LIGNE | The update notice and the news of the main menu (section 12c) | `checkupdates` |
 
 *CHEATS / TRICHE*
 
@@ -739,6 +741,47 @@ The original No Remorse has no Christmas mode; No Regret plays Christmas music f
 - **Ctrl+M** (next music track) turns the Christmas mode off until the game is quit: the hat is gone the next time the menu opens.
 - There is no option: outside these dates the menu is the original's.
 
+### 12c. Update notice and news
+
+**Files:** `src/core/news.*`, `src/platform/http_get.*`, `src/engine/ui/news_screen.*`, `src/engine/ui/main_menu.*`, `news.json` (GitHub issue #36)
+
+The original has nothing like it. The port can look online for a newer version of itself and for news its authors publish.
+
+**Asking first**
+- The first time the main menu opens, a small window asks: ONLINE UPDATES / MISES A JOUR, "CHECK ONLINE FOR NEW VERSIONS AND NEWS OF THE PORT?", YES / NO (French: OUI / NON). Left/right move between the two, Enter answers, Escape or N answers no, Y (O, J) yes; a click answers too.
+- The answer is kept in `CRUSADER.CFG` (`checkupdates`) and can be changed on the GAME page of the enhancements window (ONLINE NEWS / NOUVEAUTES EN LIGNE).
+- Until the player says yes, the game never goes online.
+
+**What is fetched.** Once agreed, at each start, on a thread of its own (the game never waits for it):
+- the latest release of the port, from the GitHub API (`releases/latest`);
+- `news.json`, at the root of the repository (branch `master`).
+Windows uses WinHTTP (part of the system, its proxy settings); Linux loads `libcurl` at run time if it is installed, and does nothing otherwise. No network, a timeout (8 s) or an error: nothing is shown.
+
+**Update notice.** When the latest release is newer than the running version, a green line above the version lines: NEW VERSION x.y.z AVAILABLE (French: NOUVELLE VERSION x.y.z DISPONIBLE). Clicking it opens the release's page in the browser. Builds that are not releases (`0.0.0-dev`) never show it. The port does not update itself: the player downloads the new version (PortMaster users through PortMaster).
+
+**News**
+- When there are news, a NEWS button (French: NOUVEAUTES) in the black band above the menu's background, on the right. Up from OPTIONS reaches it, down goes back; Enter or a click opens it.
+- A red disc with the count of the news not read yet (9+ above nine) sits on its top right corner.
+- The news screen lists them newest first: the day (DD.MM.YYYY) with a red NEW / NOUVEAU when not read yet, the title in green, the text in dark green, wrapped. Up/down scroll a line, left/right a page (the arrows shown when the text does not fit scroll a page too); Enter, Escape or BACK close it. Closing it marks them read: the date of the newest is kept in `CRUSADER.CFG` (`newsread`).
+- The texts are shown in capitals without accents, like the port's other screens.
+
+**Writing news** (`news.json`, UTF-8):
+
+```json
+{ "format": 1,
+  "news": [ { "date": "2026-11-25T18:00:00Z",
+              "expires": "2027-01-31",
+              "min_version": "1.78.0",
+              "max_version": "1.79.9",
+              "title": { "en": "...", "fr": "...", "de": "..." },
+              "body":  { "en": "...", "fr": "...", "de": "..." } } ] }
+```
+
+- `date` (UTC, `YYYY-MM-DD` with an optional time): the news shows from then, so a news can be prepared in advance. It disappears after **30 days**, or at `expires` when given.
+- `min_version` / `max_version` (optional, both included): the versions of the port it is shown to, e.g. `max_version` for "update to get this", `min_version` for "new in your version".
+- `title` / `body`: by language (the port's language, else `en`, else the first), or a plain string; `\n` separates paragraphs.
+- No release is needed: a commit of `news.json` on `master` is enough (GitHub's raw files may take a few minutes to refresh).
+
 ---
 
 ## 13. Game versions: French 1.08, US 1.23 and German 1.07
@@ -800,6 +843,7 @@ The original reads much of its data from the CD and needs it in the drive. The p
   - `--size WxH`, `--scroll DX DY`, `--walk`, `--fire`, `--use ID`;
   - `--menu`, `--menu-load`, `--menu-credits`, `--menu-options`, `--menu-gamepad`, `--menu-new`, `--movie NAME`, `--movie-overlay NAME`;
   - `--debug-title`: diagnostics in the window title (FPS, processes, missing intrinsics…).
+  - `--offline`: no update notice nor news for this run; `--check-online`: fetches them, prints what the menu would show and exits; `--online-from DIR` (with `--online-ask`, `--menu-news`): reads `DIR/release.json` and `DIR/news.json` instead of the network (section 12c).
 - Bundled tools: `shapeview`, `mapview` (shape and map viewers), `shapedump`, `sortcheck`, `ucsmoke` (runs the scripts of every map and reports missing intrinsics), `useprobe`, `diffcheck` (runs the original routines in an emulator and compares them with the port).
 
 ---
@@ -836,6 +880,8 @@ The original reads much of its data from the CD and needs it in the drive. The p
 | `flashlight` | true | `false` |
 | `ambientlight` | 85, clamped to 0..100 | ≠ 85 |
 | `language` | empty (AUTO) | a language folder is picked: its id (`fr`, `en`, `pt-br`...) |
+| `checkupdates` | none (the main menu asks) | answered: `true` or `false` (section 12c) |
+| `newsread` | 0 | the news are read: the date of the newest, in UTC seconds |
 | `viewzoom` | 0 (auto), 1..4 with decimals (`1.5`) | ≠ 0 |
 | `padmap` | see section 2.4 | controller config ≠ default. 24 comma-separated action numbers; `-1` = default role; values clamped |
 | `padaim` | 3, clamped to 1..5 | same |
@@ -947,11 +993,12 @@ The original ships no editor. `crusader-no-remorse-editor` (Dear ImGui on SDL2, 
 
 **Files:** `src/editor/generator/`, `docs/GENERATEUR.md`
 
-*Crusader: No Limit* generates new levels from the game's own pieces. The generator learns the **biomes** (floor and wall families) from the globs of the original maps, lays out rooms and corridors, and places automatic doors, the mission start and an exit teleporter. On the way to the exit, one to three locks (card doors, keypad doors whose code a monitor shows, panel doors, energy walls cut by a switch) have their key in a room reached before them. `crusader-no-remorse-editor data --generate SEED [--levels N]` writes the levels to a mod folder; *Map > Generate a level (Crusader: No Limit)...* does it in the editor. The seeds are saved in the mod's `NOLIMIT.JSON`, which is enough to share the levels: `--regenerate DIR` generates them again, byte for byte. Work in progress: milestone 2 of 7 (storeys, enemies and supplies come next).
+*Crusader: No Limit* generates new levels from the game's own pieces. The generator learns the **biomes** (floor and wall families) from the globs of the original maps, lays out rooms and corridors, and places automatic doors, the mission start and an exit teleporter. On the way to the exit, one to three locks (card doors, keypad doors whose code a monitor shows, panel doors, energy walls cut by a switch) have their key in a room reached before them. Three levels out of four climb to their exit: the rooms past a point of the way are on an upper storey (z 96), reached by lifts built as on the original maps (a platform and its pad, a call box at each end, railings round the shaft). Guards stand in the rooms (MONSTER pairs, as the original maps place their NPCs), some only at higher difficulties, facing the way the player comes. In the game, the main menu's **CRUSADER / NO LIMIT** button (between *Options* and *Credits*, drawn in the lettering of the original buttons) asks for the difficulty, generates a mission built from the original rooms (see below) from a random seed into `mods/mission-SEED` and plays it, with its own saves; *New game* goes back to the missions. `crusader-no-remorse-editor data --generate SEED [--levels N]` writes the levels to a mod folder; *Map > Generate a level (Crusader: No Limit)...* does it in the editor. The seeds are saved in the mod's `NOLIMIT.JSON`, which is enough to share the levels: `--regenerate DIR` generates them again, byte for byte. Since 25 November 2026, levels are also built **from the designers' own rooms**: `crusader-no-remorse-editor data --mission SEED --source MAP` cuts the rooms of an original map out with their furniture, scenery and guard posts, and assembles them along a mission (arrival, first contact, the key room off the way, the locked room, a breath, the climax, extraction), each room chosen for its purpose and the guards kept or added to the step's tension; the main menu's button plays those. Work in progress: a demo, to be judged in play before it grows.
 
 **Rules**
 - Pieces follow the original globs: floors of 256 units, walls one storey (96 units) high; the walls on the camera side use the black frame the designers used there, so that rooms stay visible.
 - Automatic doors are made like the original ones: a door linked by its quality to a `DOOREGG` trigger egg at its centre.
 - A level is kept only if it can be finished: a solver opens the locks with their keys from the start to the exit (`check_solvable`), and `generator_data_tests` plays generated levels in the engine, without a window: each lock bars its room until its key is used (the card picked up, the code read on the monitor and typed on the keypad, the switch or panel used), every room and the exit pad are then reached by the engine's own walking move, a door opens and lets the player through, the exit teleporter leads to the next level, the editor's level check finds no problem.
+- Lifts are ridden in the engine by the tests: the player walks onto the platform, its pad sends it up, the player walks off upstairs, and each call box sends it down and up again (a box acts in one state only: a hidden 0x4B1 relay beside it, as on map 1, makes every use call the lift).
 - Locks follow what the game's scripts need: switches, panels and monitors within 3,200 units of what they act on (`TRIGGER`'s search), wall-mounted controls on the face the camera sees, a different card number per chained level.
 - The same seed gives the same level on every platform (own random generator).

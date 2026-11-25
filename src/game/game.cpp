@@ -34,6 +34,8 @@
 #include "engine/world/palette_cycle.hpp"
 #include "engine/world/pickup_list.hpp"
 #include "engine/world/teleport.hpp"
+#include "editor/generator/campaign.hpp"
+#include "editor/project.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -42,9 +44,12 @@
 #include <ctime>
 #include <fstream>
 #include <iterator>
+#include <mutex>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 
 namespace crusader {
 
@@ -261,6 +266,7 @@ Game::Game(const std::filesystem::path& data, const std::filesystem::path& saves
     set_loaded_data_language(files_.language().empty() ? std::string() : config_.language);
     set_config(config_);
     reset_world();
+    no_limit_dir_ = data.parent_path() / "mods";
 }
 
 // @orig 12E0:06BF
@@ -1010,7 +1016,13 @@ void Game::update(std::uint32_t elapsed_us) {
     if (pending_new_game_) {
         const int difficulty = pending_new_game_;
         pending_new_game_ = 0;
+        leave_no_limit();
         new_game(difficulty);
+    }
+    if (pending_no_limit_) {
+        const int difficulty = pending_no_limit_;
+        pending_no_limit_ = 0;
+        if (!start_no_limit(difficulty)) open_menu(menu_no_game_);
     }
     autosave_icon_us_ -= std::min(autosave_icon_us_, elapsed_us);
     if (movie_) {
@@ -1056,6 +1068,7 @@ void Game::update(std::uint32_t elapsed_us) {
     if (!modal()) selection_tick(*world_);
     mix_elapsed(elapsed_us);
     if (menu_) {
+        poll_online();
         menu_->update(kernel_->ticks());
         run_credits(before);
     }
@@ -1204,12 +1217,113 @@ void Game::next_start_up_movie() {
 // @orig 1020:0C7F
 void Game::save_config() {
     if (world_) world_->state.frameskip = config_.frameskip;
+    // Port addition: the online check, once the player agreed to it.
+    if (online_fetch_ && config_.check_updates == 1) start_online_check();
     if (config_file_.empty()) return;
     try {
         config_.save(config_file_);
     } catch (const std::exception& e) {
         std::fprintf(stderr, "%s\n", e.what());
     }
+}
+
+// The port's online news and update notice (news.hpp).
+
+struct Game::OnlineState {
+    std::mutex mutex;
+    bool done = false;
+    std::optional<std::string> release, news;
+};
+
+// @orig none: port's online news
+void Game::enable_online(UrlFetch fetch, std::function<void(const std::string&)> open_url, bool synchronous) {
+    online_fetch_ = std::move(fetch);
+    open_url_ = std::move(open_url);
+    online_synchronous_ = synchronous;
+    if (online_fetch_ && config_.check_updates == 1) start_online_check();
+}
+
+// @orig none: port's online news
+void Game::start_online_check() {
+    if (online_state_ || !online_fetch_) return;
+    online_state_ = std::make_shared<OnlineState>();
+    auto run = [state = online_state_, fetch = online_fetch_] {
+        auto release = fetch(kLatestReleaseUrl);
+        auto news = fetch(kNewsUrl);
+        const std::lock_guard lock(state->mutex);
+        state->release = std::move(release);
+        state->news = std::move(news);
+        state->done = true;
+    };
+    if (online_synchronous_) {
+        run();
+        poll_online();
+    } else {
+        // Detached: a slow network never holds the game, nor its end.
+        std::thread(std::move(run)).detach();
+    }
+}
+
+// @orig none: port's online news
+void Game::poll_online() {
+    if (!online_state_) return;
+    if (!online_received_) {
+        const std::unique_lock lock(online_state_->mutex, std::try_to_lock);
+        if (!lock.owns_lock() || !online_state_->done) return;
+        if (online_state_->release) latest_release_ = parse_latest_release(*online_state_->release);
+        if (online_state_->news) news_json_ = *online_state_->news;
+        online_received_ = true;
+    }
+    // The news in the language of the port's texts, else the data's.
+    const std::string language = !config_.language.empty()                  ? config_.language
+                                 : text_language() == Language::English ? "en"
+                                 : text_language() == Language::German  ? "de"
+                                                                        : "fr";
+    if (language == news_language_ || news_json_.empty()) return;
+    news_language_ = language;
+    news_ = select_news(news_json_, static_cast<std::int64_t>(std::time(nullptr)), parse_semver(port_version_),
+                        language);
+}
+
+// @orig none: port's online news
+bool Game::OnlineMenu::ask() const { return game_->online_fetch_ && game_->config_.check_updates < 0; }
+
+// @orig none: port's online news
+void Game::OnlineMenu::answer(bool check) {
+    game_->config_.check_updates = check ? 1 : 0;
+    game_->save_config();
+}
+
+// @orig none: port's online news
+std::string Game::OnlineMenu::new_version() const {
+    const auto& latest = game_->latest_release_;
+    const auto current = parse_semver(game_->port_version_);
+    if (game_->config_.check_updates != 1 || !latest || !current || latest->version <= *current) return {};
+    return latest->version.text();
+}
+
+// @orig none: port's online news
+void Game::OnlineMenu::open_release() {
+    if (!game_->open_url_ || !game_->latest_release_) return;
+    const std::string& url = game_->latest_release_->url;
+    game_->open_url_(!url.empty() ? url
+                                  : "https://github.com/sebsebseb1982/crusader-no-remorse-decomp/releases/latest");
+}
+
+// @orig none: port's online news
+const std::vector<NewsItem>& Game::OnlineMenu::news() const {
+    static const std::vector<NewsItem> none;
+    return game_->config_.check_updates == 1 ? game_->news_ : none;
+}
+
+// @orig none: port's online news
+std::int64_t Game::OnlineMenu::news_read() const { return game_->config_.news_read; }
+
+// @orig none: port's online news
+void Game::OnlineMenu::mark_news_read() {
+    if (game_->news_.empty() || game_->news_.front().date <= game_->config_.news_read) return;
+    game_->config_.news_read = game_->news_.front().date;
+    game_->save_config();
 }
 
 // @orig 13F0:03F4 13F0:0290
@@ -1392,6 +1506,7 @@ void Game::open_menu() {
 // @orig 13D0:0000
 void Game::open_menu(bool no_game) {
     if (menu_) return;
+    menu_no_game_ = no_game;
     // WORLD_13e8_0e7d and 10c3: the status bar goes, the cursor shows.
     world_->state.status_bar_visible = false;
     apply_status_bar_mouse_range();
@@ -1420,7 +1535,9 @@ void Game::open_menu(bool no_game) {
                                 (data_version_.empty() ? std::string(tr("UNKNOWN")) : "V" + data_version_) + " " +
                                 (data_language_.empty() ? std::string(tr("UNKNOWN LANGUAGE")) : data_language_),
                             auto_save_name_function(),
-                            christmas_ && (!audio_ || audio_->music.christmas_allowed())},
+                            christmas_ && (!audio_ || audio_->music.christmas_allowed()),
+                            true,
+                            online_fetch_ ? &online_menu_ : nullptr},
         menu_shared_, no_game);
     auto p = std::make_unique<ModalProcess>();
     menu_process_ = p.get();
@@ -1461,6 +1578,7 @@ void Game::close_menu() {
     // World_game_menu, result 2: Game_save, then back to the game.
     if (result == MainMenu::kSave) save_named(load_slot + 1, save_name);
     if (result == MainMenu::kNewGame) pending_new_game_ = new_game_difficulty;
+    if (result == MainMenu::kNoLimit) pending_no_limit_ = new_game_difficulty;
     world_->state.status_bar_visible = true;
     world_->state.screen_palette = world_->state.game_palette;  // palette_write_hw(DS:058C)
     world_->state.cycle_paused = false;                         // MainMenu_dtor (13D0:03F5)
@@ -2101,6 +2219,91 @@ void Game::render_view(Surface8& screen, RenderStats* stats, bool keep_view) {
 void Game::move_camera(std::int32_t dx, std::int32_t dy) {
     const GameState& s = world_->state;
     world_->set_camera(s.camera_x + dx, s.camera_y + dy, s.camera_z);
+}
+
+}  // namespace crusader
+
+namespace crusader {
+
+// @orig none: the files of a mod folder in place of those of the game
+// (Crusader: No Limit). Only the maps and globs are read again: a generated
+// level replaces nothing else.
+void Game::use_mod(const std::filesystem::path& mod, const std::filesystem::path& save_dir) {
+    if (mod != mod_) {
+        files_ = DataFiles(data_, mod, files_.language());
+        globs_ = FlexArchive::open(files_.find("STATIC/GLOB.FLX"));
+        fixed_ = FlexArchive::open(files_.find("STATIC/FIXED.DAT"));
+        mod_ = mod;
+    }
+    if (save_dir != save_dir_) set_save_dir(save_dir);
+}
+
+// @orig none: back to the game's own files, saves and first mission.
+void Game::leave_no_limit() {
+    if (!no_limit()) return;
+    use_mod(campaign_.mod, campaign_.save_dir);
+    start_map_ = campaign_.start_map;
+    start_egg_ = campaign_.start_egg;
+    no_limit_seed_ = 0;
+}
+
+// @orig none: Crusader: No Limit from the menu (port addition)
+bool Game::start_no_limit(int difficulty) {
+    constexpr int kNoLimitSource = 1;  // the original map whose rooms make the missions
+    namespace gen = editor::gen;
+    std::uint32_t seed = no_limit_next_seed_;
+    no_limit_next_seed_ = 0;
+    if (seed == 0) {
+        // Short seeds, easy to give to someone else.
+        std::random_device device;
+        seed = 1 + (device() ^ static_cast<std::uint32_t>(std::time(nullptr))) % 999999u;
+    }
+    try {
+        // Learnt from the game's own data, never a mod's (as the editor does).
+        if (!no_limit_data_) no_limit_data_ = std::make_shared<const gen::GameData>(gen::GameData::load(data_));
+        // A seed whose level fails its checks is dropped for the next one.
+        std::string error;
+        for (int attempt = 0; attempt < 20; ++attempt, ++seed) {
+            // A mission built from the rooms of the first mission's map
+            // (editor/generator/mission.hpp).
+            const std::filesystem::path mod = no_limit_dir_ / ("mission-" + std::to_string(seed));
+            int map = 0;
+            if (std::filesystem::exists(mod)) {
+                // Drawn before: the same seed gives the same level, already
+                // there with its saves. Another folder of that name is left
+                // alone.
+                const auto manifest = gen::Manifest::read(mod);
+                if (!manifest || manifest->version != gen::kGeneratorVersion || manifest->levels.size() != 1 ||
+                    manifest->levels.front().seed != seed || manifest->levels.front().source_map != kNoLimitSource ||
+                    !std::filesystem::exists(mod / "STATIC/FIXED.DAT")) {
+                    continue;
+                }
+                map = manifest->levels.front().map;
+            } else {
+                editor::Project project(data_, mod);
+                const std::vector<gen::GeneratedLevel> levels =
+                    gen::generate_mission_levels(project, *no_limit_data_, seed, kNoLimitSource, error);
+                if (levels.empty()) {
+                    std::fprintf(stderr, "Crusader: No Limit: %s\n", error.c_str());
+                    continue;
+                }
+                project.save();
+                gen::record_levels(mod, levels);
+                map = levels.front().map;
+            }
+            if (!no_limit()) campaign_ = {mod_, save_dir_, start_map_, start_egg_};
+            use_mod(mod, mod / "SAVEGAME");
+            no_limit_seed_ = seed;
+            start_map_ = map;
+            start_egg_ = 0x1E;  // the generator's arrival egg
+            std::printf("Crusader: No Limit, seed %u: map %d in %s\n", seed, start_map_, mod.string().c_str());
+            new_game(difficulty);
+            return true;
+        }
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "Crusader: No Limit: %s\n", e.what());
+    }
+    return false;
 }
 
 }  // namespace crusader

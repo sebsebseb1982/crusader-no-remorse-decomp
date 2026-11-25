@@ -8,6 +8,7 @@
 #include "editor/generator/biome.hpp"
 #include "editor/generator/generator.hpp"
 #include "editor/generator/manifest.hpp"
+#include "editor/generator/mission.hpp"
 #include "editor/project.hpp"
 
 #include <cstdint>
@@ -23,6 +24,7 @@ struct GameData {
     std::vector<Glob> globs;
     std::vector<Level> maps;
     std::vector<bool> scripted;  // by shape: a usecode class of that number exists
+    std::vector<std::string> class_names;  // by shape: its usecode class name (EUSECODE.FLX entry 1), or empty
     std::vector<Biome> biomes;
     static GameData load(const std::filesystem::path& data);
 };
@@ -44,6 +46,11 @@ std::vector<GeneratedLevel> generate_levels(Project& project, const GameData& da
 // generator version, a seed that fails).
 std::vector<GeneratedLevel> regenerate_levels(Project& project, const GameData& data, const Manifest& manifest,
                                               std::string& error);
+
+// The demo mission (mission.hpp) from the rooms of `source_map`, on a free
+// map of the project (stored, not saved); its exit leads back to its start.
+std::vector<GeneratedLevel> generate_mission_levels(Project& project, const GameData& data, std::uint32_t seed,
+                                                    int source_map, std::string& error);
 
 // Adds the levels to the mod's NOLIMIT.JSON (written).
 void record_levels(const std::filesystem::path& mod, const std::vector<GeneratedLevel>& levels);

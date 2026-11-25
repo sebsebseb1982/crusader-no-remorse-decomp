@@ -52,7 +52,8 @@ add_library(crusader_core
   src/core/png_writer.cpp
   src/core/avi_movie.cpp
   src/core/movie_subtitles.cpp
-  src/core/json.cpp)
+  src/core/json.cpp
+  src/core/news.cpp)
 target_include_directories(crusader_core PUBLIC src)
 
 # Engine core: process kernel (KERNEL.C / PROCESS.C), no platform dependency.
@@ -117,6 +118,7 @@ add_library(crusader_engine
   src/engine/ui/weasel_gump.cpp
   src/engine/ui/mouse_cursor.cpp
   src/engine/ui/main_menu.cpp
+  src/engine/ui/menu_lettering.cpp
   src/engine/ui/christmas_hat.cpp
   src/engine/ui/load_screen.cpp
   src/engine/ui/options_screen.cpp
@@ -127,6 +129,7 @@ add_library(crusader_engine
   src/engine/ui/credits.cpp
   src/engine/ui/gamepad_screen.cpp
   src/engine/ui/enhancements_screen.cpp
+  src/engine/ui/news_screen.cpp
   src/engine/ui/movie_player.cpp
   src/engine/world/auto_firer.cpp
   src/engine/world/render.cpp)
@@ -141,12 +144,19 @@ add_library(crusader_platform
   src/platform/real_shift.cpp
   src/platform/sdl_gamepad.cpp
   src/platform/sdl_audio.cpp
-  src/platform/gl_lighting.cpp)
+  src/platform/gl_lighting.cpp
+  src/platform/http_get.cpp)
 target_link_libraries(crusader_platform PUBLIC crusader_engine ${SDL2_TARGET})
+# The online news (http_get.cpp): WinHTTP on Windows, libcurl loaded at run time elsewhere.
+if(WIN32)
+  target_link_libraries(crusader_platform PRIVATE winhttp)
+else()
+  target_link_libraries(crusader_platform PRIVATE ${CMAKE_DL_LIBS})
+endif()
 
 # The game without platform code (testable headless), and its executable.
 add_library(crusader_game src/game/game.cpp)
-target_link_libraries(crusader_game PUBLIC crusader_engine)
+target_link_libraries(crusader_game PUBLIC crusader_engine crusader_editor_core)
 
 if(WIN32)
   # Embed the application icon (Explorer, taskbar, window title bar).
@@ -203,7 +213,9 @@ add_library(crusader_editor_core
   src/editor/generator/biome.cpp
   src/editor/generator/generator.cpp
   src/editor/generator/campaign.cpp
-  src/editor/generator/manifest.cpp)
+  src/editor/generator/manifest.cpp
+  src/editor/generator/pieces.cpp
+  src/editor/generator/mission.cpp)
 target_link_libraries(crusader_editor_core PUBLIC crusader_core)
 
 option(CRUSADER_BUILD_EDITOR "Build the level editor (fetches Dear ImGui)" ON)
@@ -327,6 +339,8 @@ if(CRUSADER_GAME_DATA_TESTS)
     foreach(t core_data_tests world_data_tests audio_data_tests editor_data_tests generator_data_tests game_tests)
         add_test(NAME ${t} COMMAND ${t} ${CRUSADER_DATA_DIR})
     endforeach()
+    # Crusader: No Limit missions built from the rooms of map 1 (mission.hpp).
+    add_test(NAME generator_mission_tests COMMAND generator_data_tests ${CRUSADER_DATA_DIR} 1 3 --mission 1)
 endif()
 
 # The US data (v1.23), when found: the same game through the US usecode and texts.

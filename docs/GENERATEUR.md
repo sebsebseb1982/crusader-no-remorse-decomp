@@ -57,6 +57,10 @@ The code is in `src/editor/generator/`, without SDL, so the editor, the tests an
 
 ## Using it
 
+From the game: **CRUSADER / NO LIMIT** in the main menu, between *Options* and *Credits*. After the difficulty screen, a mission (below, "Missions from set pieces": the rooms of map 1) is generated from a random seed (1 to 999,999) into `mods/mission-SEED` (next to the data folder) and played at once. While it is played, the game reads that folder as with `--mod`: the load and save screens use its `SAVEGAME` folder; *New game* goes back to the game's own missions and saves. A seed drawn again plays the folder already there. The seed is printed on the console ("Crusader: No Limit, seed N: map M in ...mission-N"), and the folder can be played again later with `--mod mods/mission-SEED --map <map>` (the map is in its `NOLIMIT.JSON`, with `"source_map"`: `--regenerate` builds a mission again from it). Until 25 November 2026 the button generated the rule-built levels of milestones 1 to 4 into `mods/gen-SEED`.
+
+From the editor:
+
 ```sh
 crusader-no-remorse-editor data --generate 42 --mod mods/gen-42
 crusader-no-remorse data --mod mods/gen-42 --map <map printed by the generator>
@@ -76,6 +80,50 @@ crusader-no-remorse-editor data --regenerate mods/shared
 
 generates the same levels again, byte for byte. A seed gives the same level only with the same generator version (`"version"` in the file, raised whenever the generator changes what a seed gives: `--regenerate` refuses another version) and the same game data.
 
+## Missions from set pieces (demo)
+
+The levels of milestones 1 to 4 are rooms drawn as empty boxes on a grid, with mechanisms put in by rules: they can be finished, but they have no identity, no pace and no intent. The way forward (25 November 2026, a demo level first, judged in play before anything else is built on it) is to build levels **out of the designers' own rooms**, and to **tell the level before building it**.
+
+```sh
+crusader-no-remorse-editor data --pieces 1                       # the rooms of map 1, as set pieces
+crusader-no-remorse-editor data --mission 1 --source 1           # a mission from them, in mods/mission-1
+crusader-no-remorse data --mod mods/mission-1 --map <map printed>
+```
+
+**Set pieces** (`pieces.hpp`). A map is flattened (its glob eggs replaced by their pieces) and read as a grid of 16-unit cells at a storey: a cell is walkable when a solid flat piece bears it (not a black void tile, not a death floor) and nothing solid stands over it lower than 80 units (the player's height); door cells are not walkable. The walkable cells, eroded by 64 units so that doorways and passages narrower than 128 units fall away, give one component per room; each walkable cell then goes back to the nearest room. A room's **inside** is its cells and the cells of its box that its walls enclose with them (under its furniture: a stack of crates deeper than a cell from where the player walks), not another room's. It takes what stands within its inside; the walls that border it for half their length at least (not one that runs on past its corner, over the void); what hangs on a wall (thin) when the room lies on the face of the wall that the camera sees (east or south: a fake lift door painted for the room behind stays there); a flat piece that is no floor tile (a hazard stripe, a hatch) only when it lies within a cell of the inside; every floor tile that bears one of its cells or what it takes (tiles are 256 units: the one under a room's border may be held by a neighbour, and lie lower than the storey). Things that touch (crates stacked, barrels side by side, a pyramid of crates) go whole or stay whole: with the room when all of them lie within a cell of its inside, else none of them; never cut. Its **openings** are the runs of its border, 80 units wide or more, that meet another room or a door. Its **tags** count what it holds by class (crates and barrels: storage; chairs, monitors, desks: office; transformers, generators: machines; cameras, alarms, turrets: security), and its **local links** are the quality lows whose scripted objects all lie in it. Map 1 gives 59 rooms over its two storeys, in 0.2 s.
+
+**Missions** (`mission.hpp`). A mission is a run of steps, each with a purpose and an intensity. The demo:
+
+| Step | Purpose | Room wanted | Guards (of the room's own, at most; added up to at least) |
+|---|---|---|---|
+| 0 | arrival, where the player comes in | storage, quiet | none |
+| 1 | first contact | a room to cross | 2; 1 |
+| 2 | the key room, off the way (from step 0, else 1) | a dead end, an office: the card at its back, as far as can be from its door | 1; 1 |
+| 3 | behind the card door | office or security, large | 3; 2 |
+| 4 | transit | machines | 2; 1 |
+| 5 | climax | the largest, most guarded | 6; 4 |
+| 6 | extraction | a small dead end: the exit teleporter | none |
+
+- The rooms of a level come from the source map (`--source`) and from the mission maps (1 to 63) that look like it: those whose floors and walls are shared with it for three quarters at least, four at most, the closest first (`look_alike_maps`; for map 1: maps 60, 6, 5, 2). Those of their upper storeys are brought down to z 0. A room found again on a variant of its map (map 60 repeats map 1) is taken once.
+- Only **rooms**, not fragments of a larger space: walking out from each border cell up to 96 units must meet a wall (64 high or more), a door or another room past something (another room right against the border is one space that the cutting parted: open) for four fifths of the border at least (furniture within the room does not count: the room is met again past it), and railings (lower than 64) may close a tenth of it at most (a balcony, a catwalk over a pit). Of the 59 rooms of map 1, 34 pass.
+- Each step takes, among the rooms that have the openings it needs (96 to 224 units wide: a door fits in) and are big enough for it (bounding box of 512 x 512 at least; key room 384 x 512, locked room 20 and climax 30 squares of 128, extraction 384 x 384), one that suits its purpose, furnished (4 items with a height that are neither walls, doors nor what hangs on the walls per 512 x 512 at least: below, a bare hall; 8 for the key room, an office and not a bare corridor): a score from the furniture's density, the tags (each counted up to 5), the size and the guard posts, plus chance (up to half the best score), so that seeds give other levels; the best 8 are tried in turn.
+- Layout: a depth-first search places each room so that one of its openings faces an opening of its parent's room (opposite sides: the art cannot be turned) **across one line of wall** (16 units), as rooms meet on the original maps, without its cells coming within a cell of another room's; a step that finds no room goes back to the previous one. A card door's room hangs north or west of its parent, so that the reader stands on the face of the wall that the camera sees, in the parent's room.
+- The joint: the wall line between the two openings is made whole where neither room has a wall of its own, and an automatic door (`MDOOR_N` / `MDOOR_E` with its `DOOREGG`), or the card door and its reader, stands in it.
+- The rooms keep their floors, walls, furniture and scenery: an item goes with a room as above (its inside). Their scripted objects go when they are linked to something outside the room; teleporters, eggs, map events, lifts and cameras go; doors in openings go (the joint has its own). A room's other doors stay with their `DOOREGG`. Links are numbered anew.
+- Guards: the room's own MONSTER pairs, as many as the step keeps, drawn among them. Fighters (guards, soldiers, storm troopers, elites, enforcers...) take a guard's post facing the way the player comes in, and keep the designers' way of fighting when it works alone (activity 5, or 10 for elites and enforcers); workers keep their own ways (they loiter, run, surrender); other kinds are left out for now (turrets, rare robots; the thermatron and the squad members, guard squads and grenadiers, which never fire alone). Where a room's own posts fall short of its step, guards are added: the source map's most common fighter, on clear floor 256 units or more from the doorway, facing it. The demo's tension runs 0, 1, 1, 2, 1, 4, 0: calm, contact, the key, the locked room, a breath, the climax, calm.
+- Each room is closed: along its outer border (not round its furniture), every cell outside it that nothing solid stands on gets a wall, but where a joint comes in. These walls show their face, never the black frame of a facade (between two rooms, a black frame reads as a black block).
+- Tidying: what the cutting left standing on no floor, or hanging (a sign, a poster: thin, above the floor) on no wall, is taken out, then what stood on what was taken out (a crate on a crate), in turn (about one item a level since rooms are cut by their inside).
+- Before it is kept, the level is walked on its own grid (`check_walkable`): the player's box, 3 x 3 cells, must go from the start over walkable cells and doors to each room's entrance and to the exit, and must not reach the room behind a card door with that door shut (rooms side by side could open another way round). Else the layout is drawn again (up to 40 times), without the room that failed.
+
+Reviewed in play (25 November 2026, after the user's criticism of the first demo: missing walls, cut objects, signs hanging in the void, corridor junctions that read as broken walls): each version is now looked at in 640 x 480 views from every room's entrance (`--shots`), and its defects listed, before it is shown.
+
+Second review (25 November 2026, "still many inconsistencies"), each generated room set beside its original in the editor (`--center` on both): half pyramids of crates and crates in the air (rooms cut by the cells where the player walks, without what stands deeper), a hazard stripe and a fake lift door of the room next door standing in the void, a key room that was half of an L-shaped room. Rooms are now cut by their inside (above). Still seen, not fixed:
+- floor tiles (256 units, no smaller piece below 128) run past a room's near walls, over the void, where the original room had a neighbour;
+- the walls that close a room's cut sides, of short pieces, have ragged tops; a lone post may stand at a joint;
+- too few rooms: of the 193 rooms of maps 1, 60, 6, 5 and 2, about 14 have two openings a door fits in and pass the filters, so that seeds 1 to 5 begin with the same three rooms. Next: doors cut in a room's straight walls, so that any closed room can take any place in a mission.
+
+Tests: `generator_data_tests data 1 10 --mission 1` (ctest `generator_mission_tests`, seeds 1 to 3) plays missions in the engine as the other levels: the level check, walking to every room through the card door opened with its card, the automatic doors, the guards of each room at difficulties 1 and 3 (they appear, and shoot at the player who comes in: in 4 guarded rooms out of 5 at least, the silent ones listed; open question: now and then a designer's post set like the others, a guard by a wall, never fires, from whatever side the player comes), the exit; `--shots DIR` saves a 1280 x 960 view of each room from its entrance.
+
 ## Milestones
 
 Each milestone ends with levels that can be played by hand, and tests that check them.
@@ -84,11 +132,11 @@ Each milestone ends with levels that can be played by hand, and tests that check
 |---|---|---|
 | 1 | **Shell**: biomes learned from the globs; rooms and corridors on one storey with doors; start and exit teleporter; chained levels; physical verification in the engine | walk from the start to the exit of a generated level, through doors |
 | 2 ✅ | **Locks and keys**: mission graph and solver; key-card doors, switches and energy walls, panel doors, keypads with their code on a computer | a level where the exit is behind one to three locks |
-| 3 | **Verticality**: storeys at z 96 and above, lifts and elevators, stairs, catwalks and railings over lower rooms, multi-storey verification | a level that climbs two storeys to the exit |
-| 4 | **Opposition**: MONSTER pairs by difficulty and room, cameras and alarms with their reinforcements, turrets, mines, lasers, steam and valves, explosive barrels | a defended level, its hazards switched off by its controls |
+| 3 ✅ | **Verticality**: two storeys (z 0 and 96, as on the original maps), lifts (`ELEVPLAT`) with their call boxes, railings round the shafts, multi-storey verification; stairs and catwalks over lower rooms left for later | a level that climbs to its exit upstairs |
+| 4 | **Opposition**, in lots: 4a guards (MONSTER pairs by difficulty and room) ✅; 4b cameras and alarms with their reinforcements; 4c turrets and lasers, switched off by their controls; 4d mines, steam and valves, explosive barrels | a defended level, its hazards switched off by its controls |
 | 5 | **Supplies and props**: medikits, ammunition, chests and crates, rechargers, rooms furnished from the original maps (prefabs taken from the rooms where the designers placed them), secrets | a level that can be finished at every difficulty |
 | 6 | **Several biomes and robots**: biome changes between areas, robot control, teleporter networks | a level crossing two biomes |
-| 7 | **In the menu, and a bot**: "Random mission" in the game's menu, with a seed; a bot that plays generated levels to the end in `game_tests`, on a range of seeds | a new mission from the main menu |
+| 7 | **In the menu, and a bot**: "Random mission" in the game's menu (the *CRUSADER / NO LIMIT* button, done: one level from a random seed), with a seed to type; a bot that plays generated levels to the end in `game_tests`, on a range of seeds | a new mission from the main menu |
 
 ## Status
 
@@ -124,4 +172,32 @@ Each milestone ends with levels that can be played by hand, and tests that check
 - Editor: number of locks in *Generate a level*.
 - Tests: `editor_tests` checks every lock of 60 seeds (key before the lock, ranges, links, numbers, one barrier and one key each) and that the solver finds a key left behind its own lock; `generator_data_tests` plays them in the engine: each lock bars its room, its key and reader are reached on foot, the card is picked up (as the selection mode does), the monitor shows the code that the keypad then takes, the switch or panel is used, and the room is then reached. On seeds 1 to 40: 73 locks (15 card doors, 17 keypad doors, 24 panel doors, 17 energy walls), all open. `--shots DIR` saves a picture of each lock and key.
 
-Next: milestone 3, verticality.
+**Milestone 3 done** (24 November 2026): two storeys and lifts.
+
+- Storeys: the original maps have two (glob eggs at z 0 or 96), and so do generated levels. In three levels out of four (option `storeys`, -1: drawn), the rooms from a depth drawn on the way to the exit up are on the upper storey, at z 96: the start is downstairs, the exit upstairs. A room or corridor of the upper storey stands on walls without doorways that close its underside.
+- Lifts: a passage between storeys becomes a lift corridor, two tiles long at least (the shaft and a landing). Built as on map 5:
+
+| Piece | Shape | Where, settings |
+|---|---|---|
+| platform | `ELEVPLAT` 0x12F, 8 × 8 × 1 | in the shaft's tile, against the upper part, at z 1 (its top 9 above the floor: a step); quality = link |
+| pad | `TRIGPAD` 0x4CD | on the platform (z 9); `TRIGGER` on shape 0x12F, action 2 (`equip`, argument 0), map number 0x26: sends the platform from one end of its run to the other, z 1 and 88 (its top level with the upper floor) |
+| call boxes | `BOX_NS` 0x081 / `BOX_EW` 0x080 | on the corridor's far wall, below before the platform (z 48), above past the shaft (z 144); same settings as the pad |
+| relays | 0x4B1, invisible | 32 above each box: same settings with bit 3 (map number 0x2E) |
+| railings | `YR8X6NS`... `YR1X1` (48 high) | at z 96 round the shaft, on the three sides where the platform does not touch the upper floor, and from the corridor's walls to them |
+
+- Found on the way: a box (switch, panel) acts through `TRIGGER` in **one state** only, frame 0 unless its map number has bit 3; in the other state, `TRIGGER` passes the use on to the 0x4B1 objects of the same link within 160 units whose bit 3 is the other way. The original lifts' boxes have such a relay beside them (map 1), so that each use calls the lift; without it, every other use does nothing.
+- The platform's script (`ELEVPLAT` equip) moves it within z 1 to 159 (its argument): a third storey would need another lift (`ELEVATOR`, the cab between maps). Stairs and catwalks over lower rooms are left for later.
+- Generator version 3. Editor: number of storeys in *Generate a level*.
+- Tests: `editor_tests` checks the storeys and lifts of 60 seeds (start below and exit above, a lift exactly on the passages between storeys, corridor length, platform, pad, boxes and relays with their settings); `generator_data_tests` crosses the lifts in its walking search (standing on the platform at the bottom leads to the upper floor in front of it, and back) and rides each lift in the engine: the player walks onto the platform, its pad sends it up to z 88, the player walks off onto the upper floor at z 96, then each call box sends it down and up again. On seeds 1 to 40: 24 levels on two storeys, 53 lifts, all ridden; the 73 locks still open.
+
+**Milestone 4, lot 4a done** (24 November 2026): guards.
+
+- Every room but the start one gets NPCs as the original maps make most of theirs: **MONSTER pairs** (shape 0x4D0, the place frame 0 and the kind frame 1, linked by their quality low, `docs/EDITEUR.md`). The place's map number has bit 3: its `enterFastArea` event creates the NPC when the place comes near the player (`MONSTER` equip, `Actor::I_createActorCru`), then both links are cleared.
+- How many: 0 or 1 per room, one more from depth 2 and one more in the exit room; one room in two adds one only from difficulty 2 or 3 (map number bits 0-1), which the engine leaves out at lower difficulties.
+- Types, among the fighters most used on the original maps (3,500 pairs): guard (4), soldier (9), storm trooper (8), elite (15), weighted 5, 4, 4, 2; one in five carries its other weapon (bit 2). Not the chemsuits (2), though common: on the original maps they loiter and surrender (activities 2, 7, 7), and in the engine they never shoot.
+- Activities: guard (8), attack on seeing the player (5) and when shot at (5), the editor's setting and one of the original ones. Each guard faces the doorway the player comes in by (`gen::entry`: from the neighbour nearer the start), so that it sees the player there: a guard facing another doorway of its room does not turn round to a player behind it.
+- Spots: 64 units from the walls, clear of doorways, keys, desks, the start and the exit pad, and of each other.
+- Option `guards` (0: none; recorded in `NOLIMIT.JSON`), *Guards* in the editor's *Generate a level*. The guards come last: a level without them is the same level, item for item. Generator version 4.
+- Tests: `editor_tests` checks the guards of 60 seeds (none in the start room, inside their room, off the exit pad, one link each, pair settings) and that a level without guards is the same; `generator_data_tests` checks the mechanisms on a copy of the level without its guards, then, at difficulties 1 and 3, comes into each guarded room through its doorway (`gen::entry`) and checks that exactly the guards of that difficulty appear, where they stand, of their type, and that the player is shot at, from the doorway or after walking up to a guard (guards farther than about 400 units engage only when the player comes nearer). On seeds 1 to 40: 511 guards, each appearing exactly at its difficulties; in all 454 rooms visited (difficulties 1 and 3) the player is shot at, in 16 after walking up; the 53 lifts and 73 locks still work.
+
+Next: lot 4b, cameras and alarms.

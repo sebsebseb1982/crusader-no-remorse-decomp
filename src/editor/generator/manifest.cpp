@@ -29,6 +29,8 @@ Options ManifestLevel::options() const {
     o.biome = biome;
     o.rooms = rooms;
     o.locks = locks;
+    o.storeys = storeys;
+    o.guards = guards;
     o.first_card = first_card;
     o.map = map;
     o.next_map = next_map;
@@ -42,6 +44,8 @@ ManifestLevel manifest_level(const Options& options, const Result& result, const
     l.biome = options.biome;
     l.rooms = options.rooms;
     l.locks = options.locks;
+    l.storeys = options.storeys;
+    l.guards = options.guards;
     l.first_card = options.first_card;
     l.next_map = options.next_map;
     if (result.biome >= 0 && result.biome < static_cast<int>(biomes.size())) {
@@ -71,6 +75,9 @@ std::optional<Manifest> Manifest::read(const std::filesystem::path& mod, std::st
             l.biome = static_cast<int>(v.number_at("biome", -1));
             l.rooms = static_cast<int>(v.number_at("rooms", 0));
             l.locks = static_cast<int>(v.number_at("locks", -1));
+            l.storeys = static_cast<int>(v.number_at("storeys", -1));
+            l.guards = static_cast<int>(v.number_at("guards", -1));
+            l.source_map = static_cast<int>(v.number_at("source_map", 0));
             l.first_card = static_cast<int>(v.number_at("first_card", 1));
             l.next_map = static_cast<int>(v.number_at("next_map", 0));
             l.biome_name = v.string_at("biome_name", "");
@@ -88,7 +95,7 @@ std::string Manifest::to_json() const {
     for (std::size_t i = 0; i < levels.size(); ++i) {
         const ManifestLevel& l = levels[i];
         out << (i ? ",\n" : "\n") << "    {\"map\": " << l.map << ", \"seed\": " << l.seed << ", \"biome\": " << l.biome
-            << ", \"rooms\": " << l.rooms << ", \"locks\": " << l.locks
+            << ", \"rooms\": " << l.rooms << ", \"locks\": " << l.locks << ", \"storeys\": " << l.storeys << ", \"guards\": " << l.guards << ", \"source_map\": " << l.source_map
             << ", \"first_card\": " << l.first_card << ", \"next_map\": " << l.next_map
             << ", \"biome_name\": " << quoted(l.biome_name) << ", \"room_count\": " << l.room_count << "}";
     }

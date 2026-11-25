@@ -46,6 +46,7 @@ GLASS DEBRIS = GLASS DEBRIS
 AUTOSAVE = AUTOSAVE
 ORIGINAL BUG FIXES = ORIGINAL BUG FIXES
 LANGUAGE = LANGUAGE
+ONLINE NEWS = ONLINE NEWS
 LOOT FROM REMAINS = LOOT FROM REMAINS
 ON = ON
 OFF = OFF
@@ -62,6 +63,19 @@ CLICK: ASSIGN A BUTTON   DEL: CLEAR = CLICK: ASSIGN A BUTTON   DEL: CLEAR
 
 # --- load and save screen (src/engine/ui/load_screen.cpp)
 SAVED GAME = SAVED GAME
+
+# --- main menu (src/engine/ui/main_menu.cpp)
+NEW VERSION %s AVAILABLE = NEW VERSION %s AVAILABLE
+NEWS = NEWS
+
+# --- online news and updates (src/engine/ui/news_screen.cpp)
+ONLINE UPDATES = ONLINE UPDATES
+CHECK ONLINE FOR NEW VERSIONS = CHECK ONLINE FOR NEW VERSIONS
+AND NEWS OF THE PORT? = AND NEWS OF THE PORT?
+YES = YES
+NO = NO
+NEW = NEW
+NO NEWS = NO NEWS
 
 # --- Weasel's shop, No Remorse only (src/engine/ui/weasel_gump.cpp)
 Are you sure you\nwant to buy this? = Are you sure you\nwant to buy this?

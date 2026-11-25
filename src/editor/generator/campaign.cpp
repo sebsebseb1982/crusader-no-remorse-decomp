@@ -23,6 +23,16 @@ GameData GameData::load(const std::filesystem::path& data) {
     for (std::size_t c = 0; c < d.scripted.size() && c + 2 < usecode.entries.size(); ++c) {
         d.scripted[c] = !usecode.entries[c + 2].empty();
     }
+    // Class names: 13 bytes each from offset 4 of entry 1.
+    d.class_names.assign(d.shapes.size(), {});
+    if (usecode.entries.size() > 1) {
+        const auto& names = usecode.entries[1];
+        for (std::size_t c = 0; c < d.class_names.size(); ++c) {
+            for (std::size_t i = 4 + 13 * c; i < 4 + 13 * (c + 1) && i < names.size() && names[i]; ++i) {
+                d.class_names[c] += static_cast<char>(names[i]);
+            }
+        }
+    }
     // Black frames: most of their pixels are near black in the game palette.
     const FlexArchive shapes = FlexArchive::open(data / "STATIC/SHAPES.FLX");
     const Palette palette = Palette::load(data / "STATIC/GAMEPAL.PAL");
@@ -100,6 +110,21 @@ std::vector<GeneratedLevel> regenerate_levels(Project& project, const GameData& 
             error = "map " + std::to_string(l.map) + " does not fit FIXED.DAT";
             return {};
         }
+        if (l.source_map > 0) {
+            // A mission: the same seed and source map give the same level.
+            MissionOptions mo;
+            mo.seed = l.seed;
+            mo.source_map = l.source_map;
+            mo.map = l.map;
+            mo.next_map = l.next_map;
+            GeneratedLevel g{l.map, generate_mission(data, demo_mission(), mo), l};
+            if (g.result.rooms.empty()) {
+                error = "seed " + std::to_string(l.seed) + ": " + (g.result.notes.empty() ? "no mission" : g.result.notes.front());
+                return {};
+            }
+            out.push_back(std::move(g));
+            continue;
+        }
         const Options o = l.options();
         GeneratedLevel g{l.map, generate(data.biomes, o), {}};
         g.entry = manifest_level(o, g.result, data.biomes);
@@ -112,6 +137,52 @@ std::vector<GeneratedLevel> regenerate_levels(Project& project, const GameData& 
     }
     for (const GeneratedLevel& g : out) project.store_map(static_cast<std::size_t>(g.map), g.result.level);
     return out;
+}
+
+std::vector<GeneratedLevel> generate_mission_levels(Project& project, const GameData& data, std::uint32_t seed,
+                                                    int source_map, std::string& error) {
+    int map = 0;
+    for (std::size_t m = 1; m < project.map_slots() && !map; ++m) {
+        if (!project.map_used(m)) map = static_cast<int>(m);
+    }
+    if (!map) {
+        error = "FIXED.DAT has no free map";
+        return {};
+    }
+    MissionOptions o;
+    o.seed = seed;
+    o.source_map = source_map;
+    o.map = map;
+    o.next_map = map;
+    GeneratedLevel g{map, generate_mission(data, demo_mission(), o), {}};
+    g.entry.map = map;
+    g.entry.seed = seed;
+    g.entry.source_map = source_map;
+    g.entry.next_map = map;
+    g.entry.room_count = static_cast<int>(g.result.rooms.size());
+    if (g.result.biome >= 0 && g.result.biome < static_cast<int>(data.biomes.size())) {
+        g.entry.biome_name = data.biomes[static_cast<std::size_t>(g.result.biome)].name();
+    }
+    if (g.result.rooms.empty()) {
+        error.clear();
+        for (const std::string& n : g.result.notes) error += (error.empty() ? "" : "\n") + n;
+        if (error.empty()) error = "no mission";
+        return {};
+    }
+    const std::string problem = check_solvable(g.result);
+    if (!problem.empty()) {
+        error = "seed " + std::to_string(seed) + ": " + problem;
+        for (const Link& l : g.result.links) {
+            error += " [" + std::to_string(l.a) + "-" + std::to_string(l.b) + " lock " + std::to_string(l.lock) + "]";
+        }
+        for (const Lock& k : g.result.locks) {
+            error += " {room " + std::to_string(k.room) + " key " + std::to_string(k.key_room) + " link " +
+                     std::to_string(k.link) + "}";
+        }
+        return {};
+    }
+    project.store_map(static_cast<std::size_t>(map), g.result.level);
+    return {g};
 }
 
 void record_levels(const std::filesystem::path& mod, const std::vector<GeneratedLevel>& levels) {

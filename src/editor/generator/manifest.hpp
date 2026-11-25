@@ -6,15 +6,15 @@
 //
 //   {
 //     "generator": "Crusader: No Limit",
-//     "version": 2,
+//     "version": 5,
 //     "levels": [
-//       {"map": 12, "seed": 42, "biome": -1, "rooms": 0, "locks": -1, "first_card": 1, "next_map": 18,
+//       {"map": 12, "seed": 42, "biome": -1, "rooms": 0, "locks": -1, "storeys": -1, "guards": -1, "first_card": 1, "next_map": 18,
 //        "biome_name": "floor 0x014, walls 0x008 / 0x009 (maps 14 28 149 223)", "room_count": 6}
 //     ]
 //   }
 //
-// "biome", "rooms" and "locks" are the options (-1, 0 and -1: drawn from
-// the seed), "first_card" the first key card number;
+// "biome", "rooms", "locks", "storeys" and "guards" are the options (-1,
+// 0, -1, -1 and -1: drawn from the seed; "guards" 0: none), "first_card" the first key card number;
 // "biome_name" and "room_count" what the seed gave.
 
 #include "editor/generator/generator.hpp"
@@ -29,7 +29,7 @@ namespace crusader::editor::gen {
 
 constexpr const char* kGeneratorName = "Crusader: No Limit";
 // Raised whenever a seed would give another level than before.
-constexpr int kGeneratorVersion = 2;  // 2: locks and keys
+constexpr int kGeneratorVersion = 7;  // 2: locks; 3: storeys and lifts; 4: guards; 5: missions; 6: rooms cut by footprint, closed; 7: rooms cut by their inside, heaps whole
 constexpr const char* kManifestFile = "NOLIMIT.JSON";
 
 struct ManifestLevel {
@@ -38,6 +38,9 @@ struct ManifestLevel {
     int biome = -1;
     int rooms = 0;
     int locks = -1;
+    int storeys = -1;
+    int guards = -1;
+    int source_map = 0;  // a mission built from the rooms of that original map (mission.hpp); 0: rooms drawn by rules
     int first_card = 1;
     int next_map = 0;
     std::string biome_name;

@@ -41,7 +41,7 @@ This repository contains **no game files**: you need your own copy of the origin
 - Release the game on PortMaster.
 - Support additional versions of *Crusader: No Remorse*, if there is interest.
 - Level editor: script (usecode) disassembly and assembly, sprite import, NPC type editing.
-- *Crusader: No Limit*, procedural levels: the generator (`crusader-no-remorse-editor data --generate SEED`) builds rooms, corridors, doors and an exit from the game's own pieces, with locks and their keys (card doors, keypads, panels, energy walls); several storeys, enemies and supplies are next. See [docs/GENERATEUR.md](docs/GENERATEUR.md).
+- *Crusader: No Limit*, procedural levels: the generator (`crusader-no-remorse-editor data --generate SEED`) builds rooms, corridors, doors and an exit from the game's own pieces, with locks and their keys (card doors, keypads, panels, energy walls) lifts up to a second storey and guards; the main menu's *CRUSADER / NO LIMIT* button generates one and plays it. Cameras, alarms, traps and supplies are next. See [docs/GENERATEUR.md](docs/GENERATEUR.md).
 - Have an idea? Let me know what you'd like to see!
 
 Further improvements will come when my Claude subscription renews. If you'd like to help speed things up, feel free to leave a small tip (see [SPONSORING.md](SPONSORING.md)).
