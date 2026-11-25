@@ -46,7 +46,12 @@ void check_config() {
     e.big_video = false;
     e.frameskip = 3;
     check(e.text() == "irq=7\r\nmusicvolume=40\r\nfilter=false\r\nlimitblasts=true\r\nsoundvolume=64\r\n"
-                      "mousespeed=2\r\nanimation=0\r\nframeskip=3\r\n",
+                      "mousespeed=2\r\nanimation=0\r\nframeskip=3\r\n"
+                      // A fresh install's file: the enhancements it got, written.
+                      "followplayer=true\r\ndirectionalmove=true\r\nviewzoom=2\r\nsmoothscaling=true\r\n"
+                      "directionalaim=true\r\ntogglerun=true\r\nimpactmarks=true\r\nbloodmarks=true\r\n"
+                      "casings=true\r\nbarrelleaks=true\r\nglassdebris=true\r\nlighting=true\r\n"
+                      "flashlight=false\r\nremainsloot=true\r\nfixoriginalbugs=true\r\n",
           "config written over its lines, other keys kept");
 
     // 1020:0000 lowers keys and values, cuts them at blanks, skips comments.
@@ -73,14 +78,18 @@ void check_config() {
     check(!GameConfig::parse(saving.text()).autosave && saving.text().find("autosave=false") != std::string::npos,
           "config autosave off round trip");
 
-    // "smoothscaling" (port addition): written only when set.
-    check(!GameConfig::parse("irq=7\r\n").smooth_scaling && GameConfig::parse("smoothscaling=true\r\n").smooth_scaling,
+    // "smoothscaling" (port addition): on for a fresh install, off in a file
+    // the port wrote without it (it was written only when set), written either way.
+    check(GameConfig::parse("irq=7\r\n").smooth_scaling && GameConfig::parse("smoothscaling=true\r\n").smooth_scaling &&
+              !GameConfig::parse("irq=7\r\nlighting=true\r\n").smooth_scaling,
           "config smoothscaling");
     {
         GameConfig smooth = GameConfig::parse("smoothscaling=true\r\n");
         check(smooth.text().find("smoothscaling=true") != std::string::npos, "config smoothscaling written");
         smooth.smooth_scaling = false;
-        check(smooth.text().find("smoothscaling") == std::string::npos, "config smoothscaling erased");
+        check(smooth.text().find("smoothscaling=false") != std::string::npos &&
+                  !GameConfig::parse(smooth.text()).smooth_scaling,
+              "config smoothscaling off written");
     }
     // "volumetricsmoke" (port addition): on by default, written only when off.
     {
@@ -92,10 +101,13 @@ void check_config() {
                   !GameConfig::parse(smoke.text()).volumetric_smoke,
               "config volumetricsmoke off round trip");
     }
-    // "flashlight" (port addition): on by default, written only when off.
+    // "flashlight" (port addition): on by default, off for a fresh install,
+    // written either way.
     {
-        GameConfig lamp = GameConfig::parse("irq=7\r\n");
-        check(lamp.flashlight && lamp.text().find("flashlight") == std::string::npos, "config flashlight default on");
+        GameConfig lamp = GameConfig::parse("irq=7\r\nlighting=true\r\n");
+        check(lamp.flashlight && lamp.text().find("flashlight=true") != std::string::npos &&
+                  !GameConfig::parse("irq=7\r\n").flashlight,
+              "config flashlight default");
         lamp.flashlight = false;
         check(lamp.text().find("flashlight=false") != std::string::npos && !GameConfig::parse(lamp.text()).flashlight,
               "config flashlight off round trip");
@@ -115,7 +127,8 @@ void check_config() {
     check(PadSettings{}.buttons[kPadLeftTrigger] == kPadFlashlight && kPadActions[kPadFlashlight].scancode == 0x26,
           "pad left trigger: flashlight");
     // "viewzoom" (port addition): hundredths, whole values keep their old file form, x1.5 is new.
-    check(GameConfig::parse("irq=7\r\n").view_zoom_pct == 0, "config viewzoom default auto");
+    check(GameConfig::parse("irq=7\r\n").view_zoom_pct == 200 && GameConfig::parse("lighting=true\r\n").view_zoom_pct == 0,
+          "config viewzoom default x2 for a fresh install, else auto");
     check(GameConfig::parse("viewzoom=2\r\n").view_zoom_pct == 200, "config viewzoom whole");
     check(GameConfig::parse("viewzoom=1.5\r\n").view_zoom_pct == 150 && GameConfig::parse("viewzoom=1,5\r\n").view_zoom_pct == 150,
           "config viewzoom 1.5");
@@ -129,7 +142,8 @@ void check_config() {
     zoom.view_zoom_pct = 300;
     check(zoom.text().find("viewzoom=3\r\n") != std::string::npos, "config viewzoom whole written as before");
     zoom.view_zoom_pct = 0;
-    check(zoom.text().find("viewzoom") == std::string::npos, "config viewzoom auto not written");
+    check(zoom.text().find("viewzoom=0\r\n") != std::string::npos && GameConfig::parse(zoom.text()).view_zoom_pct == 0,
+          "config viewzoom auto written");
     // The cycle: auto, x1, x1.5, x2, x3, x4 up to what the window allows (160 % on 1360 x 768).
     check(GameConfig::next_view_zoom(0, 160) == 100 && GameConfig::next_view_zoom(100, 160) == 150 &&
               GameConfig::next_view_zoom(150, 160) == 0 && GameConfig::next_view_zoom(150, 225) == 200 &&
@@ -168,16 +182,40 @@ void check_config() {
     precise_off.precise_aim = false;
     check(precise_off.text().find("preciseaim") == std::string::npos, "config preciseaim off erased");
 
-    // "remainsloot" (port addition, a cheat): off by default, written only when set.
-    GameConfig loot = GameConfig::parse("irq=7\r\n");
-    check(!loot.remains_loot && loot.text().find("remainsloot") == std::string::npos,
-          "config remainsloot default off, not written");
+    // "remainsloot" (port addition, a cheat): on for a fresh install, off in a
+    // file the port wrote without it, written either way.
+    GameConfig loot = GameConfig::parse("irq=7\r\nlighting=true\r\n");
+    check(!loot.remains_loot && loot.text().find("remainsloot=false") != std::string::npos &&
+              GameConfig::parse("irq=7\r\n").remains_loot,
+          "config remainsloot default");
     loot.remains_loot = true;
     check(GameConfig::parse(loot.text()).remains_loot && loot.text().find("remainsloot=true") != std::string::npos,
           "config remainsloot on round trip");
     GameConfig loot_off = GameConfig::parse(loot.text());
     loot_off.remains_loot = false;
-    check(loot_off.text().find("remainsloot") == std::string::npos, "config remainsloot off erased");
+    check(loot_off.text().find("remainsloot=false") != std::string::npos, "config remainsloot off written");
+
+    // A fresh install (no key of the enhancements window: the original's file,
+    // or none) gets the port's author's settings; any of those keys (a file the
+    // port wrote) keeps the old defaults for the missing ones.
+    for (const GameConfig& f : {GameConfig::parse("irq=7\r\ndma=1\r\n"), GameConfig::load("NO_SUCH.CFG")}) {
+        check(f.follow_player && f.directional_move && f.directional_aim && f.smooth_scaling && f.toggle_run &&
+                  f.impact_marks && f.blood_marks && !f.gore_mode && f.casings && f.barrel_leaks && f.glass_debris &&
+                  f.lighting && f.remains_loot && f.view_zoom_pct == 200 && f.fix_original_bugs && !f.flashlight,
+              "config fresh install defaults");
+        check(f.language.empty() && f.check_updates == -1 && f.native_resolution && f.autosave,
+              "config fresh install: AUTO language, the online question still asked");
+    }
+    {
+        const GameConfig old = GameConfig::parse("irq=7\r\nlanguage=fr\r\n");
+        check(!old.follow_player && !old.lighting && !old.remains_loot && old.view_zoom_pct == 0,
+              "config a file the port wrote keeps the old defaults");
+        GameConfig fresh = GameConfig::parse("irq=7\r\n");
+        fresh.lighting = false;
+        const GameConfig again = GameConfig::parse(fresh.text());
+        check(!again.lighting && again.follow_player && again.view_zoom_pct == 200,
+              "config a fresh install's choices kept once written");
+    }
 
     // Controller settings (port addition): defaults, not written until changed.
     GameConfig p = GameConfig::parse("irq=7\r\n");

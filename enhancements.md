@@ -6,7 +6,7 @@ The rest of the engine reproduces the original. Each function carries an `@orig 
 
 The changes fall into four groups:
 
-- **New options**, all in the Enhancements screen and all off by default unless stated otherwise (sections 1 to 10).
+- **New options**, all in the Enhancements screen and all off by default unless stated otherwise (sections 1 to 10); a fresh install starts with a recommended set of them switched on (section 16).
 - **Quality-of-life and platform changes** that are always on (sections 11 to 16).
 - **Robustness**: places where the original would crash or misbehave and the port does not (section 17).
 - **Known deviations**: what the port does differently or does not reproduce yet (section 18).
@@ -247,7 +247,7 @@ A wrong mapping is fixed with SDL's own `SDL_GAMECONTROLLERCONFIG` variable (or 
 
 ## 3. Directional movement (left stick)
 
-**Option:** DIRECTIONAL MOVE (`directionalmove`, off by default)
+**Option:** DIRECTIONAL MOVE (`directionalmove`, off by default, on for a fresh install)
 
 The original uses tank controls: up walks forward, left/right turn. With this option, the Silencer **walks in the direction the left stick points**.
 
@@ -275,7 +275,7 @@ The original uses tank controls: up walks forward, left/right turn. With this op
 
 ## 4. Directional aiming (right stick)
 
-**Option:** DIRECTIONAL AIM (`directionalaim`, off by default)
+**Option:** DIRECTIONAL AIM (`directionalaim`, off by default, on for a fresh install)
 **Option:** DRAW ON AIM (`drawonaim`, on by default, used with directional aiming)
 **Files:** `src/platform/sdl_gamepad.cpp`, `src/engine/world/aim_mode.cpp` (`aim_at_angle`)
 
@@ -329,7 +329,7 @@ The search above works on the ground, in 16-way directions. A target on another 
 
 ## 5. Camera follows the player
 
-**Option:** CAMERA FOLLOW (`followplayer`, off by default)
+**Option:** CAMERA FOLLOW (`followplayer`, off by default, on for a fresh install)
 **Files:** `src/engine/world/world.cpp` (`track_camera_target`, `shift_camera`, `update_follow_camera`)
 
 **Original**: the view only moves when the controlled character gets near an edge: within 100 px left or right, 140 px at the top or 70 px at the bottom. It then **jumps** to put the character at x=520, x=120 or the centre.
@@ -371,7 +371,7 @@ The search above works on the ground, in 16-way directions. A target on another 
 
 ## 7. Zoom
 
-**Option:** ZOOM (`viewzoom`, default `0` = AUTO)
+**Option:** ZOOM (`viewzoom`, default `0` = AUTO, x2 for a fresh install)
 
 Zoom sets the **maximum size of a game pixel** in native resolution.
 
@@ -386,7 +386,7 @@ Zoom sets the **maximum size of a game pixel** in native resolution.
 
 ## 7b. Impact marks
 
-**Options:** IMPACT MARKS / IMPACTS (`impactmarks`) and BLOOD / SANG (`bloodmarks`), both off by default and independent: either can be on without the other. Switching one off forgets its own marks only.
+**Options:** IMPACT MARKS / IMPACTS (`impactmarks`) and BLOOD / SANG (`bloodmarks`), both off by default (on for a fresh install) and independent: either can be on without the other. Switching one off forgets its own marks only.
 **Files:** `src/engine/world/damage_marks.*`, `src/engine/world/projectile.cpp`, `src/engine/world/item_damage.cpp`, `src/game/game.cpp`
 
 The original leaves no trace of a shot. With this option the scenery keeps one where a shot ends.
@@ -414,7 +414,7 @@ The original leaves no trace of a shot. With this option the scenery keeps one w
 
 ## 7c. Casings
 
-**Option:** CASINGS / DOUILLES (`casings`), off by default, independent of the impact marks and the blood.
+**Option:** CASINGS / DOUILLES (`casings`), off by default, on for a fresh install, independent of the impact marks and the blood.
 **Files:** `src/engine/world/casings.*`, `src/engine/world/damage_marks.*`, `src/game/game.cpp`
 
 The original ejects nothing. With this option every shot of a firearm throws out a casing that stays on the floor.
@@ -441,7 +441,7 @@ The original ejects nothing. With this option every shot of a firearm throws out
 
 ## 7d. 3D lighting
 
-**Option:** 3D LIGHTING / ECLAIRAGE 3D (`lighting`), DISPLAY page, off by default. `--lighting` switches it on for one run.
+**Option:** 3D LIGHTING / ECLAIRAGE 3D (`lighting`), DISPLAY page, off by default, on for a fresh install. `--lighting` switches it on for one run.
 **Option:** VOLUMETRIC SMOKE / FUMEE 3D (`volumetricsmoke`, written only when off), DISPLAY page, on by default: the smoke and the liquids' steam below. Without the 3D lighting it does nothing.
 **Option:** CEILING LIGHTS / PLAFONNIERS (`ceilinglights`, written only when off), DISPLAY page, on by default: the ceiling lights below. Without the 3D lighting it does nothing.
 **Files:** `src/engine/world/lighting.*`, `src/engine/world/ceiling_lights.*`, `src/core/json.*`, `ceiling_lights/`, `src/platform/gl_lighting.*`, `src/game/game.cpp`, `src/platform/sdl_presenter.*`; the `lightview` tool and docs/LIGHTVIEW.md; the light plans in `tools/lights/`
@@ -491,7 +491,7 @@ The original draws flat sprites under a fixed light. With this option the world 
 
 ## 7e. Leaking barrels
 
-**Option:** LEAKING BARRELS / FUITES DES BARILS (`barrelleaks`), EFFECTS page, off by default.
+**Option:** LEAKING BARRELS / FUITES DES BARILS (`barrelleaks`), EFFECTS page, off by default, on for a fresh install.
 **Files:** `src/engine/world/barrel_leaks.*`, `src/engine/world/projectile.cpp` (the barrels' damage), `src/engine/world/item_damage.cpp` (a barrel blowing up), `src/engine/world/lighting.*` (the fire's smoke and glow), `src/game/game.cpp`
 
 The explosive barrels (BARRELUP 0xAA upright, BARRELS to BARRELSE 0x151..0x155 lying) take several bullets before they blow up: their class adds up the damage of each hit and explodes at 100 (150 in *No Regret*). In the original the bullets before the last leave no trace. With this option each of them pierces the barrel, and its fuel runs out.
@@ -559,7 +559,7 @@ The explosive barrels (BARRELUP 0xAA upright, BARRELS to BARRELSE 0x151..0x155 l
 
 ## 7f. Glass debris
 
-**Option:** GLASS DEBRIS / ECLATS DE VERRE (`glassdebris`), EFFECTS page, off by default.
+**Option:** GLASS DEBRIS / ECLATS DE VERRE (`glassdebris`), EFFECTS page, off by default, on for a fresh install.
 **Files:** `src/engine/world/glass_debris.*`, `src/engine/world/render.*` (sprites drawn among the items), `src/engine/world/projectile.cpp` (the shot's way), `src/engine/world/item_damage.cpp` (the blasts), `src/game/game.cpp`
 
 The glass walls and dividers (classes GLASS_EW 0x27B, GLASS_NS 0x2F3, GLDIV_EW 0x541, GLDIV_NS 0x542, in every mission) break at their first hit: their class plays the pane crumbling, lays a pile of broken glass (0x27A, 0x349) on each side where one fits and leaves the wall's foot. In the original the piles never move: blasts only throw what has a weight, and theirs is 0. With this option a pile is shown as the pieces of glass it is made of, and they follow the shots and the blasts.
@@ -653,7 +653,7 @@ The port prints some texts itself: its own screens (Enhancements, controller), a
 
 ## 9. Toggle run
 
-**Option:** TOGGLE RUN (`togglerun`, off by default)
+**Option:** TOGGLE RUN (`togglerun`, off by default, on for a fresh install)
 
 **Original**: the Silencer runs while Shift is held.
 
@@ -667,7 +667,7 @@ The port prints some texts itself: its own screens (Enhancements, controller), a
 
 ## 9b. Original game bug fixes
 
-**Option:** ORIGINAL BUG FIXES / CORRECTIFS ORIGINAL (`fixoriginalbugs`, off by default)
+**Option:** ORIGINAL BUG FIXES / CORRECTIFS ORIGINAL (`fixoriginalbugs`, off by default, on for a fresh install)
 
 Some bugs are in the original game itself, in its scripts (usecode) or its level data, and the port plays them as they are. This option corrects those that can block a mission. Off, the game behaves exactly as the original. The crashes and misbehaviours of the original executable are a different matter: the port always avoids them (section 17).
 
@@ -699,7 +699,7 @@ The original keypad (door and chest codes) only works with the mouse or the numb
 
 ## 10b. Loot from remains (cheat)
 
-**Option:** LOOT FROM REMAINS / BUTIN DES CENDRES, on the CHEATS / TRICHE page (`remainsloot`, off by default). Asked for in [No Regret's issue #2](https://github.com/sebsebseb1982/crusader-no-regret-decomp/issues/2), for both games.
+**Option:** LOOT FROM REMAINS / BUTIN DES CENDRES, on the CHEATS / TRICHE page (`remainsloot`, off by default, on for a fresh install). Asked for in [No Regret's issue #2](https://github.com/sebsebseb1982/crusader-no-regret-decomp/issues/2), for both games.
 **Files:** `src/engine/world/death_loot.*`, `src/engine/world/projectile.cpp`, `src/engine/usecode/item_intrinsics.cpp`
 
 **Original**: an enemy burnt, melted or electrocuted by an energy weapon, or set on fire by a blast, leaves no body to search. The death usecode (NPCDEATH) destroys what the enemy carried and makes its remains (ashes, a skeleton…) without the loot a body gets. Killing enemies with plasma therefore costs ammunition and gives nothing back.
@@ -867,32 +867,37 @@ The original reads much of its data from the CD and needs it in the drive. The p
 - Only the lines of known keys are replaced. Other lines (sound card, CD drive, mouse buttons…) are **kept, in their order**.
 - `\r\n` line endings, as the installer writes them.
 - Missing or unreadable file: the defaults of the original data segment (or the US installer defaults, see section 13).
+- **Fresh install**: a file without any key of the Enhancements screen (the original game's file, or none) starts with the settings the port's author plays with: `followplayer`, `directionalmove`, `directionalaim`, `smoothscaling`, `togglerun`, `impactmarks`, `bloodmarks`, `casings`, `barrelleaks`, `glassdebris`, `lighting`, `remainsloot`, `fixoriginalbugs` switched on, `flashlight` off and `viewzoom` x2. The language stays AUTO and the main menu still asks before going online. These keys are then always written (`false` included), so a file the port wrote keeps what the player switched off; in a file written before (when they were written only when set) a missing key still means off.
 
-**Added keys** (written only when they differ from the default, so the file stays compatible with the original):
+**Added keys** (written only when they differ from the default, so the file stays compatible with the original; the fresh install's ones always):
 
 | Key | Default | Written when |
 |---|---|---|
-| `followplayer` | false | `true` |
-| `directionalmove` | false | `true` |
-| `directionalaim` | false | `true` |
+| `followplayer` | false; a fresh install: true | always |
+| `directionalmove` | false; a fresh install: true | always |
+| `directionalaim` | false; a fresh install: true | always |
 | `drawonaim` | true | `false` |
-| `togglerun` | false | `true` |
-| `impactmarks` | false | `true` |
-| `bloodmarks` | false | `true` |
+| `togglerun` | false; a fresh install: true | always |
+| `impactmarks` | false; a fresh install: true | always |
+| `bloodmarks` | false; a fresh install: true | always |
 | `goremode` | false | `true` |
-| `casings` | false | `true` |
-| `remainsloot` | false | `true` |
+| `casings` | false; a fresh install: true | always |
+| `remainsloot` | false; a fresh install: true | always |
 | `nativeresolution` | true | `false` |
 | `autosave` | true | `false` |
-| `lighting` | false | `true` |
+| `lighting` | false; a fresh install: true | always |
+| `smoothscaling` | false; a fresh install: true | always |
+| `barrelleaks` | false; a fresh install: true | always |
+| `glassdebris` | false; a fresh install: true | always |
+| `fixoriginalbugs` | false; a fresh install: true | always |
 | `volumetricsmoke` | true | `false` |
-| `flashlight` | true | `false` |
+| `flashlight` | true; a fresh install: false | always |
 | `ambientlight` | 85, clamped to 0..100 | ≠ 85 |
 | `language` | empty (AUTO) | a language folder is picked: its id (`fr`, `en`, `pt-br`...) |
 | `checkupdates` | none (the main menu asks) | answered: `true` or `false` (section 12c) |
 | `newsseen` | empty | the ids of the news read (hex, comma separated, the last 64) |
 | `newsread` | 0 | old way, no longer written: the news dated before it are read (UTC seconds) |
-| `viewzoom` | 0 (auto), 1..4 with decimals (`1.5`) | ≠ 0 |
+| `viewzoom` | 0 (auto), 1..4 with decimals (`1.5`); a fresh install: x2 | always |
 | `padmap` | see section 2.4 | controller config ≠ default. 24 comma-separated action numbers; `-1` = default role; values clamped |
 | `padaim` | 3, clamped to 1..5 | same |
 | `paddeadzone` | 2, clamped to 0..4 | same |

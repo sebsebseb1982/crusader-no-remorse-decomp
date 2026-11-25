@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <iterator>
 #include <sstream>
 #include <stdexcept>
 
@@ -44,6 +45,21 @@ Entry entry_of(std::string_view line) {
     return {lower(line.substr(i, k - i)), lower(line.substr(v, w - v))};
 }
 
+// The keys of the port's enhancements window (not "checkupdates" and the
+// news, which the main menu writes, nor the controller's): a file without any
+// is a fresh install's (or the original game's), which gets the port's
+// recommended settings (set_fresh_install_defaults).
+constexpr std::string_view kEnhancementKeys[] = {
+    "followplayer", "directionalmove", "viewzoom", "smoothscaling", "lighting", "volumetricsmoke", "flashlight",
+    "ceilinglights", "ambientlight", "nativeresolution", "autosave", "directionalaim", "drawonaim", "preciseaim",
+    "togglerun", "impactmarks", "bloodmarks", "goremode", "casings", "barrelleaks", "glassdebris", "remainsloot",
+    "language", "fixoriginalbugs", "vibration", "vibrationintensity"
+};
+
+bool is_enhancement_key(std::string_view key) {
+    return std::find(std::begin(kEnhancementKeys), std::end(kEnhancementKeys), key) != std::end(kEnhancementKeys);
+}
+
 // atoi, as the original reads numbers.
 int number(std::string_view value) { return std::atoi(std::string(value).c_str()); }
 
@@ -78,7 +94,7 @@ int GameConfig::next_view_zoom(int current_pct, int limit_pct) {
 // @orig 1020:0000
 GameConfig GameConfig::load(const std::filesystem::path& path) {
     std::ifstream in(path, std::ios::binary);
-    if (!in) return {};
+    if (!in) return parse({});
     std::ostringstream s;
     s << in.rdbuf();
     return parse(s.str());
@@ -87,6 +103,7 @@ GameConfig GameConfig::load(const std::filesystem::path& path) {
 // @orig 1020:0000
 GameConfig GameConfig::parse(std::string_view text) {
     GameConfig c;
+    bool enhancements = false;  // a key of the enhancements window
     while (!text.empty()) {
         const auto end = text.find_first_of("\r\n");
         const std::string_view line = text.substr(0, end);
@@ -96,6 +113,7 @@ GameConfig GameConfig::parse(std::string_view text) {
         const Entry e = entry_of(line);
         const std::string_view key = e.key;
         const std::string_view value = e.value;
+        enhancements = enhancements || is_enhancement_key(key);
         if (key == "soundvolume") c.sound_volume = number(value);
         else if (key == "musicvolume") c.music_volume = number(value);
         else if (key == "filter") c.filter = value == "true";
@@ -156,7 +174,28 @@ GameConfig GameConfig::parse(std::string_view text) {
             }
         }
     }
+    if (!enhancements) c.set_fresh_install_defaults();
     return c;
+}
+
+// @orig none: port addition, the settings the port's author plays with
+// (the enhancements window's), for a file that has none of its keys.
+void GameConfig::set_fresh_install_defaults() {
+    follow_player = true;
+    directional_move = true;
+    directional_aim = true;
+    smooth_scaling = true;
+    toggle_run = true;
+    impact_marks = true;
+    blood_marks = true;
+    casings = true;
+    barrel_leaks = true;
+    glass_debris = true;
+    lighting = true;
+    remains_loot = true;
+    fix_original_bugs = true;
+    flashlight = false;
+    view_zoom_pct = 200;
 }
 
 // @orig 1020:0C7F
@@ -178,50 +217,36 @@ std::string GameConfig::text() const {
     // Written only when set (DS:0178 != 0).
     if (no_weasel) out.set("noweasel", "true");
     else out.erase("noweasel");
-    if (follow_player) out.set("followplayer", "true");
-    else out.erase("followplayer");
-    if (directional_move) out.set("directionalmove", "true");
-    else out.erase("directionalmove");
-    if (view_zoom_pct) out.set("viewzoom", view_zoom_text(view_zoom_pct));
-    else out.erase("viewzoom");
-    if (smooth_scaling) out.set("smoothscaling", "true");
-    else out.erase("smoothscaling");
+    out.set("followplayer", follow_player ? "true" : "false");
+    out.set("directionalmove", directional_move ? "true" : "false");
+    out.set("viewzoom", view_zoom_text(view_zoom_pct));
+    out.set("smoothscaling", smooth_scaling ? "true" : "false");
     if (!native_resolution) out.set("nativeresolution", "false");
     else out.erase("nativeresolution");
     if (!autosave) out.set("autosave", "false");
     else out.erase("autosave");
-    if (directional_aim) out.set("directionalaim", "true");
-    else out.erase("directionalaim");
+    out.set("directionalaim", directional_aim ? "true" : "false");
     if (!draw_on_aim) out.set("drawonaim", "false");
     else out.erase("drawonaim");
     if (precise_aim) out.set("preciseaim", "true");
     else out.erase("preciseaim");
-    if (toggle_run) out.set("togglerun", "true");
-    else out.erase("togglerun");
-    if (impact_marks) out.set("impactmarks", "true");
-    else out.erase("impactmarks");
-    if (blood_marks) out.set("bloodmarks", "true");
-    else out.erase("bloodmarks");
+    out.set("togglerun", toggle_run ? "true" : "false");
+    out.set("impactmarks", impact_marks ? "true" : "false");
+    out.set("bloodmarks", blood_marks ? "true" : "false");
     if (gore_mode) out.set("goremode", "true");
     else out.erase("goremode");
-    if (casings) out.set("casings", "true");
-    else out.erase("casings");
-    if (barrel_leaks) out.set("barrelleaks", "true");
-    else out.erase("barrelleaks");
-    if (glass_debris) out.set("glassdebris", "true");
-    else out.erase("glassdebris");
-    if (lighting) out.set("lighting", "true");
-    else out.erase("lighting");
+    out.set("casings", casings ? "true" : "false");
+    out.set("barrelleaks", barrel_leaks ? "true" : "false");
+    out.set("glassdebris", glass_debris ? "true" : "false");
+    out.set("lighting", lighting ? "true" : "false");
     if (!volumetric_smoke) out.set("volumetricsmoke", "false");
     else out.erase("volumetricsmoke");
-    if (!flashlight) out.set("flashlight", "false");
-    else out.erase("flashlight");
+    out.set("flashlight", flashlight ? "true" : "false");
     if (!ceiling_lights) out.set("ceilinglights", "false");
     else out.erase("ceilinglights");
     if (ambient_light != 85) out.set("ambientlight", std::to_string(ambient_light));
     else out.erase("ambientlight");
-    if (remains_loot) out.set("remainsloot", "true");
-    else out.erase("remainsloot");
+    out.set("remainsloot", remains_loot ? "true" : "false");
     if (!language.empty()) out.set("language", language);
     else out.erase("language");
     if (check_updates >= 0) out.set("checkupdates", check_updates ? "true" : "false");
@@ -240,8 +265,7 @@ std::string GameConfig::text() const {
     } else {
         out.erase("newsseen");
     }
-    if (fix_original_bugs) out.set("fixoriginalbugs", "true");
-    else out.erase("fixoriginalbugs");
+    out.set("fixoriginalbugs", fix_original_bugs ? "true" : "false");
     if (!vibration) out.set("vibration", "false");
     else out.erase("vibration");
     if (vibration_intensity != 100) out.set("vibrationintensity", std::to_string(vibration_intensity));
