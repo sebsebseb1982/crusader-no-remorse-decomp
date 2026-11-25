@@ -87,6 +87,8 @@ The maintainer does not own the Steam or EA releases, so this has not been teste
 
 ### 3. Launch
 
+On Windows, run `run_no_remorse_in_dosbox.bat` from the repository root to start the original French 1.08 `CRUSADER.EXE` in DOSBox, with the matching CD image mounted as drive `E:`.
+
 ```sh
 ./crusader-no-remorse data --new-game        # Windows: crusader-no-remorse.exe data --new-game
 ./crusader-no-remorse data --save 1          # resumes SAVEGAME.1 from the data folder
