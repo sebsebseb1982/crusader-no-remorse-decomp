@@ -525,27 +525,37 @@ public:
     // @orig none: port lighting
     void run(std::size_t n, const std::function<void(std::size_t)>& f) {
         if (n == 0) return;
+        const auto job = std::make_shared<Job>();
+        job->task = &f;
+        job->count = n;
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            task_ = &f;
-            count_ = n;
-            next_ = 0;
-            done_ = 0;
+            job_ = job;
             ++generation_;
         }
         wake_.notify_all();
-        drain();
+        drain(*job);
         std::unique_lock<std::mutex> lock(mutex_);
-        finished_.wait(lock, [&] { return done_ == count_; });
-        task_ = nullptr;
+        finished_.wait(lock, [&] { return job->done == job->count; });
+        job_.reset();
     }
 
 private:
+    // One run's work, with its own counters: a worker still on the last one
+    // when the next starts finds it all taken. (With counters shared by the
+    // runs and reset by each, such a worker could take an item of the next
+    // run and count it twice: run() then waited for ever.)
+    struct Job {
+        const std::function<void(std::size_t)>* task = nullptr;
+        std::size_t count = 0;
+        std::atomic<std::size_t> next{0}, done{0};
+    };
+
     // @orig none: port lighting
-    void drain() {
-        for (std::size_t i; (i = next_++) < count_;) {
-            (*task_)(i);
-            if (++done_ == count_) {
+    void drain(Job& job) {
+        for (std::size_t i; (i = job.next++) < job.count;) {
+            (*job.task)(i);
+            if (++job.done == job.count) {
                 std::lock_guard<std::mutex> lock(mutex_);
                 finished_.notify_all();
             }
@@ -555,22 +565,22 @@ private:
     void work() {
         std::uint64_t seen = 0;
         while (true) {
+            std::shared_ptr<Job> job;
             {
                 std::unique_lock<std::mutex> lock(mutex_);
                 wake_.wait(lock, [&] { return stop_ || generation_ != seen; });
                 if (stop_) return;
                 seen = generation_;
+                job = job_;
             }
-            drain();
+            if (job) drain(*job);
         }
     }
 
     std::vector<std::thread> threads_;
     std::mutex mutex_;
     std::condition_variable wake_, finished_;
-    const std::function<void(std::size_t)>* task_ = nullptr;
-    std::size_t count_ = 0;
-    std::atomic<std::size_t> next_{0}, done_{0};
+    std::shared_ptr<Job> job_;
     std::uint64_t generation_ = 0;
     bool stop_ = false;
 };
