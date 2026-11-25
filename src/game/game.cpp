@@ -1310,6 +1310,50 @@ void Game::OnlineMenu::open_release() {
                                   : "https://github.com/sebsebseb1982/crusader-no-remorse-decomp/releases/latest");
 }
 
+// @orig none: port's self-update
+void Game::enable_self_update(UpdateHooks hooks, std::filesystem::path install_dir, std::string exe_name,
+                              const char* suffix, bool synchronous) {
+    if (!suffix || !hooks.fetch || !hooks.download) return;
+    self_update_ = SelfUpdate{std::move(hooks), std::move(install_dir), std::move(exe_name), suffix, synchronous};
+    install_dir_ok_.reset();
+}
+
+// @orig none: port's self-update
+bool Game::OnlineMenu::can_install() {
+    Game& g = *game_;
+    if (!g.self_update_ || !g.latest_release_ || new_version().empty()) return false;
+    const SelfUpdate& u = *g.self_update_;
+    if (!SelfUpdater(u.hooks, u.install_dir, u.exe_name, u.suffix).can_install(*g.latest_release_)) return false;
+    if (!g.install_dir_ok_) g.install_dir_ok_ = install_dir_writable(u.install_dir);
+    return *g.install_dir_ok_;
+}
+
+// @orig none: port's self-update
+void Game::OnlineMenu::install() {
+    Game& g = *game_;
+    if (!can_install()) return;
+    const SelfUpdate& u = *g.self_update_;
+    // A new one for each try: a failed or cancelled one is over.
+    g.updater_ = std::make_unique<SelfUpdater>(u.hooks, u.install_dir, u.exe_name, u.suffix);
+    g.updater_->start(*g.latest_release_, u.synchronous);
+}
+
+// @orig none: port's self-update
+void Game::OnlineMenu::cancel_install() {
+    if (game_->updater_) game_->updater_->cancel();
+}
+
+// @orig none: port's self-update
+UpdateStatus Game::OnlineMenu::install_status() const {
+    return game_->updater_ ? game_->updater_->status() : UpdateStatus{};
+}
+
+// @orig none: port's self-update
+void Game::OnlineMenu::restart() {
+    game_->restart_ = true;
+    game_->quit_ = true;
+}
+
 // @orig none: port's online news
 const std::vector<NewsItem>& Game::OnlineMenu::news() const {
     static const std::vector<NewsItem> none;

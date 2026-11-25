@@ -40,6 +40,10 @@ namespace crusader {
 
 inline constexpr const char* kLatestReleaseUrl =
     "https://api.github.com/repos/sebsebseb1982/crusader-no-remorse-decomp/releases/latest";
+// Where the files of that release are: the self-update downloads nothing from
+// another place (core/self_update.hpp).
+inline constexpr const char* kReleaseDownloadPrefix =
+    "https://github.com/sebsebseb1982/crusader-no-remorse-decomp/releases/download/";
 inline constexpr const char* kNewsUrl =
     "https://raw.githubusercontent.com/sebsebseb1982/crusader-no-remorse-decomp/master/news.json";
 inline constexpr std::int64_t kNewsLifetime = 30 * 24 * 3600;  // seconds
@@ -59,12 +63,19 @@ std::optional<std::int64_t> parse_utc_date(std::string_view text);
 // A day as "DD.MM.YYYY" (UTC).
 std::string format_day(std::int64_t utc_seconds);
 
+// A file attached to a release (core/self_update.hpp installs from them).
+struct ReleaseAsset {
+    std::string name;  // "crusader-no-remorse-1.79.0-windows-x64.zip"
+    std::string url;   // its "browser_download_url"
+    std::uint64_t size = 0;
+};
 struct ReleaseInfo {
     SemVer version;
     std::string url;  // the release's page
+    std::vector<ReleaseAsset> assets;
 };
 // The GitHub API's answer for the latest release; none without a valid
-// "tag_name".
+// "tag_name". Assets without a name or a URL are left out.
 std::optional<ReleaseInfo> parse_latest_release(std::string_view json);
 
 struct NewsItem {

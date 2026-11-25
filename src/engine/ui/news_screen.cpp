@@ -5,6 +5,7 @@
 #include "engine/ui/gump_keys.hpp"
 
 #include <algorithm>
+#include <utility>
 
 namespace crusader {
 
@@ -139,6 +140,183 @@ void UpdatesQuestion::mouse_down(int x, int y) {
             yes_focused_ = yes;
             result_ = yes;
         }
+    }
+}
+
+// --- UpdateDialog
+
+namespace {
+
+constexpr int kDialogButtonWidth = 132, kDialogButtonGap = 14;
+constexpr int kBarX0 = kAskX0 + 60, kBarX1 = kAskX1 - 60, kBarY0 = kAskLineY - 8, kBarHeight = 18;
+
+}  // namespace
+
+// @orig none: port's self-update
+UpdateDialog::UpdateDialog(const FontSet& fonts, MenuOnline& online, std::string title)
+    : fonts_(&fonts), online_(&online), title_(std::move(title)) {
+    set_step(Step::kAsk);
+}
+
+// @orig none: port's self-update
+void UpdateDialog::set_step(Step step) {
+    step_ = step;
+    focused_ = 0;
+    switch (step) {
+    case Step::kAsk: buttons_ = {Action::kInstall, Action::kPage, Action::kLater}; break;
+    case Step::kRunning: buttons_ = {Action::kCancel}; break;
+    case Step::kFailed: buttons_ = {Action::kPage, Action::kBack}; break;
+    }
+}
+
+// @orig none: port's self-update
+std::string UpdateDialog::button_label(Action action) const {
+    switch (action) {
+    case Action::kInstall: return tr("INSTALL");
+    case Action::kPage: return tr("WEB PAGE");
+    case Action::kLater: return tr("LATER");
+    case Action::kCancel: return tr("CANCEL");
+    case Action::kBack: return tr("BACK");
+    }
+    return {};
+}
+
+// @orig none: port's self-update
+UpdateDialog::Rect UpdateDialog::button(int index) const {
+    const int count = static_cast<int>(buttons_.size());
+    const int total = count * kDialogButtonWidth + (count - 1) * kDialogButtonGap;
+    const int x0 = (kAskX0 + kAskX1 + 1 - total) / 2 + index * (kDialogButtonWidth + kDialogButtonGap);
+    return {x0, kAskButtonY0, x0 + kDialogButtonWidth - 1, kAskButtonY0 + kAskButtonHeight - 1};
+}
+
+// @orig none: port's self-update
+void UpdateDialog::draw(Surface8& screen) const {
+    draw_rounded_box(screen, kAskX0, kAskY0, kAskX1, kAskY1, 0, kFrame);
+    draw_rounded_box(screen, kAskX0 + 3, kAskY0 + 3, kAskX1 - 3, kAskY1 - 3, -1, kFrame);
+    const auto centred = [&](int y, const std::string& text, std::uint8_t tint) {
+        print_tinted(screen, *fonts_, kFont, (kAskX0 + kAskX1 + 1 - text_width(*fonts_, kFont, text)) / 2, y, text,
+                     tint);
+    };
+    switch (step_) {
+    case Step::kAsk:
+        centred(kAskTitleY, title_, kGreen);
+        centred(kAskLineY, tr("INSTALL IT NOW?"), kDimGreen);
+        centred(kAskLineY + kAskLineStep, tr("THE GAME RESTARTS AFTERWARDS"), kDimGreen);
+        break;
+    case Step::kRunning: {
+        const bool downloading = status_.phase == UpdatePhase::kIdle || status_.phase == UpdatePhase::kDownloading;
+        centred(kAskTitleY, downloading                            ? tr("DOWNLOADING...")
+                            : status_.phase == UpdatePhase::kDone ? tr("RESTARTING...")
+                                                                   : tr("INSTALLING..."),
+                kGreen);
+        double fraction = downloading ? 0 : 1;
+        if (downloading && status_.total > 0) {
+            fraction = std::min(1.0, static_cast<double>(status_.done) / static_cast<double>(status_.total));
+        }
+        draw_rounded_box(screen, kBarX0, kBarY0, kBarX1, kBarY0 + kBarHeight - 1, -1, kDimGreen);
+        const int inner = kBarX1 - kBarX0 - 5;
+        for (int y = kBarY0 + 3; y < kBarY0 + kBarHeight - 3; ++y) {
+            for (int x = 0; x < static_cast<int>(inner * fraction); ++x) {
+                if (y >= 0 && y < screen.height && kBarX0 + 3 + x < screen.width) screen.row(y)[kBarX0 + 3 + x] = kGreen;
+            }
+        }
+        if (downloading) centred(kAskLineY + kAskLineStep, std::to_string(static_cast<int>(fraction * 100)) + "%", kDimGreen);
+        break;
+    }
+    case Step::kFailed:
+        centred(kAskTitleY, tr("UPDATE FAILED"), kRed);
+        centred(kAskLineY + 8,
+                status_.failure == UpdateFailure::kDownload   ? tr("THE DOWNLOAD FAILED")
+                : status_.failure == UpdateFailure::kChecksum ? tr("THE DOWNLOAD IS CORRUPTED")
+                : status_.failure == UpdateFailure::kNoPackage ? tr("NO PACKAGE FOR THIS SYSTEM")
+                                                                : tr("THE INSTALLATION FAILED"),
+                kDimGreen);
+        break;
+    }
+    for (int i = 0; i < static_cast<int>(buttons_.size()); ++i) {
+        const Rect r = button(i);
+        draw_button(screen, *fonts_, kFont, r.x0, r.y0, r.x1, r.y1, button_label(buttons_[static_cast<std::size_t>(i)]),
+                    i == focused_);
+    }
+}
+
+// @orig none: port's self-update
+void UpdateDialog::press(Action action) {
+    switch (action) {
+    case Action::kInstall:
+        online_->install();
+        status_ = {};
+        status_.phase = UpdatePhase::kDownloading;
+        set_step(Step::kRunning);
+        break;
+    case Action::kPage:
+        online_->open_release();
+        closed_ = true;
+        break;
+    case Action::kCancel:
+        online_->cancel_install();
+        closed_ = true;
+        break;
+    case Action::kLater:
+    case Action::kBack: closed_ = true; break;
+    }
+}
+
+// @orig none: port's self-update
+void UpdateDialog::key(std::uint16_t code) {
+    if (closed_) return;
+    const int count = static_cast<int>(buttons_.size());
+    switch (code) {
+    case gump_key::kLeft:
+    case gump_key::kUp:
+    case '4':
+    case '8':
+        if (count > 0) focused_ = (focused_ + count - 1) % count;
+        break;
+    case gump_key::kRight:
+    case gump_key::kDown:
+    case '6':
+    case '2':
+        if (count > 0) focused_ = (focused_ + 1) % count;
+        break;
+    case gump_key::kEnter:
+        if (count > 0) press(buttons_[static_cast<std::size_t>(focused_)]);
+        break;
+    case gump_key::kEscape:
+        // The last button leaves: LATER, CANCEL, BACK; none while installing.
+        if (count > 0) press(buttons_.back());
+        break;
+    default: break;
+    }
+}
+
+// @orig none: port's self-update
+void UpdateDialog::mouse_down(int x, int y) {
+    if (closed_) return;
+    for (int i = 0; i < static_cast<int>(buttons_.size()); ++i) {
+        if (button(i).contains(x, y)) {
+            focused_ = i;
+            press(buttons_[static_cast<std::size_t>(i)]);
+            return;
+        }
+    }
+}
+
+// @orig none: port's self-update
+void UpdateDialog::update() {
+    if (closed_ || step_ != Step::kRunning) return;
+    status_ = online_->install_status();
+    switch (status_.phase) {
+    case UpdatePhase::kFailed: set_step(Step::kFailed); break;
+    case UpdatePhase::kInstalling:
+    case UpdatePhase::kDone:
+        buttons_.clear();  // nothing to cancel from here
+        if (status_.phase == UpdatePhase::kDone && !restarted_) {
+            restarted_ = true;
+            online_->restart();
+        }
+        break;
+    default: break;
     }
 }
 

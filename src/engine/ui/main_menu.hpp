@@ -61,7 +61,9 @@
 //     until answered (MenuOnline::answer);
 //   - when a newer release of the port is known, a green line above the
 //     version lines, "NEW VERSION x.y.z AVAILABLE": a press on it opens the
-//     release's page (MenuOnline::open_release);
+//     release's page (MenuOnline::open_release), or, when the game can install
+//     that version itself and no game is running, the UpdateDialog
+//     (MenuOnline::can_install, core/self_update.hpp);
 //   - when there are news, a "NEWS" button (button 8) in the black band
 //     above the background, on the right, with a red disc and the count of
 //     the news not read yet on its corner when there are some. Up from
@@ -180,6 +182,7 @@ public:
     bool has_news() const { return res_.online && !res_.online->news().empty(); }
     const UpdatesQuestion* updates_question() const { return question_.get(); }
     const NewsScreen* news_screen() const { return news_.get(); }
+    const UpdateDialog* update_dialog() const { return update_.get(); }
     // The "new version" line, empty when it is not shown.
     Rect update_line() const;
 
@@ -213,6 +216,7 @@ private:
     bool news_key(std::uint16_t code);
     std::unique_ptr<UpdatesQuestion> question_;
     std::unique_ptr<NewsScreen> news_;
+    std::unique_ptr<UpdateDialog> update_;
     Rect news_button_{};
     bool no_game_;
     std::array<Rect, kButtons> buttons_{};

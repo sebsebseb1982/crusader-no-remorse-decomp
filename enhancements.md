@@ -757,7 +757,16 @@ The original has nothing like it. The port can look online for a newer version o
 - `news.json`, at the root of the repository (branch `master`).
 Windows uses WinHTTP (part of the system, its proxy settings); Linux loads `libcurl` at run time if it is installed, and does nothing otherwise. No network, a timeout (8 s) or an error: nothing is shown.
 
-**Update notice.** When the latest release is newer than the running version, a green line above the version lines: NEW VERSION x.y.z AVAILABLE (French: NOUVELLE VERSION x.y.z DISPONIBLE). Clicking it opens the release's page in the browser. Builds that are not releases (`0.0.0-dev`) never show it. The port does not update itself: the player downloads the new version (PortMaster users through PortMaster).
+**Update notice.** When the latest release is newer than the running version, a green line above the version lines: NEW VERSION x.y.z AVAILABLE (French: NOUVELLE VERSION x.y.z DISPONIBLE). Builds that are not releases (`0.0.0-dev`) never show it. Clicking it:
+
+- on Windows and Linux (x86-64), from the menu of a launch (no game running), opens a window: INSTALL / WEB PAGE / LATER (French: INSTALLER / PAGE WEB / PLUS TARD). INSTALL downloads the release's archive with a percentage and a CANCEL button, checks its SHA-256 against the release's `SHA256SUMS`, swaps the files in and restarts the game by itself. A failure says why (download, corrupted download, installation) and nothing is changed.
+- otherwise (a game is running, the folder cannot be written to, the PortMaster build, which is updated through PortMaster), opens the release's page in the browser, as before.
+
+What is installed: the executables and the files beside them, `languages/` and `ceiling_lights/`. Never `data/`: the game files, the saved games and `CRUSADER.CFG` are left alone. Only addresses under the repository's release downloads are used. The checksum comes from the same release as the archive, so it protects against a broken download, not against a tampered release.
+
+The files an update replaces are kept next to the new ones as `<name>.old` and listed in `.update-backup.txt`; the new version deletes them once it runs. If it did not start, rename them back. Any failure while swapping puts everything back at once.
+
+**Files:** `src/core/self_update.*` (the steps, the choice of files, the rollback), `src/core/archive.*` (DEFLATE, gzip, zip, tar), `src/core/sha256.*`, `src/platform/http_get.*` (`http_download`), `src/platform/process.*` (restart), `src/engine/ui/news_screen.*` (`UpdateDialog`); tests `tests/update_tests.cpp`, `test_self_update_menu` in `e2e/game_tests.cpp`.
 
 **News**
 - When there are news, a NEWS button (French: NOUVEAUTES) in the black band above the menu's background, on the right. Up from OPTIONS reaches it, down goes back; Enter or a click opens it.
@@ -843,7 +852,7 @@ The original reads much of its data from the CD and needs it in the drive. The p
   - `--size WxH`, `--scroll DX DY`, `--walk`, `--fire`, `--use ID`;
   - `--menu`, `--menu-load`, `--menu-credits`, `--menu-options`, `--menu-gamepad`, `--menu-new`, `--movie NAME`, `--movie-overlay NAME`;
   - `--debug-title`: diagnostics in the window title (FPS, processes, missing intrinsics…).
-  - `--offline`: no update notice nor news for this run; `--check-online`: fetches them, prints what the menu would show and exits; `--online-from DIR` (with `--online-ask`, `--menu-news`): reads `DIR/release.json` and `DIR/news.json` instead of the network (section 12c).
+  - `--offline`: no update notice nor news for this run; `--check-online`: fetches them, prints what the menu would show and exits; `--online-from DIR` (with `--online-ask`, `--menu-news`): reads `DIR/release.json` and `DIR/news.json` instead of the network (section 12c). `--port-version V`: the program believes it is version V (to test the update notice and the install with `--online-from`, whose DIR then also holds the release's archive and `SHA256SUMS`, found by name); `--install-update DIR`: installs the latest release from the network into the folder DIR, prints the steps and exits.
 - Bundled tools: `shapeview`, `mapview` (shape and map viewers), `shapedump`, `sortcheck`, `ucsmoke` (runs the scripts of every map and reports missing intrinsics), `useprobe`, `diffcheck` (runs the original routines in an emulator and compares them with the port).
 
 ---

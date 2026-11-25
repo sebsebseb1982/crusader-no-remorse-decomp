@@ -19,6 +19,13 @@
 // and DIR/news.json instead of the network, as if the player agreed
 // (--online-ask: as if not asked yet); --menu-news, with --png, opens the
 // news from the menu.
+// Self-update (core/self_update.hpp): the update line of the main menu installs
+// the new version and restarts the game. --port-version V makes the program
+// believe it is that version (to test with --online-from, whose DIR then also
+// holds the files of the release: its assets are read there by name);
+// --install-update DIR installs the latest release from the network into the
+// folder DIR (which holds an install, e.g. a copy of this one), prints the
+// steps and exits, without restarting.
 // --mod loads a folder made by the level editor (crusader-no-remorse-editor): its
 // files replace those of the data. --map starts a new game on that map, on
 // its teleport egg E (frame 1, quality low byte E; 0x1E by default, where
@@ -35,7 +42,9 @@
 #include "core/news.hpp"
 #include "core/png_writer.hpp"
 #include "platform/gl_lighting.hpp"
+#include "core/self_update.hpp"
 #include "platform/http_get.hpp"
+#include "platform/process.hpp"
 #include "crusader_version.hpp"
 #include "engine/ui/christmas_hat.hpp"
 #include "engine/world/ceiling_lights.hpp"
@@ -135,6 +144,80 @@ int check_online() {
     return release_json ? 0 : 1;
 }
 
+// The network as the self-update uses it, or the files of `from` when it is
+// given (--online-from): the asset a URL names is the file of that name.
+// @orig none: port's self-update
+UpdateHooks update_hooks(const std::filesystem::path& from) {
+    UpdateHooks hooks;
+    if (from.empty()) {
+        hooks.fetch = [](const std::string& url) { return http_get(url); };
+        hooks.download = [](const std::string& url, const std::filesystem::path& file, std::uint64_t size,
+                            const std::function<bool(std::uint64_t)>& progress) {
+            return http_download(url, file, size, progress);
+        };
+        return hooks;
+    }
+    hooks.fetch = [from](const std::string& url) -> std::optional<std::string> {
+        std::ifstream in(from / std::filesystem::path(url.substr(url.rfind('/') + 1)), std::ios::binary);
+        if (!in) return std::nullopt;
+        return std::string(std::istreambuf_iterator<char>(in), {});
+    };
+    hooks.download = [from](const std::string& url, const std::filesystem::path& file, std::uint64_t,
+                            const std::function<bool(std::uint64_t)>& progress) {
+        std::ifstream in(from / std::filesystem::path(url.substr(url.rfind('/') + 1)), std::ios::binary);
+        std::ofstream out(file, std::ios::binary | std::ios::trunc);
+        if (!in || !out) return false;
+        std::vector<char> buffer(1 << 16);
+        std::uint64_t written = 0;
+        while (in) {
+            in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+            out.write(buffer.data(), in.gcount());
+            written += static_cast<std::uint64_t>(in.gcount());
+            if (!progress(written)) return false;
+        }
+        return static_cast<bool>(out);
+    };
+    return hooks;
+}
+
+// --install-update DIR: the latest release, installed into DIR.
+// @orig none: port's self-update
+int install_update(const std::filesystem::path& dir, const std::string& exe_name) {
+    const auto release_json = http_get(kLatestReleaseUrl);
+    const auto release = release_json ? parse_latest_release(*release_json) : std::nullopt;
+    if (!release) {
+        std::fprintf(stderr, "cannot read the latest release\n");
+        return 1;
+    }
+    const char* suffix = platform_archive_suffix();
+    SelfUpdater updater(update_hooks({}), dir, exe_name, suffix ? suffix : "");
+    if (!updater.can_install(*release)) {
+        std::fprintf(stderr, "release %s has no package for this system\n", release->version.text().c_str());
+        return 1;
+    }
+    std::printf("installing %s into %s (replacing %s)\n", release->version.text().c_str(), dir.string().c_str(),
+                exe_name.c_str());
+    updater.start(*release);
+    for (UpdatePhase last = UpdatePhase::kIdle;;) {
+        const UpdateStatus status = updater.status();
+        if (status.phase != last || status.phase == UpdatePhase::kDownloading) {
+            std::printf("\rphase %d: %llu / %llu bytes   ", static_cast<int>(status.phase),
+                        static_cast<unsigned long long>(status.done), static_cast<unsigned long long>(status.total));
+            std::fflush(stdout);
+            last = status.phase;
+        }
+        if (status.phase == UpdatePhase::kDone) {
+            std::printf("\ndone: the old files are kept as .old, listed in .update-backup.txt\n");
+            return 0;
+        }
+        if (status.phase == UpdatePhase::kFailed) {
+            std::printf("\nfailed (%d): %s\n", static_cast<int>(status.failure), status.detail.c_str());
+            return 1;
+        }
+        SDL_Delay(50);
+    }
+}
+
 // The browser, on a page (the release of the update notice).
 // @orig none: port's online news
 void open_url(const std::string& url) {
@@ -156,6 +239,11 @@ void print_faults(Game& game) {
 // @orig none: command line and SDL start-up of the port
 int main(int argc, char** argv) {
     SDL_SetMainReady();
+    // The file this program runs from, before anything renames it (an update).
+    const std::filesystem::path exe = current_executable();
+    std::string port_version = CRUSADER_VERSION;  // --port-version
+    std::filesystem::path install_update_dir;     // --install-update
+    bool restart = false;                         // an update was installed: start again
     std::filesystem::path data = "data", iso, mod;
     int start_map = 0, start_egg = 0x1E;
     int save = 1, frames = 0;
@@ -221,6 +309,8 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--offline") == 0) offline = true;
         else if (std::strcmp(argv[i], "--check-online") == 0) return check_online();
         else if (std::strcmp(argv[i], "--online-from") == 0 && i + 1 < argc) online_from = argv[++i];
+        else if (std::strcmp(argv[i], "--port-version") == 0 && i + 1 < argc) port_version = argv[++i];
+        else if (std::strcmp(argv[i], "--install-update") == 0 && i + 1 < argc) install_update_dir = argv[++i];
         else if (std::strcmp(argv[i], "--online-ask") == 0) online_ask = true;
         else if (std::strcmp(argv[i], "--scroll") == 0 && i + 2 < argc) {
             scroll_x = std::stoi(argv[++i]);
@@ -229,6 +319,11 @@ int main(int argc, char** argv) {
         else if (std::strncmp(argv[i], "-laurie", 7) == 0) laurie = true;  // CRUSYS_1050_093D: the cheats enabled
         else if (std::filesystem::path p = argv[i]; is_disc_image(p)) iso = p;
         else data = argv[i];
+    }
+
+    if (!install_update_dir.empty()) {
+        SDL_Init(SDL_INIT_TIMER);  // SDL_Delay
+        return install_update(install_update_dir, exe.filename().string());
     }
 
     try {
@@ -272,7 +367,7 @@ int main(int argc, char** argv) {
             ~SdlQuitLast() { SDL_Quit(); }
         } sdl_quit_last;
         Game game(data, {}, mod);
-        game.set_port_version(CRUSADER_VERSION);
+        game.set_port_version(port_version);
         // The online news and update notice (port addition): in play, from
         // the network once the player agreed; --online-from reads files.
         if (!online_from.empty()) {
@@ -288,6 +383,17 @@ int main(int argc, char** argv) {
         } else if (!offline && png.empty()) {
             game.enable_online([](const std::string& url) { return http_get(url); }, open_url);
         }
+        // The self-update (port addition): the folder of the executable; first
+        // the files an earlier update left (its ".old" files, now unused).
+        if (!exe.empty() && !offline && png.empty()) {
+            clean_after_update(exe.parent_path());
+            game.enable_self_update(update_hooks(online_from), exe.parent_path(), exe.filename().string(),
+                                    platform_archive_suffix());
+        } else if (!exe.empty() && !online_from.empty()) {  // tools: no thread
+            game.enable_self_update(update_hooks(online_from), exe.parent_path(), exe.filename().string(),
+                                    platform_archive_suffix(), true);
+        }
+
         if (lighting) game.config().lighting = true;
         // The 3D lighting on the GPU when there is one (else on the processor),
         // made the first time the option is on; --cpu-lighting keeps it on the
@@ -557,10 +663,19 @@ int main(int argc, char** argv) {
             else presenter.present(screen, game.palette());
         }
         print_faults(game);
-        return 0;
+        restart = game.restart_requested();
+        if (!restart) return 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "error: %s\n", e.what());
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "crusader-no-remorse", e.what(), nullptr);
         return 1;
     }
+    // An update was installed: the window, the audio and SDL are closed, the
+    // new executable takes over (core/self_update.hpp).
+    if (!relaunch(exe, argc, argv)) {
+        std::fprintf(stderr, "the update is installed, but %s could not be started again: start it by hand\n",
+                     exe.string().c_str());
+        return 1;
+    }
+    return 0;
 }

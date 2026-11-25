@@ -12,6 +12,7 @@
 #include "core/data_files.hpp"
 #include "core/game_config.hpp"
 #include "core/news.hpp"
+#include "core/self_update.hpp"
 #include "core/dtable.hpp"
 #include "core/font.hpp"
 #include "core/xform.hpp"
@@ -331,6 +332,18 @@ public:
     // fetched at once; until the player has said, the main menu asks.
     using UrlFetch = std::function<std::optional<std::string>(const std::string& url)>;
     void enable_online(UrlFetch fetch, std::function<void(const std::string&)> open_url, bool synchronous = false);
+    // Port addition (core/self_update.hpp): the newer version can be installed
+    // by the game itself, from the main menu when no game is running: the
+    // update line then opens the UpdateDialog. `hooks` give the network,
+    // `install_dir` is the folder of the executable `exe_name`, `suffix`
+    // names this system's archive in the release (platform_archive_suffix(),
+    // null: no install). Needs enable_online. `synchronous`: the install
+    // runs in the call that starts it (tests).
+    void enable_self_update(UpdateHooks hooks, std::filesystem::path install_dir, std::string exe_name,
+                            const char* suffix, bool synchronous = false);
+    // An install is done: the program must end and start again
+    // (quit_requested() is then set too).
+    bool restart_requested() const { return restart_; }
     // What was fetched (once arrived).
     const std::optional<ReleaseInfo>& latest_release() const { return latest_release_; }
     const std::vector<NewsItem>& news() const { return news_; }
@@ -503,6 +516,11 @@ private:
         void answer(bool check) override;
         std::string new_version() const override;
         void open_release() override;
+        bool can_install() override;
+        void install() override;
+        void cancel_install() override;
+        UpdateStatus install_status() const override;
+        void restart() override;
         const std::vector<NewsItem>& news() const override;
         NewsRead news_read() const override;
         void mark_news_read() override;
@@ -525,6 +543,17 @@ private:
     std::string news_language_;
     std::vector<NewsItem> news_;
     OnlineMenu online_menu_{*this};
+    // The self-update (enable_self_update).
+    struct SelfUpdate {
+        UpdateHooks hooks;
+        std::filesystem::path install_dir;
+        std::string exe_name, suffix;
+        bool synchronous = false;
+    };
+    std::optional<SelfUpdate> self_update_;
+    std::optional<bool> install_dir_ok_;  // install_dir_writable, asked once
+    std::unique_ptr<SelfUpdater> updater_;
+    bool restart_ = false;
     Process* menu_process_ = nullptr;  // modal placeholder, owned by the kernel
     MainMenu::Shared menu_shared_;     // DS:5BE8, DS:0098
     LoadScreen::Names save_names_;     // DS:7964

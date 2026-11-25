@@ -201,6 +201,7 @@ void MainMenu::draw(Surface8& screen) const {
     draw_version(screen, kVersionY0 + kVersionLineHeight, res_.data_version);
     if (res_.online) draw_online(screen);  // port addition
     if (question_) question_->draw(screen);
+    if (update_) update_->draw(screen);
 }
 
 // @orig 13D0:06CD
@@ -213,6 +214,11 @@ void MainMenu::key(std::uint16_t code) {
             question_.reset();
             res_.online->answer(*answer);
         }
+        return;
+    }
+    if (update_) {
+        update_->key(code);
+        if (update_->closed()) update_.reset();
         return;
     }
     if (news_) {
@@ -314,6 +320,11 @@ void MainMenu::mouse_down(int x, int y) {
         }
         return;
     }
+    if (update_) {
+        update_->mouse_down(x, y);
+        if (update_->closed()) update_.reset();
+        return;
+    }
     if (news_) {
         news_->mouse_down(x, y);
         if (news_->closed()) {
@@ -323,7 +334,14 @@ void MainMenu::mouse_down(int x, int y) {
         return;
     }
     if (!load_ && !options_ && !difficulty_ && !result_ && update_line().contains(x, y)) {
-        res_.online->open_release();
+        // Installed by the game itself when it can, and no game is running
+        // (the program restarts); else the release's page.
+        if (no_game_ && res_.online->can_install()) {
+            update_ = std::make_unique<UpdateDialog>(*res_.fonts, *res_.online,
+                                                     update_text(res_.online->new_version()));
+        } else {
+            res_.online->open_release();
+        }
         return;
     }
     if (load_) {
@@ -349,7 +367,7 @@ void MainMenu::mouse_down(int x, int y) {
 
 // @orig 1310:0151
 void MainMenu::mouse_move(int x, int y) {
-    if (question_ || news_) return;  // port addition
+    if (question_ || news_ || update_) return;  // port addition
     if (options_) {
         options_->mouse_move(x, y);
         return;
@@ -366,7 +384,7 @@ void MainMenu::mouse_move(int x, int y) {
 
 // @orig 1310:001D
 void MainMenu::mouse_up(int x, int y) {
-    if (question_ || news_) return;  // port addition
+    if (question_ || news_ || update_) return;  // port addition
     if (options_) {
         options_->mouse_up(x, y);
         after_sub_screen();
@@ -426,6 +444,10 @@ void MainMenu::activate(int i) {
 namespace crusader {
 
 void MainMenu::update(std::uint32_t ticks) {
+    if (update_) {  // port addition: follows the install
+        update_->update();
+        if (update_->closed()) update_.reset();
+    }
     if (options_) options_->update(ticks);
 }
 

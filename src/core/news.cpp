@@ -126,7 +126,16 @@ std::optional<ReleaseInfo> parse_latest_release(std::string_view json) {
     if (!doc || !doc->is_object()) return std::nullopt;
     const auto version = parse_semver(doc->string_at("tag_name", ""));
     if (!version) return std::nullopt;
-    return ReleaseInfo{*version, doc->string_at("html_url", "")};
+    ReleaseInfo release{*version, doc->string_at("html_url", ""), {}};
+    if (const JsonValue* assets = doc->get("assets"); assets && assets->is_array()) {
+        for (const JsonValue& asset : assets->array) {
+            if (!asset.is_object()) continue;
+            ReleaseAsset a{asset.string_at("name", ""), asset.string_at("browser_download_url", ""), 0};
+            if (const double size = asset.number_at("size", 0); size > 0) a.size = static_cast<std::uint64_t>(size);
+            if (!a.name.empty() && !a.url.empty()) release.assets.push_back(std::move(a));
+        }
+    }
+    return release;
 }
 
 // @orig none: port's online news
