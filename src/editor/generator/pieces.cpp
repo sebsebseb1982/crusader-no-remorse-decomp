@@ -68,6 +68,10 @@ const char* tag_name(int tag) {
     return "?";
 }
 
+bool is_wall_gun(const std::string& class_name) {
+    return starts(class_name, "GATGUNEW") || starts(class_name, "GATGUNNS") || starts(class_name, "BASEGUN");
+}
+
 bool RoomPiece::cell(std::int32_t x, std::int32_t y) const {
     const std::int32_t c = (x - x0) / kCell, r = (y - y0) / kCell;
     return x >= x0 && y >= y0 && c < cols && r < rows && cells[static_cast<std::size_t>(r * cols + c)];
@@ -89,6 +93,8 @@ std::string RoomPiece::describe() const {
     if (squared) s += ", squared " + std::to_string(squared) + "%";
     if (cameras) s += ", cameras " + std::to_string(cameras);
     if (alarm_boxes) s += ", alarm boxes " + std::to_string(alarm_boxes);
+    if (guns) s += ", guns " + std::to_string(guns);
+    if (lasers) s += ", lasers " + std::to_string(lasers);
     return s;
 }
 
@@ -667,6 +673,8 @@ std::vector<RoomPiece> extract_rooms(const GameData& data, int map, std::int32_t
             const std::string cls = name(i.shape);
             if (starts(cls, "CAMERANS") || starts(cls, "CAMERAEW") || starts(cls, "CAMERACO")) ++room.cameras;
             if (cls == "ALARMBOX") ++room.alarm_boxes;
+            if (is_wall_gun(cls)) ++room.guns;
+            if (starts(cls, "LAZER")) ++room.lasers;
         }
         // Doors that can be cut: a straight wall piece, 128 or 256 units long,
         // right along the room's border, with six cells (96 units) of the

@@ -46,6 +46,9 @@ struct Opening {
 enum PieceTag { kStorage = 0, kOffice, kMachines, kSecurity, kTagCount };
 const char* tag_name(int tag);
 
+// A wall gun: it turns to the player and fires while in the fast area (WALLGUN).
+bool is_wall_gun(const std::string& class_name);
+
 struct RoomPiece {
     int map = 0;
     std::int32_t z = 0;                  // the storey's floor
@@ -76,6 +79,7 @@ struct RoomPiece {
     int unfloored = 0;  // cells of its outline that no floor of it bears
     int squared = 0;    // share of its outline (in %) added to square it (a rectangle or an L)
     int cameras = 0, alarm_boxes = 0;  // wall cameras that call TRIGGER (CAMERANS, CAMERAEW, CAMERACO); ALARMBOX
+    int guns = 0, lasers = 0;          // wall guns (GATGUNEW, GATGUNNS, BASEGUN); lasers (LAZEREW, LAZERNS)
     bool cell(std::int32_t x, std::int32_t y) const;  // a walkable cell of the room at (x, y)
     std::string describe() const;
 };

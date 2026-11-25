@@ -222,15 +222,18 @@ void check_seed(const std::filesystem::path& data, const gen::GameData& game_dat
         }
         project.save();
     }
-    // The same levels without their guards (MONSTER pairs), for the checks
-    // of the mechanisms: the guards are checked on their own.
+    // The same levels without their guards (MONSTER pairs) nor their wall
+    // guns, for the checks of the mechanisms: the guards and the guns are
+    // checked on their own; the guns without the guards (`armed`).
+    auto is_gun = [](const LevelItem& i) { return i.shape == 0x108 || i.shape == 0x113 || i.shape == 0x4C8; };
     const auto calm = std::filesystem::temp_directory_path() / ("crusader_generator_tests_calm_" + std::to_string(seed));
-    std::filesystem::remove_all(calm);
-    {
-        Project project(data, calm);
+    const auto armed = std::filesystem::temp_directory_path() / ("crusader_generator_tests_armed_" + std::to_string(seed));
+    for (const bool guns : {false, true}) {
+        std::filesystem::remove_all(guns ? armed : calm);
+        Project project(data, guns ? armed : calm);
         for (const gen::GeneratedLevel& g : levels) {
             Level without = g.result.level;
-            std::erase_if(without.items, [](const LevelItem& i) { return i.shape == 0x4D0; });
+            std::erase_if(without.items, [&](const LevelItem& i) { return i.shape == 0x4D0 || (!guns && is_gun(i)); });
             project.store_map(static_cast<std::size_t>(g.map), without);
         }
         project.save();
@@ -770,6 +773,75 @@ void check_seed(const std::filesystem::path& data, const gen::GameData& game_dat
         }
     }
 
+    // Turrets: a room's armed gun shoots at the player who comes in; its
+    // panel switches it off: the player, at the panel then back where he was
+    // shot at, is hurt no more. Without the guards (`armed`): the gun alone.
+    {
+        std::set<int> rooms;
+        for (const gen::Turret& t : level.turrets) rooms.insert(t.room);
+        for (const int room_index : rooms) {
+            const gen::Turret& t = *std::find_if(level.turrets.begin(), level.turrets.end(),
+                                                 [&](const gen::Turret& u) { return u.room == room_index; });
+            auto game = std::make_unique<Game>(data, test_saves(data), armed);
+            game->set_start(levels[0].map, 0x1E);
+            game->new_game(1);
+            World& w = game->world();
+            run_frames(*game, 120);
+            ObjId gun = 0, panel = 0;
+            w.for_each([&](const Item& i) {
+                if (i.parent != 0 || (i.quality & 0xFF) != t.link) return;
+                if (i.shape == t.gun_shape) gun = i.id;
+                if (i.shape == 0xA1 || i.shape == 0xA2) panel = i.id;
+            });
+            CHECK(gun && panel);
+            if (!gun || !panel) continue;
+            // Shot at: from the doorway, else nearer the gun (in front of it).
+            const gen::Spot in = gen::entry(level, room_index);
+            std::set<int> frames;
+            auto hurt_within = [&](const gen::Spot& at, int limit) {
+                w.teleport(1, at.x, at.y, 0, w.current_map());
+                w.set_npc_word(1, 0x00, 200);
+                for (int f = 0; f < limit; ++f) {
+                    game->update(kFrameUs);
+                    if (const Item* g = w.get(gun)) frames.insert(g->frame);
+                    if (w.is_dead(1) || w.npc_hp(1) < 200) return true;
+                }
+                return false;
+            };
+            gen::Spot where = in;
+            bool hurt = hurt_within(in, 600);
+            for (const auto& d : {std::pair{1, 1}, std::pair{1, 0}, std::pair{0, 1}, std::pair{-1, 1}, std::pair{1, -1}}) {
+                if (hurt) break;
+                where = {t.gun.x + d.first * 192, t.gun.y + d.second * 192, 0};
+                hurt = hurt_within(where, 400);
+            }
+            std::printf("  room %d: gun 0x%X (mode %d) %s, %zu frame(s) shown\n", room_index, t.gun_shape,
+                        w.get(gun) ? int{w.get(gun)->npc_number} : -1, hurt ? "shoots the player" : "DOES NOT SHOOT", frames.size());
+            CHECK(hurt);
+            if (!shots_dir.empty()) {
+                Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+                game->render(screen);
+                write_png(shots_dir / ("seed" + std::to_string(seed) + "-gun" + std::to_string(room_index) + ".png"),
+                          screen, game->palette());
+                { const gen::Room& rm = level.rooms[static_cast<std::size_t>(room_index)]; w.teleport(1, (rm.x0 + rm.x1) / 2, (rm.y0 + rm.y1) / 2, 0, w.current_map()); }
+                run_frames(*game, 20);
+                game->render(screen);
+                write_png(shots_dir / ("seed" + std::to_string(seed) + "-panel" + std::to_string(room_index) + ".png"),
+                          screen, game->palette());
+            }
+            // The panel, from in front of it.
+            w.teleport(1, t.front.x, t.front.y, 0, w.current_map());
+            w.set_npc_word(1, 0x00, 200);
+            run_frames(*game, 10);
+            use_item(w, panel);
+            run_frames(*game, 90);
+            const bool off = !hurt_within(where, 600);
+            std::printf("  room %d: panel used, the gun %s\n", room_index, off ? "is off" : "STILL SHOOTS");
+            CHECK(off);
+            CHECK(game->machine().faults().empty());
+        }
+    }
+
     // The exit teleporter: to the next level's start.
     {
         auto game = play("exit");
@@ -791,6 +863,7 @@ void check_seed(const std::filesystem::path& data, const gen::GameData& game_dat
     }
     std::filesystem::remove_all(mod);
     std::filesystem::remove_all(calm);
+    std::filesystem::remove_all(armed);
 }
 
 }  // namespace

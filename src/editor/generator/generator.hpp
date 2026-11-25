@@ -138,6 +138,17 @@ struct Guard {
     std::uint8_t link = 0;
 };
 
+// Missions: a room's wall gun, armed (it turns to the player and fires),
+// and the wall panel in the room that switches it off (docs/GENERATEUR.md,
+// "Turrets").
+struct Turret {
+    int room = 0;
+    Spot gun, panel;  // item positions
+    Spot front;       // where the player stands to use the panel
+    std::uint16_t gun_shape = 0;
+    std::uint8_t link = 0;
+};
+
 struct Result {
     Level level;
     int biome = 0;
@@ -149,6 +160,7 @@ struct Result {
     // Missions: guards that a room's camera calls when it sees the player
     // (their link is the camera's); they are not there before.
     std::vector<Guard> reinforcements;
+    std::vector<Turret> turrets;
     int storeys = 1;
     int start_room = 0, exit_room = 0;
     Spot start, exit;  // the arrival egg; the exit pad's centre

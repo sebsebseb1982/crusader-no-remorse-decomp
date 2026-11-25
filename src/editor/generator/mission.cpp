@@ -30,6 +30,7 @@ constexpr std::uint8_t kDoorEggType = 0x0A, kDoorEggZone = 0x44, kExitZone = 0x2
 constexpr std::uint8_t kTriggerOff = 7;
 constexpr std::uint8_t kTriggerEquip = 6;  // map number bits: action 2 (equip), bit 2
 constexpr std::uint16_t kShapeAlarmBox = 0x477;
+constexpr std::uint16_t kShapePanelNS = 0x0A1, kShapePanelEW = 0x0A2;  // PANELNS, PANELEW: use calls TRIGGER
 constexpr int kFirstLink = 32;
 
 bool is_door_shape(std::uint16_t s) {
@@ -396,6 +397,13 @@ std::string check_walkable(const Result& r, const GameData& data, int* failed_ro
             return "the key of room " + std::to_string(lock.room) + " cannot be walked to";
         }
     }
+    // Each panel that switches a gun off.
+    for (const Turret& t : r.turrets) {
+        if (!reached(t.front)) {
+            if (failed_room) *failed_room = t.room;
+            return "the gun panel of room " + std::to_string(t.room) + " cannot be walked to";
+        }
+    }
     // With its card door shut, the room behind it must be out of reach (no
     // other way round, through rooms that ended up side by side).
     for (const Lock& lock : r.locks) {
@@ -746,12 +754,135 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
                                  return i.shape == kShapeAlarmBox && !in_cut(i);
                              });
         if (has_camera && next_link < 250) alarm_link[k] = static_cast<std::uint8_t>(next_link++);
+        // The room's wall guns, armed, and a wall panel in the room that
+        // switches them off (docs/GENERATEUR.md, "Turrets"). A gun's mode is
+        // its NPC number (WALLGUN): 6 is off, as most stand on the original
+        // maps until a trigger egg on the way in equips them with their
+        // mode (TRIGGER passes its quality high). Here a gun has that mode
+        // from the start, and fires once in the fast area; the panel
+        // equips it with mode 6. Guns of one shape (a panel acts on one);
+        // not where the player comes in, nor with no wall for the panel.
+        std::uint16_t gun_shape = 0;
+        auto live_gun = [&](const LevelItem& i) {
+            return is_wall_gun(name(i.shape)) && i.quality_high() != 99 && i.quality_high() != 199 && !in_cut(i);
+        };
+        for (const LevelItem& i : piece.items) {
+            if (!arrival && live_gun(i)) {
+                gun_shape = i.shape;
+                break;
+            }
+        }
+        // The mode the designers' triggers equip it with (else its own, or 2).
+        auto armed_mode = [&](const LevelItem& gun) -> std::uint8_t {
+            std::map<int, int> votes;
+            if (gun.quality_low() && piece.map >= 0 && piece.map < static_cast<int>(data.maps.size())) {
+                for (const LevelItem& t : data.maps[static_cast<std::size_t>(piece.map)].items) {
+                    if (trigger_target(t) != gun.shape || (t.map_number & 0x1F) != kTriggerEquip ||
+                        t.quality_low() != gun.quality_low()) {
+                        continue;
+                    }
+                    const int m = t.quality_high();
+                    if (m != 6 && (m < 90 || m > 99)) ++votes[m];
+                }
+            }
+            int best = -1, most = 0;
+            for (const auto& [m, v] : votes) {
+                if (v > most) most = v, best = m;
+            }
+            if (best >= 0) return static_cast<std::uint8_t>(best);
+            return gun.npc_number != 6 ? gun.npc_number : std::uint8_t{2};
+        };
+        std::uint8_t gun_link = 0;
+        LevelItem panel;
+        Spot panel_front;
+        if (gun_shape && next_link < 250) {
+            // Spots: the middle of a straight wall piece of the room's north
+            // wall (PANELNS) or west wall (PANELEW), the faces the camera
+            // sees, with the room walkable 3 cells deep in front of it, and
+            // nothing else hanging or standing there.
+            auto floor_cell = [](std::int32_t v) { return v >= 0 ? v / kCell : -((-v + kCell - 1) / kCell); };
+            auto inside = [&](int row, int col) {
+                return row >= 0 && col >= 0 && row < piece.rows && col < piece.cols &&
+                       piece.outline[static_cast<std::size_t>(row * piece.cols + col)];
+            };
+            auto walkable = [&](int row, int col) {
+                return piece.cell(piece.x0 + col * kCell, piece.y0 + row * kCell);
+            };
+            std::vector<std::pair<LevelItem, Spot>> spots;
+            for (const LevelItem& w : piece.items) {
+                const ShapeInfo* s = w.shape < data.shapes.size() ? &data.shapes[w.shape] : nullptr;
+                int axis = 0, length = 0;
+                if (!s || !wall_kind(*s, axis, length) || s->footpad_z * 8 < 64 || w.z < piece.z - 8 ||
+                    w.z > piece.z + 8 || in_cut(w) || in_opening(w)) {
+                    continue;
+                }
+                const bool along_x = axis == kAlongX;
+                const int c1 = floor_cell(w.x - piece.x0), r1 = floor_cell(w.y - piece.y0);
+                const int c0 = c1 - s->footpad_x + 1, r0 = r1 - s->footpad_y + 1;
+                const int mid = along_x ? (c0 + c1 + 1) / 2 : (r0 + r1 + 1) / 2;  // the panel: cells mid - 1, mid
+                bool clear = true;
+                for (int t = mid - 1; t <= mid && clear; ++t) {
+                    // The wall's cell out of the room, the room south (east) of it.
+                    clear = along_x ? !inside(r1, t) : !inside(t, c1);
+                    for (int d = 1; d <= 3 && clear; ++d) clear = along_x ? walkable(r1 + d, t) : walkable(t, c1 + d);
+                }
+                // Seen: a near wall (east of a panel on the north wall, south
+                // of one on the west wall), as high as the room, hides what
+                // stands less than about 112 units behind it at its height:
+                // the room goes on 8 cells past the panel.
+                for (int d = 1; d <= 8 && clear; ++d) clear = along_x ? inside(r1 + 1, mid + d) : inside(mid + d, c1 + 1);
+                if (!clear) continue;
+                const std::int32_t px = along_x ? piece.x0 + (mid + 1) * kCell - 1 : piece.x0 + (c1 + 2) * kCell - 1;
+                const std::int32_t py = along_x ? piece.y0 + (r1 + 2) * kCell - 1 : piece.y0 + (mid + 1) * kCell - 1;
+                const std::int32_t pz = piece.z + 40;
+                LevelItem pn = make_item(along_x ? kShapePanelNS : kShapePanelEW, 0, px, py, pz);
+                const ShapeInfo& ps = data.shapes[pn.shape];
+                const std::int32_t bx0 = px - ps.footpad_x * kCell, by0 = py - ps.footpad_y * kCell;
+                bool free = true;
+                for (const LevelItem& o : piece.items) {
+                    const ShapeInfo* os = o.shape < data.shapes.size() ? &data.shapes[o.shape] : nullptr;
+                    if (!os || &o == &w || o.z + os->footpad_z * 8 <= piece.z + kStepDown) continue;
+                    const std::int32_t ox0 = o.x - std::max(1, int{os->footpad_x}) * kCell;
+                    const std::int32_t oy0 = o.y - std::max(1, int{os->footpad_y}) * kCell;
+                    if (ox0 < px && bx0 < o.x && oy0 < py && by0 < o.y && o.z < pz + ps.footpad_z * 8 &&
+                        pz < o.z + std::max(1, int{os->footpad_z}) * 8) {
+                        free = false;
+                        break;
+                    }
+                }
+                if (!free) continue;
+                const Spot front = along_x ? Spot{px + 8, py + 64, 0} : Spot{px + 64, py + 8, 0};
+                spots.push_back({pn, front});
+            }
+            // Away from the guns (192 units at least) when the room allows it,
+            // as the designers put them: the player crosses their fire.
+            std::vector<std::pair<LevelItem, Spot>> away;
+            for (const auto& sp : spots) {
+                const bool far = std::all_of(piece.items.begin(), piece.items.end(), [&](const LevelItem& g) {
+                    return g.shape != gun_shape || std::abs(g.x - sp.first.x) + std::abs(g.y - sp.first.y) >= 192;
+                });
+                if (far) away.push_back(sp);
+            }
+            if (!away.empty()) spots = std::move(away);
+            if (!spots.empty()) {
+                const auto& [pn, front] = spots[static_cast<std::size_t>(rng.below(static_cast<int>(spots.size())))];
+                panel = pn;
+                panel_front = front;
+                gun_link = static_cast<std::uint8_t>(next_link++);
+            }
+        }
         for (const LevelItem& src : piece.items) {
             if (in_cut(src)) continue;
             LevelItem i = src;
             const std::string cls = name(i.shape);
             if (arrival && (is_camera(i) || i.shape == kShapeAlarmBox)) continue;
-            if (is_camera(i) || (i.shape == kShapeAlarmBox && has_box)) {
+            if (is_wall_gun(cls)) {
+                if (!gun_link || i.shape != gun_shape || !live_gun(i)) continue;
+                i.npc_number = armed_mode(src);
+                i.quality = static_cast<std::uint16_t>((i.quality & 0xFF00) | gun_link);
+                r.turrets.push_back({static_cast<int>(k), {i.x + p.dx, i.y + p.dy, i.z - piece.z}, {}, {}, i.shape,
+                                     gun_link});
+            } else if (is_camera(i) || (i.shape == kShapeAlarmBox && has_box)) {
                 if (!alarm_link[k]) continue;
                 // Quality high as the designers set it: 1 for a camera that
                 // rings a box, else 0 (TRIGGER reads it; with a camera's own,
@@ -796,6 +927,22 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
             }
             i.next = 0;
             level.items.push_back(i);
+        }
+        if (gun_link) {
+            // The panel: TRIGGER equips the guns of its link with its
+            // quality high, mode 6 (off), every time it is used.
+            set_trigger_target(panel, gun_shape);
+            panel.map_number = static_cast<std::uint8_t>((panel.map_number & 0xE0) | kTriggerEquip);
+            panel.quality = static_cast<std::uint16_t>(6 << 8 | gun_link);
+            panel.x += p.dx;
+            panel.y += p.dy;
+            panel.z -= piece.z;
+            panel_front.x += p.dx;
+            panel_front.y += p.dy;
+            level.items.push_back(panel);
+            for (Turret& t : r.turrets) {
+                if (t.link == gun_link) t.panel = {panel.x, panel.y, panel.z}, t.front = panel_front;
+            }
         }
         // The room closed: along its border, every cell outside it that
         // nothing solid stands on (an opening to a room left behind, a side
@@ -1444,7 +1591,7 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
         }
     }
 
-    char note[320];
+    char note[480];
     std::string sources;
     for (int m : look_alike_maps(data, options.source_map)) sources += (sources.empty() ? "" : " ") + std::to_string(m);
     std::snprintf(note, sizeof note,
@@ -1463,9 +1610,12 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
         const Rect b = placed[k].box();
         const int called = static_cast<int>(std::count_if(r.reinforcements.begin(), r.reinforcements.end(),
                                                           [&](const Guard& g) { return g.room == static_cast<int>(k); }));
-        std::snprintf(note, sizeof note, "  %d %-22s at (%d..%d, %d..%d): %s, %d guard(s)%s%s", static_cast<int>(k),
+        const int armed = static_cast<int>(std::count_if(r.turrets.begin(), r.turrets.end(),
+                                                         [&](const Turret& t) { return t.room == static_cast<int>(k); }));
+        std::snprintf(note, sizeof note, "  %d %-22s at (%d..%d, %d..%d): %s, %d guard(s)%s%s%s", static_cast<int>(k),
                       purpose_name(steps[k].purpose), b.x0, b.x1, b.y0, b.y1, placed[k].piece->describe().c_str(),
                       guards - called, called ? (", camera calling " + std::to_string(called)).c_str() : "",
+                      armed ? (", " + std::to_string(armed) + " gun(s) armed, a panel").c_str() : "",
                       steps[k].locked ? ", behind a card door" : "");
         r.notes.push_back(note);
     }
