@@ -104,6 +104,13 @@ crusader-no-remorse data --mod mods/mission-1 --map <map printed>
 | 5 | climax | the largest, most guarded | 6; 4 |
 | 6 | extraction | a small dead end: the exit teleporter | none |
 
+The seed draws the plan (`mission_steps`, from its high bits so that the layout's attempts keep it; the plan's name in the level's notes): the demo above one time in two, else one of:
+
+- **two cards**: arrival, contact, the first card in a room off it, transit, the first card door, behind it the second card's room (guarded) and the second card door, the climax behind it, extraction (8 rooms, 2 locks);
+- **crossing**: arrival, a quiet transit, contact, the card in a dead end half-way, a second and harder contact, the card door, climax, extraction (8 rooms).
+
+A locked step names the step whose room holds its card (`MissionStep::key`; else the first key room).
+
 - The rooms of a level come from the source map (`--source`) and from the mission maps (1 to 63) that look like it: those whose floors and walls are shared with it for three quarters at least, four at most, the closest first (`look_alike_maps`; for map 1: maps 60, 6, 5, 2). Those of their upper storeys are brought down to z 0. A room found again on a variant of its map (map 60 repeats map 1) is taken once.
 - Only **rooms**, not fragments of a larger space: walking out from each border cell up to 96 units must meet a wall (64 high or more), a door or another room past something (another room right against the border is one space that the cutting parted: open) for four fifths of the border at least (furniture within the room does not count: the room is met again past it), and railings (lower than 64) may close a tenth of it at most (a balcony, a catwalk over a pit). Of the 59 rooms of map 1, 34 pass.
 - Each step takes, among the rooms that have the openings it needs (96 to 224 units wide, or a door that can be cut: a door fits in) and are big enough for it (bounding box of 512 x 512 at least; key room 384 x 512, locked room 20 and climax 30 squares of 128, extraction 384 x 384), one that suits its purpose, furnished (4 items with a height that are neither walls, doors nor what hangs on the walls per 512 x 512 at least: below, a bare hall; 8 for the key room, an office and not a bare corridor): a score from the furniture's density, the tags (each counted up to 5), the size and the guard posts, plus chance (up to half the best score), so that seeds give other levels; the best 8 are tried in turn.

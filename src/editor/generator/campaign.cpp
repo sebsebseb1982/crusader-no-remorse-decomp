@@ -128,7 +128,7 @@ std::vector<GeneratedLevel> regenerate_levels(Project& project, const GameData& 
             mo.source_map = l.source_map;
             mo.map = l.map;
             mo.next_map = l.next_map;
-            GeneratedLevel g{l.map, generate_mission(data, demo_mission(), mo), l};
+            GeneratedLevel g{l.map, generate_mission(data, mission_steps(mo.seed, &mo.plan), mo), l};
             if (g.result.rooms.empty()) {
                 error = "seed " + std::to_string(l.seed) + ": " + (g.result.notes.empty() ? "no mission" : g.result.notes.front());
                 return {};
@@ -165,7 +165,7 @@ std::vector<GeneratedLevel> generate_mission_levels(Project& project, const Game
     o.source_map = source_map;
     o.map = map;
     o.next_map = map;
-    GeneratedLevel g{map, generate_mission(data, demo_mission(), o), {}};
+    GeneratedLevel g{map, generate_mission(data, mission_steps(o.seed, &o.plan), o), {}};
     g.entry.map = map;
     g.entry.seed = seed;
     g.entry.source_map = source_map;

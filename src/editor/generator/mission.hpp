@@ -43,6 +43,7 @@ struct MissionStep {
     int max_guards = 0;   // of the room's own guard posts
     int alt_parent = -1;  // another step it may open from, when the layout fails from `parent`
     int min_guards = 0;   // guards added when the room's own posts are fewer
+    int key = -1;         // a locked step: the step whose room holds its card (-1: the first key room)
 };
 
 // The source map and the maps that look like it (floors and walls shared
@@ -54,12 +55,19 @@ std::vector<int> look_alike_maps(const GameData& data, int source_map);
 // control room, machines, the climax, extraction.
 std::vector<MissionStep> demo_mission();
 
+// The plan of the mission of a seed, among a few (the demo; two cards, the
+// second behind the first door and the climax behind the second; a longer
+// crossing, its key in a dead end half-way). `name`, when given, receives
+// the plan's name.
+std::vector<MissionStep> mission_steps(std::uint32_t seed, std::string* name = nullptr);
+
 struct MissionOptions {
     std::uint32_t seed = 1;
     int source_map = 1;  // the original map the rooms come from
     int map = 0, next_map = 0;
     std::uint8_t next_egg = 0x1E;
     int first_card = 1;
+    std::string plan;  // the plan's name, for the notes
 };
 
 // The level of `steps`, with its rooms from the source map. The Result's

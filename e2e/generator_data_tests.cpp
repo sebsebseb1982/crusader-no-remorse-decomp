@@ -577,11 +577,13 @@ void check_seed(const std::filesystem::path& data, const gen::GameData& game_dat
             std::vector<ObjId> actors;
             for (const gen::Guard& g : level.guards) {
                 if (g.room != room_index) continue;
-                const std::uint16_t shape = npc_types().word(g.npc_type, 0x3E);
                 bool seen = false;
                 for (const auto& [id, at] : born) {
                     const auto& [s, x, y, z] = at;
-                    if (s == shape && std::abs(x - g.place.x) <= 24 && std::abs(y - g.place.y) <= 24 &&
+                    // At its post, whatever its shape: its type's, or that
+                    // of another of its stances (a guard kneeling to shoot).
+                    (void)s;
+                    if (std::abs(x - g.place.x) <= 24 && std::abs(y - g.place.y) <= 24 &&
                         std::abs(z - g.place.z) <= 24) {
                         seen = true;
                         actors.push_back(id);

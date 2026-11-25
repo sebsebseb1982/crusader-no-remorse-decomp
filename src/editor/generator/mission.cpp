@@ -236,7 +236,7 @@ std::vector<int> look_alike_maps(const GameData& data, int source_map) {
 const char* purpose_name(Purpose p) {
     switch (p) {
         case Purpose::kArrival: return "arrival";
-        case Purpose::kContact: return "first contact";
+        case Purpose::kContact: return "contact";
         case Purpose::kKeyRoom: return "key room";
         case Purpose::kLocked: return "behind the locked door";
         case Purpose::kTransit: return "transit";
@@ -257,6 +257,52 @@ std::vector<MissionStep> demo_mission() {
         {Purpose::kClimax, 4, false, 6, -1, 4},
         {Purpose::kExtraction, 5, false, 0, -1, 0},
     };
+}
+
+std::vector<MissionStep> mission_steps(std::uint32_t seed, std::string* name) {
+    // The plan from the seed's own bits, not its low ones: the attempts of a
+    // layout (seed + attempt * 7919) keep the same plan.
+    const std::uint32_t plan = (seed * 2654435761u) >> 30;  // 0 to 3
+    if (plan == 1) {
+        if (name) *name = "two cards";
+        auto step = [](Purpose p, int parent, bool locked, int max_guards, int min_guards, int key = -1) {
+            MissionStep s;
+            s.purpose = p, s.parent = parent, s.locked = locked, s.max_guards = max_guards, s.min_guards = min_guards;
+            s.key = key;
+            return s;
+        };
+        return {
+            step(Purpose::kArrival, -1, false, 0, 0),
+            step(Purpose::kContact, 0, false, 2, 1),
+            step(Purpose::kKeyRoom, 1, false, 1, 1),        // the first card
+            step(Purpose::kTransit, 1, false, 2, 1),
+            step(Purpose::kLocked, 3, true, 3, 2, 2),       // behind the first door
+            step(Purpose::kKeyRoom, 4, false, 2, 1),        // the second card, guarded
+            step(Purpose::kClimax, 4, true, 6, 4, 5),       // behind the second door
+            step(Purpose::kExtraction, 6, false, 0, 0),
+        };
+    }
+    if (plan == 2) {
+        if (name) *name = "crossing";
+        auto step = [](Purpose p, int parent, bool locked, int max_guards, int min_guards, int key = -1) {
+            MissionStep s;
+            s.purpose = p, s.parent = parent, s.locked = locked, s.max_guards = max_guards, s.min_guards = min_guards;
+            s.key = key;
+            return s;
+        };
+        return {
+            step(Purpose::kArrival, -1, false, 0, 0),
+            step(Purpose::kTransit, 0, false, 1, 0),        // a quiet way in
+            step(Purpose::kContact, 1, false, 2, 1),
+            step(Purpose::kKeyRoom, 2, false, 1, 1),        // the card, in a dead end half-way
+            step(Purpose::kContact, 2, false, 3, 2),        // a second, harder fight
+            step(Purpose::kLocked, 4, true, 3, 2, 3),
+            step(Purpose::kClimax, 5, false, 6, 4),
+            step(Purpose::kExtraction, 6, false, 0, 0),
+        };
+    }
+    if (name) *name = "demo";
+    return demo_mission();
 }
 
 namespace {
@@ -960,8 +1006,10 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
             reader.map_number = static_cast<std::uint8_t>(reader.map_number | kTriggerOff);
             reader.quality = static_cast<std::uint16_t>(3 << 8 | lock.number);
             level.items.push_back(reader);
-            // Its key: the card in the key room (the first one in the steps).
-            for (std::size_t q = 0; q < n; ++q) {
+            // Its key: the card in its step's key room, else in the first one.
+            lock.key_room = -1;
+            if (step.key >= 0) lock.key_room = step.key;
+            for (std::size_t q = 0; q < n && lock.key_room < 0; ++q) {
                 if (steps[q].purpose == Purpose::kKeyRoom) lock.key_room = static_cast<int>(q);
             }
             lock.key_shape = kShapeKeycard;
@@ -1323,9 +1371,9 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
     std::string sources;
     for (int m : look_alike_maps(data, options.source_map)) sources += (sources.empty() ? "" : " ") + std::to_string(m);
     std::snprintf(note, sizeof note,
-                  "mission (seed %u) from map %d (rooms of maps %s): %zu rooms, %zu locks, %zu items (%d left behind: "
+                  "mission%s%s (seed %u) from map %d (rooms of maps %s): %zu rooms, %zu locks, %zu items (%d left behind: "
                   "on no floor, on no wall)",
-                  options.seed, options.source_map, sources.c_str(), r.rooms.size(), r.locks.size(),
+                  options.plan.empty() ? "" : " ", options.plan.c_str(), options.seed, options.source_map, sources.c_str(), r.rooms.size(), r.locks.size(),
                   level.record_count(), tidied);
     r.notes.push_back(note);
     r.notes.push_back(mask_note);
