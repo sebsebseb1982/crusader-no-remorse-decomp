@@ -518,17 +518,36 @@ void check_news() {
     check(select_news("{", now, std::nullopt, "en").empty() && select_news("[]", now, std::nullopt, "en").empty(),
           "news: bad JSON");
     news = select_news(json, now, SemVer{1, 79, 0}, "en");
-    check(count_unread(news, 0) == 3 && count_unread(news, news[1].date) == 1 && count_unread(news, news[0].date) == 0,
-          "news: unread");
-    // Config: asked until answered, the last news read.
+    check(count_unread(news, {}) == 3 && count_unread(news, {news[0].date, {}}) == 1 &&
+              count_unread(news, {news[0].date + 1, {}}) == 0,
+          "news: unread, by the old date");
+    check(count_unread(news, {0, {news[0].id}}) == 2 && count_unread(news, {0, {news[0].id, news[2].id}}) == 1,
+          "news: unread, by ids");
+    // Two news of the same day: reading the first leaves the second new.
+    const std::string same_day = R"({"news": [{"date": "2026-11-25", "title": "First"},
+        {"date": "2026-11-25", "title": "Second"}]})";
+    const auto day_one = select_news(same_day, now, std::nullopt, "en");
+    check(day_one.size() == 2 && day_one[0].id != day_one[1].id, "news: ids of two news of the same day");
+    NewsRead read;
+    for (const NewsItem& item : day_one) read.seen.push_back(item.id);
+    check(count_unread(day_one, read) == 0, "news: both read");
+    const auto day_two = select_news(
+        R"({"news": [{"date": "2026-11-25", "title": "First"}, {"date": "2026-11-25", "title": "Second"},
+            {"date": "2026-11-25", "title": "Third"}]})",
+        now, std::nullopt, "en");
+    check(day_two.size() == 3 && count_unread(day_two, read) == 1, "news: a third news of the same day is new");
+    // Config: asked until answered, the news read.
     GameConfig c = GameConfig::parse("irq=7\r\n");
-    check(c.check_updates == -1 && c.news_read == 0, "news: config defaults");
-    check(c.text().find("checkupdates") == std::string::npos && c.text().find("newsread") == std::string::npos,
+    check(c.check_updates == -1 && c.news_read == 0 && c.news_seen.empty(), "news: config defaults");
+    check(c.text().find("checkupdates") == std::string::npos && c.text().find("newsread") == std::string::npos &&
+              c.text().find("newsseen") == std::string::npos,
           "news: nothing written before an answer");
     c.check_updates = 1;
     c.news_read = 1795629600;
+    c.news_seen = {0x0123abcdu, 0xffffffffu};
     const GameConfig back = GameConfig::parse(c.text());
-    check(back.check_updates == 1 && back.news_read == 1795629600, "news: config written and read");
+    check(back.check_updates == 1 && back.news_read == 1795629600 && back.news_seen == c.news_seen,
+          "news: config written and read");
     check(GameConfig::parse("checkupdates=false\r\n").check_updates == 0, "news: refused");
 }
 

@@ -155,6 +155,14 @@ std::vector<NewsItem> select_news(std::string_view json, std::int64_t now, std::
         }
         NewsItem item;
         item.date = *date;
+        {
+            // FNV-1a of the id, else of the date's text and the title (en).
+            std::string key = entry.string_at("id", "");
+            if (key.empty()) key = entry.string_at("date", "") + "|" + pick_text(entry.get("title"), "en");
+            std::uint32_t h = 2166136261u;
+            for (const char c : key) h = (h ^ static_cast<unsigned char>(c)) * 16777619u;
+            item.id = h;
+        }
         item.title = to_menu_text(pick_text(entry.get("title"), language));
         item.body = to_menu_text(pick_text(entry.get("body"), language));
         if (item.title.empty()) continue;
@@ -165,8 +173,13 @@ std::vector<NewsItem> select_news(std::string_view json, std::int64_t now, std::
 }
 
 // @orig none: port's online news
-int count_unread(const std::vector<NewsItem>& news, std::int64_t read) {
-    return static_cast<int>(std::count_if(news.begin(), news.end(), [&](const NewsItem& n) { return n.date > read; }));
+bool NewsRead::has(const NewsItem& item) const {
+    return item.date < before || std::find(seen.begin(), seen.end(), item.id) != seen.end();
+}
+
+// @orig none: port's online news
+int count_unread(const std::vector<NewsItem>& news, const NewsRead& read) {
+    return static_cast<int>(std::count_if(news.begin(), news.end(), [&](const NewsItem& n) { return !read.has(n); }));
 }
 
 // @orig none: port's online news

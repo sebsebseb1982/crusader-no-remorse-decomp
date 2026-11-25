@@ -14,7 +14,7 @@
 //
 // NewsScreen: the news, newest first, in a window as large as the
 // enhancements one: for each, its day (DD.MM.YYYY) with a red "NEW" after it
-// when it is dated after the last news read, its title in green, its text in
+// when it is not read yet, its title in green, its text in
 // dim green, wrapped to the window. Up / down scroll a line, left / right a
 // page, Enter and Escape close, as does a press on "BACK"; presses on the
 // arrows shown at the top and bottom of the text when it does not fit scroll
@@ -42,10 +42,10 @@ public:
     virtual std::string new_version() const = 0;
     // Opens the page of that release in the browser.
     virtual void open_release() = 0;
-    // The news to show, newest first (select_news), and the date of the last
-    // one read; mark_news_read() moves it to the newest.
+    // The news to show, newest first (select_news), and which are read;
+    // mark_news_read() reads them all.
     virtual const std::vector<NewsItem>& news() const = 0;
-    virtual std::int64_t news_read() const = 0;
+    virtual NewsRead news_read() const = 0;
     virtual void mark_news_read() = 0;
 };
 
@@ -87,8 +87,8 @@ public:
         int x0 = 0, y0 = 0, x1 = 0, y1 = 0;  // inclusive
         bool contains(int x, int y) const { return x >= x0 && x <= x1 && y >= y0 && y <= y1; }
     };
-    // `read`: the date of the last news read, the newer ones are marked new.
-    NewsScreen(const FontSet& fonts, const std::vector<NewsItem>& news, std::int64_t read);
+    // `read`: the news not read are marked new.
+    NewsScreen(const FontSet& fonts, const std::vector<NewsItem>& news, const NewsRead& read);
 
     void draw(Surface8& screen) const;
     void key(std::uint16_t code);

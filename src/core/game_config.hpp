@@ -134,10 +134,15 @@ public:
     // online for a newer version of the port and for its news (news.hpp).
     // -1 (no key) asks the player on the main menu, then 1 or 0.
     int check_updates = -1;
-    // Port addition, written when not 0: "newsread", the date of the last
-    // news the player saw (UTC seconds); the newer ones are counted on the
-    // main menu's news button.
+    // Port addition, written when not 0: "newsread", the old way to tell the
+    // news read, the date of the newest one (UTC seconds); the ones before it
+    // are read. Not written any more by the game: it hid a second news of the
+    // same day.
     std::int64_t news_read = 0;
+    // Port addition, written when not empty: "newsseen", the ids (hex, comma
+    // separated) of the news the player saw (news.hpp); the others are
+    // counted on the main menu's news button. The last 64 are kept.
+    std::vector<std::uint32_t> news_seen;
     // Port addition, written when changed: controller rumble and its strength
     // (0..100 percent).
     bool vibration = true;

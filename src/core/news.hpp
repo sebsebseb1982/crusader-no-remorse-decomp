@@ -25,8 +25,10 @@
 // picked in the language asked for, else English, else the first one given;
 // title and body may also be plain strings. The newest comes first.
 //
-// The player's last news read is a date (GameConfig::news_read): the news
-// after it are new, counted on the main menu's news button.
+// The ids of the news the player has read are kept (GameConfig::news_seen):
+// the others are new, counted on the main menu's news button. An optional
+// "id" in a news ("id": "no-limit") keeps its identity when its title is
+// reworded.
 
 #include <cstdint>
 #include <optional>
@@ -67,16 +69,26 @@ std::optional<ReleaseInfo> parse_latest_release(std::string_view json);
 
 struct NewsItem {
     std::int64_t date = 0;  // UTC seconds
+    std::uint32_t id = 0;   // stable: from the "id" text, else the date's text and the title (en)
     std::string title;      // as the menus print it (to_menu_text)
     std::string body;       // the same, '\n' between paragraphs
+};
+// What the player has read. A news is read when its id is in `seen` (the ids
+// kept in the config), or when it is dated before `before` (the old
+// "newsread" of the config, a date: two news of the same day were not told
+// apart, the second one was never shown as new).
+struct NewsRead {
+    std::int64_t before = 0;
+    std::vector<std::uint32_t> seen;
+    bool has(const NewsItem& item) const;
 };
 // The news of news.json to show at `now` (UTC seconds) to `version` (none
 // for a build that is not a release), in `language` ("fr", "en", "de"...),
 // newest first. Malformed entries are skipped; malformed JSON gives none.
 std::vector<NewsItem> select_news(std::string_view json, std::int64_t now, std::optional<SemVer> version,
                                   std::string_view language);
-// How many of `news` are dated after `read` (the last news read).
-int count_unread(const std::vector<NewsItem>& news, std::int64_t read);
+// How many of `news` are not read.
+int count_unread(const std::vector<NewsItem>& news, const NewsRead& read);
 
 // UTF-8 text as the menu fonts print it: capitals of code page 850 without
 // accents ("Été" gives "ETE"), the characters they lack as '?'.

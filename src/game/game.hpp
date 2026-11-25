@@ -504,7 +504,7 @@ private:
         std::string new_version() const override;
         void open_release() override;
         const std::vector<NewsItem>& news() const override;
-        std::int64_t news_read() const override;
+        NewsRead news_read() const override;
         void mark_news_read() override;
 
     private:

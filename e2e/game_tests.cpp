@@ -1223,6 +1223,7 @@ void test_online_menu(const std::filesystem::path& data) {
     Game game(data, test_saves(data));
     game.config().check_updates = -1;  // the user's CRUSADER.CFG may hold an answer
     game.config().news_read = 0;
+    game.config().news_seen.clear();
     game.set_port_version("v1.77.0");
     const auto utc = [](std::int64_t t) {
         const std::time_t tt = static_cast<std::time_t>(t);
@@ -1306,7 +1307,7 @@ void test_online_menu(const std::filesystem::path& data) {
     const NewsScreen* news = m->news_screen();
     CHECK(news && !news->lines().empty() && news->lines()[0].unread && news->lines()[1].text == "HIER");
     press(game, 0x01, false, 0x1B);
-    CHECK(!m->news_screen() && game.config().news_read == game.news()[0].date && reds() == 0);
+    CHECK(!m->news_screen() && game.config().news_seen.size() == 2 && reds() == 0);
     // Keys: it is selected; down to "options", up back, Enter opens it.
     CHECK(m->selected() == MainMenu::kNews);
     press(game, 0x50, true);

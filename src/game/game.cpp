@@ -1317,12 +1317,20 @@ const std::vector<NewsItem>& Game::OnlineMenu::news() const {
 }
 
 // @orig none: port's online news
-std::int64_t Game::OnlineMenu::news_read() const { return game_->config_.news_read; }
+NewsRead Game::OnlineMenu::news_read() const { return {game_->config_.news_read, game_->config_.news_seen}; }
 
 // @orig none: port's online news
 void Game::OnlineMenu::mark_news_read() {
-    if (game_->news_.empty() || game_->news_.front().date <= game_->config_.news_read) return;
-    game_->config_.news_read = game_->news_.front().date;
+    auto& seen = game_->config_.news_seen;
+    bool changed = false;
+    for (const NewsItem& item : game_->news_) {
+        if (std::find(seen.begin(), seen.end(), item.id) != seen.end()) continue;
+        seen.push_back(item.id);
+        changed = true;
+    }
+    if (!changed) return;
+    constexpr std::size_t kKept = 64;
+    if (seen.size() > kKept) seen.erase(seen.begin(), seen.end() - kKept);
     game_->save_config();
 }
 

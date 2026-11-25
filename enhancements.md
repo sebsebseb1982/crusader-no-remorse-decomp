@@ -762,7 +762,7 @@ Windows uses WinHTTP (part of the system, its proxy settings); Linux loads `libc
 **News**
 - When there are news, a NEWS button (French: NOUVEAUTES) in the black band above the menu's background, on the right. Up from OPTIONS reaches it, down goes back; Enter or a click opens it.
 - A red disc with the count of the news not read yet (9+ above nine) sits on its top right corner.
-- The news screen lists them newest first: the day (DD.MM.YYYY) with a red NEW / NOUVEAU when not read yet, the title in green, the text in dark green, wrapped. Up/down scroll a line, left/right a page (the arrows shown when the text does not fit scroll a page too); Enter, Escape or BACK close it. Closing it marks them read: the date of the newest is kept in `CRUSADER.CFG` (`newsread`).
+- The news screen lists them newest first: the day (DD.MM.YYYY) with a red NEW / NOUVEAU when not read yet, the title in green, the text in dark green, wrapped. Up/down scroll a line, left/right a page (the arrows shown when the text does not fit scroll a page too); Enter, Escape or BACK close it. Closing it marks them read: their ids (from the optional `id` of a news in `news.json`, else a hash of its date and English title) are kept in `CRUSADER.CFG` (`newsseen`), so a second news published the same day as a read one is still new.
 - The texts are shown in capitals without accents, like the port's other screens.
 
 **Writing news** (`news.json`, UTF-8):
@@ -881,7 +881,8 @@ The original reads much of its data from the CD and needs it in the drive. The p
 | `ambientlight` | 85, clamped to 0..100 | ≠ 85 |
 | `language` | empty (AUTO) | a language folder is picked: its id (`fr`, `en`, `pt-br`...) |
 | `checkupdates` | none (the main menu asks) | answered: `true` or `false` (section 12c) |
-| `newsread` | 0 | the news are read: the date of the newest, in UTC seconds |
+| `newsseen` | empty | the ids of the news read (hex, comma separated, the last 64) |
+| `newsread` | 0 | old way, no longer written: the news dated before it are read (UTC seconds) |
 | `viewzoom` | 0 (auto), 1..4 with decimals (`1.5`) | ≠ 0 |
 | `padmap` | see section 2.4 | controller config ≠ default. 24 comma-separated action numbers; `-1` = default role; values clamped |
 | `padaim` | 3, clamped to 1..5 | same |

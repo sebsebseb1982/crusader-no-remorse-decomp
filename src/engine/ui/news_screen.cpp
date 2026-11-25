@@ -145,12 +145,12 @@ void UpdatesQuestion::mouse_down(int x, int y) {
 // --- NewsScreen
 
 // @orig none: port's online news
-NewsScreen::NewsScreen(const FontSet& fonts, const std::vector<NewsItem>& news, std::int64_t read) : fonts_(&fonts) {
+NewsScreen::NewsScreen(const FontSet& fonts, const std::vector<NewsItem>& news, const NewsRead& read) : fonts_(&fonts) {
     const int width = kTextX1 - kTextX0 + 1;
     for (std::size_t i = 0; i < news.size(); ++i) {
         const NewsItem& item = news[i];
         if (i > 0) lines_.push_back({Line::Kind::kGap, {}, false});
-        lines_.push_back({Line::Kind::kDay, format_day(item.date), item.date > read});
+        lines_.push_back({Line::Kind::kDay, format_day(item.date), !read.has(item)});
         for (std::string& l : wrap(fonts, kFont, item.title, width)) lines_.push_back({Line::Kind::kTitle, std::move(l)});
         if (!item.body.empty()) {
             for (std::string& l : wrap(fonts, kFont, item.body, width)) lines_.push_back({Line::Kind::kBody, std::move(l)});

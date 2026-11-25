@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
@@ -130,6 +131,16 @@ GameConfig GameConfig::parse(std::string_view text) {
         else if (key == "language") c.language = value;
         else if (key == "checkupdates") c.check_updates = value == "false" ? 0 : value == "true" ? 1 : -1;
         else if (key == "newsread") c.news_read = std::max<long long>(std::atoll(std::string(value).c_str()), 0);
+        else if (key == "newsseen") {
+            std::size_t pos = 0;
+            while (pos < value.size()) {
+                std::size_t end = value.find(',', pos);
+                if (end == std::string_view::npos) end = value.size();
+                const std::string id(value.substr(pos, end - pos));
+                if (!id.empty()) c.news_seen.push_back(static_cast<std::uint32_t>(std::strtoul(id.c_str(), nullptr, 16)));
+                pos = end + 1;
+            }
+        }
         else if (key == "fixoriginalbugs") c.fix_original_bugs = value == "true";
         else if (key == "vibration") c.vibration = value != "false";
         else if (key == "vibrationintensity") c.vibration_intensity = std::clamp(number(value), 0, 100);
@@ -217,6 +228,18 @@ std::string GameConfig::text() const {
     else out.erase("checkupdates");
     if (news_read > 0) out.set("newsread", std::to_string(news_read));
     else out.erase("newsread");
+    if (!news_seen.empty()) {
+        std::string ids;
+        char hex[16];
+        for (const std::uint32_t id : news_seen) {
+            std::snprintf(hex, sizeof hex, "%08x", static_cast<unsigned>(id));
+            if (!ids.empty()) ids += ',';
+            ids += hex;
+        }
+        out.set("newsseen", ids);
+    } else {
+        out.erase("newsseen");
+    }
     if (fix_original_bugs) out.set("fixoriginalbugs", "true");
     else out.erase("fixoriginalbugs");
     if (!vibration) out.set("vibration", "false");
