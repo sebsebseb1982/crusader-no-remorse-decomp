@@ -87,6 +87,8 @@ std::string RoomPiece::describe() const {
     if (overhang) s += ", floor past its walls " + std::to_string(overhang);
     if (unfloored) s += ", cells with no floor " + std::to_string(unfloored);
     if (squared) s += ", squared " + std::to_string(squared) + "%";
+    if (cameras) s += ", cameras " + std::to_string(cameras);
+    if (alarm_boxes) s += ", alarm boxes " + std::to_string(alarm_boxes);
     return s;
 }
 
@@ -662,6 +664,9 @@ std::vector<RoomPiece> extract_rooms(const GameData& data, int map, std::int32_t
             if (cd.furniture && !hung && i.z >= z0 - 8) ++room.furniture;
             const int t = tag_of(name(i.shape));
             if (t >= 0) ++room.tags[static_cast<std::size_t>(t)];
+            const std::string cls = name(i.shape);
+            if (starts(cls, "CAMERANS") || starts(cls, "CAMERAEW") || starts(cls, "CAMERACO")) ++room.cameras;
+            if (cls == "ALARMBOX") ++room.alarm_boxes;
         }
         // Doors that can be cut: a straight wall piece, 128 or 256 units long,
         // right along the room's border, with six cells (96 units) of the

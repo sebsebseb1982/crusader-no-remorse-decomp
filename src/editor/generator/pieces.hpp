@@ -75,6 +75,7 @@ struct RoomPiece {
     int overhang = 0;
     int unfloored = 0;  // cells of its outline that no floor of it bears
     int squared = 0;    // share of its outline (in %) added to square it (a rectangle or an L)
+    int cameras = 0, alarm_boxes = 0;  // wall cameras that call TRIGGER (CAMERANS, CAMERAEW, CAMERACO); ALARMBOX
     bool cell(std::int32_t x, std::int32_t y) const;  // a walkable cell of the room at (x, y)
     std::string describe() const;
 };

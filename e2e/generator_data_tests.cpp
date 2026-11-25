@@ -350,6 +350,22 @@ void check_seed(const std::filesystem::path& data, const gen::GameData& game_dat
                 }
                 std::fprintf(stderr, "\n");
             }
+            // An alarm rung on the way (a camera's): the doors keep shut until
+            // it is switched off at an alarm box, as the player would.
+            if (w.state.alert_active) {
+                ObjId box = 0;
+                w.for_each([&](const Item& i) {
+                    if (!box && i.parent == 0 && i.shape == 0x477) box = i.id;
+                });
+                CHECK(box != 0);
+                if (const Item* bi = w.get(box)) {
+                    w.teleport(1, bi->x + 48, bi->y + 48, 0, w.current_map());
+                    run_frames(*game, 30);
+                    use_item(w, box);
+                    run_frames(*game, 60);
+                }
+                CHECK(!w.state.alert_active);
+            }
             // Using the key.
             const ObjId key = find(lock.key_shape, lock.key);
             CHECK(key != 0);
@@ -730,6 +746,23 @@ void check_seed(const std::filesystem::path& data, const gen::GameData& game_dat
                 }
             }
             for (const gen::Guard* g : calls) came += called_near(*g, &there);
+            // A room's alarm box, on the cameras' link: the camera rang it.
+            ObjId box = 0;
+            w.for_each([&](const Item& i) {
+                if (i.parent == 0 && i.shape == 0x477 && (i.quality & 0xFF) == calls.front()->link) box = i.id;
+            });
+            if (box) {
+                std::printf("  room %d: the alarm is %s\n", room_index, w.state.alert_active ? "on" : "OFF");
+                CHECK(w.state.alert_active);
+                // The player switches it off at the box.
+                const Item* bi = w.get(box);
+                if (bi) w.teleport(1, bi->x + 48, bi->y + 48, in.z, w.current_map());
+                run_frames(*game, 30);
+                use_item(w, box);
+                run_frames(*game, 60);
+                std::printf("  room %d: used, the alarm is %s\n", room_index, w.state.alert_active ? "STILL ON" : "off");
+                CHECK(!w.state.alert_active);
+            }
             std::printf("  room %d: camera(s) %zu, %d guard(s) of %zu called\n", room_index, cameras.size(), came,
                         calls.size());
             CHECK(came == static_cast<int>(calls.size()));

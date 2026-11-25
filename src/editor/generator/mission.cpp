@@ -29,6 +29,7 @@ constexpr std::uint16_t kShapeTelepad = 0x1DB;
 constexpr std::uint8_t kDoorEggType = 0x0A, kDoorEggZone = 0x44, kExitZone = 0x22;
 constexpr std::uint8_t kTriggerOff = 7;
 constexpr std::uint8_t kTriggerEquip = 6;  // map number bits: action 2 (equip), bit 2
+constexpr std::uint16_t kShapeAlarmBox = 0x477;
 constexpr int kFirstLink = 32;
 
 bool is_door_shape(std::uint16_t s) {
@@ -729,20 +730,35 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
         }
         std::map<std::uint8_t, std::uint8_t> door_relink;
         for (std::uint8_t l : door_links) door_relink[l] = static_cast<std::uint8_t>(next_link++);
+        auto is_camera = [&](const LevelItem& i) {
+            const std::string cls = name(i.shape);
+            return starts(cls, "CAMERANS") || starts(cls, "CAMERAEW") || starts(cls, "CAMERACO");
+        };
+        // The room's alarm, when it has a camera: the camera equips the
+        // room's alarm box (the alert: the map's alarm lights and sound; the
+        // player can switch it off at the box), which equips the guards'
+        // places; with no box, the camera equips them itself. One link.
+        // (Not where the player comes in: the alarm would ring at once, the
+        // doors shut before the first step.)
+        const bool arrival = step.purpose == Purpose::kArrival;
+        const bool has_camera = !arrival && std::any_of(piece.items.begin(), piece.items.end(), is_camera);
+        const bool has_box = has_camera && std::any_of(piece.items.begin(), piece.items.end(), [&](const LevelItem& i) {
+                                 return i.shape == kShapeAlarmBox && !in_cut(i);
+                             });
+        if (has_camera && next_link < 250) alarm_link[k] = static_cast<std::uint8_t>(next_link++);
         for (const LevelItem& src : piece.items) {
             if (in_cut(src)) continue;
             LevelItem i = src;
             const std::string cls = name(i.shape);
-            const bool camera = starts(cls, "CAMERANS") || starts(cls, "CAMERAEW") || starts(cls, "CAMERACO");
-            if (camera) {
-                // A camera of the room's walls: on seeing the player, it calls
-                // the room's reinforcements (TRIGGER on their MONSTER places:
-                // equip, which brings the NPC in), whatever it called on its map.
-                if (!alarm_link[k] && next_link < 250) alarm_link[k] = static_cast<std::uint8_t>(next_link++);
+            if (arrival && (is_camera(i) || i.shape == kShapeAlarmBox)) continue;
+            if (is_camera(i) || (i.shape == kShapeAlarmBox && has_box)) {
                 if (!alarm_link[k]) continue;
-                // (Quality high 0: TRIGGER reads it, a camera's own may hold it back.)
-                i.quality = alarm_link[k];
-                set_trigger_target(i, kShapeMonster);
+                // Quality high as the designers set it: 1 for a camera that
+                // rings a box, else 0 (TRIGGER reads it; with a camera's own,
+                // 0x65 on one of map 1, it never acted).
+                const bool calls_box = is_camera(i) && has_box;
+                i.quality = static_cast<std::uint16_t>((calls_box ? 1 << 8 : 0) | alarm_link[k]);
+                set_trigger_target(i, calls_box ? kShapeAlarmBox : kShapeMonster);
                 i.map_number = static_cast<std::uint8_t>((i.map_number & 0xE0) | kTriggerEquip);
             } else if (i.shape == kShapeMonster) {
                 // A kind goes with a kept place of its link within 64 units.
@@ -1122,7 +1138,9 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
                                                   [&](const Guard& g) { return g.room == static_cast<int>(k); }));
         // A room with a camera: two guards it calls (the second from
         // difficulty 2), waiting off the map until it sees the player.
-        const int calls = alarm_link[k] ? 2 : 0;
+        // (None in a quiet step, the arrival or the way out: its camera
+        // only rings the alarm.)
+        const int calls = alarm_link[k] && steps[k].max_guards > 0 ? 2 : 0;
         if (have >= steps[k].min_guards && !calls) continue;
         const Spot in = k == 0 ? r.start : entry(r, static_cast<int>(k));
         std::vector<Spot> taken_spots{in, r.start, {r.exit.x + 56, r.exit.y + 56, 0}};
