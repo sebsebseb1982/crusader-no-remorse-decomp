@@ -20,7 +20,7 @@ Done: missions 1 to 15, on maps 1, 3, 5, 7, 10, 11, 13, 15, 17, 19, 21, 23, 25, 
 ]}
 ```
 
-- Coordinates are world units (x, y) and z units (z, the bulb: 22 under the ceiling, the walls' top).
+- Coordinates are world units (x, y) and z units (z, the bulb: 64 over the walls' top, 160 in most rooms, twice the Silencer's height: a bulb just over a head makes its shadow a blot many times its width, one under it an endless shadow).
 - `kind`: a kind of `kinds.json`: `warm` (offices, quarters), `neon` (machine rooms, labs, corridors), `sodium` (stores), `dim`, `red`, or one added there; a light can override it (5th value), and its radius (4th, lighting-space units, 0 the kind's). An unknown kind is `warm`.
 - The game reads only `rooms[].kind` and `rooms[].lights`; the rest describes the room for the tools.
 - `skip`: why a room has none: `small` (closets, recesses, door sills), `liquid` (a radioactive pool lights it), `outside`, `roof` (nothing stands above it), `hidden` (its floor is not seen: black slabs hide it).
@@ -42,7 +42,7 @@ tools/lights/shoot_rooms.py ceiling_lights/map001.json lights/mission01 --labels
 tools/lights/plan_map.py ceiling_lights/map001.json plan.json.lab.npy lights/mission01/plan.png
 ```
 
-How `plan_rooms.py` finds the rooms: flat tiles, land or solid and not black, make the floor (on a 32-unit grid; where they lie over one another, the highest: the upper rooms; `--floor lowest` for No Regret, whose machinery roof lies over everything round the rooms), what stands 40 z units or more and doors bound it; black floors and black slabs (shape 538 at the ceiling), and the floors that any slab higher up hides as seen, are the void; a stretch of floor with nothing standing above it is a roof. Each stretch of floor is cut where it narrows under 7 cells (224 units): the narrow parts long enough are corridors, the others join the room they open on most. Lights hang 22 z units under the ceiling on a grid 1152 units apart (1280 in the large halls: few strong lamps, so that one lamp lights most of its stretch of floor and the shadows stay dark), at least 160 units from the walls, clear of what stands under them, none within 640 units of a radioactive pool.
+How `plan_rooms.py` finds the rooms: flat tiles, land or solid and not black, make the floor (on a 32-unit grid; where they lie over one another, the highest: the upper rooms; `--floor lowest` for No Regret, whose machinery roof lies over everything round the rooms), what stands 40 z units or more and doors bound it; black floors and black slabs (shape 538 at the ceiling), and the floors that any slab higher up hides as seen, are the void; a stretch of floor with nothing standing above it is a roof. Each stretch of floor is cut where it narrows under 7 cells (224 units): the narrow parts long enough are corridors, the others join the room they open on most. Lights hang 64 z units over the walls' top on a grid 1152 units apart (1280 in the large halls: few strong lamps, so that one lamp lights most of its stretch of floor and the shadows stay dark), at least 160 units from the walls, clear of what stands under them, none within 640 units of a radioactive pool.
 
 The skill `.claude/skills/ceiling-lights/SKILL.md` walks Claude Code through a new map (`/ceiling-lights`).
 

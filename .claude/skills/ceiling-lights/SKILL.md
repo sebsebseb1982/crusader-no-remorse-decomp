@@ -50,7 +50,7 @@ Look at the top view and every sheet (Read the PNGs); open a full screenshot whe
 
 - **Not rooms**: roofs, the void round the buildings, outdoor ground, a lift shaft. Set `"lights": []` and a `"skip"` (`roof`, `outside`) or a `"note"`.
 - **Rooms that need none**: closets, recesses, a room a liquid already lights (green glow), a room dark on purpose. Same: empty `lights`, a `skip` or `note`. The user wants no lamp in closets nor in rooms lit by a radioactive / toxic pool.
-- **Lamps**: away from walls (the planner keeps 160 units), not over a hidden floor, spaced about 1150 units (1280 in halls). Few strong lamps give dark, readable shadows; do not add lamps to "fill": the user asked for fewer, stronger ones. Move a lamp by editing `[x, y, z]` (world units; z in z units, 22 under the ceiling: `floor_z + ceiling - 22`).
+- **Lamps**: away from walls (the planner keeps 160 units), not over a hidden floor, spaced about 1150 units (1280 in halls). Few strong lamps give dark, readable shadows; do not add lamps to "fill": the user asked for fewer, stronger ones. Move a lamp by editing `[x, y, z]` (world units; z in z units, 64 over the walls' top: `floor_z + ceiling + 64`, 160 in most rooms, twice the Silencer's 80: a lamp just over a head blows its shadow up into a blot, one under a head makes it endless).
 - **Kind** per room (`warm` offices and quarters, `neon` machine rooms, labs, corridors, `sodium` stores and docks, `dim`, `red`), and the room's `name` in French (the automatic one is a guess from its contents). A lamp can have its own radius and kind: `[x, y, z, radius, "kind"]`.
 - Merged rooms (a big stretch over a wide opening) are fine when it reads as one space; split by hand only if the screenshot is unreadable.
 

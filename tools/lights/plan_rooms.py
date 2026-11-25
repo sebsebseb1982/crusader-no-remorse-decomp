@@ -361,8 +361,13 @@ def place(mask, x0, y0, fz, ceil, top):
         k += 1
         dist[cur[1:-1, 1:-1]] = k
         cur = cur & np.roll(cur, 1, 0) & np.roll(cur, -1, 0) & np.roll(cur, 1, 1) & np.roll(cur, -1, 1)
-    # Hanging 22 z units under the ceiling (longer shadows than right under it).
-    z = fz + max(48, min(ceil, 120) - 22)
+    # 64 z units over the walls' top (160 over the floor in most rooms, twice
+    # the Silencer's 80): a lamp is a point, the shadow of a head at h under a
+    # lamp at H is H / (H - h) times wider than the head. Under the ceiling
+    # (92, 74) a head right under a lamp threw a blot 8 times its width, a
+    # head higher than the lamp a shadow without end; at 160 a disc round
+    # the feet, a short shadow beside the lamp. The lamp is not drawn.
+    z = fz + max(48, min(ceil, 120)) + 64
     sp = (1280 if mask.sum() > 4000 else LIGHT_SPACING) / R
     nx = max(1, round(w / sp))
     ny = max(1, round(h / sp))
