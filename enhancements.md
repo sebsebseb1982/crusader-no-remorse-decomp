@@ -757,7 +757,7 @@ The original has nothing like it. The port can look online for a newer version o
 - `news.json`, at the root of the repository (branch `master`).
 Windows uses WinHTTP (part of the system, its proxy settings); Linux loads `libcurl` at run time if it is installed, and does nothing otherwise. No network, a timeout (8 s) or an error: nothing is shown.
 
-**Update notice.** When the latest release is newer than the running version, a green line above the version lines: NEW VERSION x.y.z AVAILABLE (French: NOUVELLE VERSION x.y.z DISPONIBLE). Builds that are not releases (`0.0.0-dev`) never show it. Clicking it:
+**Update notice.** When the latest release is newer than the running version, a green line above the version lines: UPDATE TO x.y.z (French: METTRE A JOUR VERS x.y.z). Builds that are not releases (`0.0.0-dev`) never show it. Clicking it:
 
 - on Windows and Linux (x86-64), from the menu of a launch (no game running), opens a window: INSTALL / WEB PAGE / LATER (French: INSTALLER / PAGE WEB / PLUS TARD). INSTALL downloads the release's archive with a percentage and a CANCEL button, checks its SHA-256 against the release's `SHA256SUMS`, swaps the files in and restarts the game by itself. A failure says why (download, corrupted download, installation) and nothing is changed.
 - otherwise (a game is running, the folder cannot be written to, the PortMaster build, which is updated through PortMaster), opens the release's page in the browser, as before.

@@ -61,7 +61,7 @@ CLICK: ASSIGN A BUTTON   DEL: CLEAR = CLIC : ASSIGNER UN BOUTON   SUPPR : RETIRE
 SAVED GAME = SAUVEGARDE
 
 # --- main menu (src/engine/ui/main_menu.cpp)
-NEW VERSION %s AVAILABLE = NOUVELLE VERSION %s DISPONIBLE
+UPDATE TO %s = METTRE A JOUR VERS %s
 NEWS = NOUVEAUTES
 
 # --- online news and updates (src/engine/ui/news_screen.cpp)

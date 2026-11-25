@@ -1233,6 +1233,81 @@ void test_credits(const std::filesystem::path& data) {
 // Port addition: "CRUSADER / NO LIMIT" in the menu, between "options" and
 // "credits": the difficulty screen, then a level of the generator played in
 // its own mod folder, with its own saves; "new game" goes back to the game's.
+// The online part of the main menu in every language: the NEWS button holds
+// its word (measured in the language in use), the update line lies above the
+// version lines (438), the update window holds its lines and its buttons, each
+// button its name (the German INSTALLIEREN, ABBRECHEN).
+struct StubOnline : MenuOnline {
+    bool ask() const override { return false; }
+    void answer(bool) override {}
+    std::string new_version() const override { return "1.44.0"; }
+    void open_release() override {}
+    bool can_install() override { return true; }
+    void install() override {}
+    void cancel_install() override {}
+    UpdateStatus install_status() const override { return {}; }
+    void restart() override {}
+    const std::vector<NewsItem>& news() const override { return news_; }
+    NewsRead news_read() const override { return {}; }
+    void mark_news_read() override {}
+    std::vector<NewsItem> news_;
+};
+
+void test_online_texts_fit(const std::filesystem::path& data) {
+    set_languages_dir(CRUSADER_LANGUAGES_DIR);
+    Game game(data, test_saves(data));
+    game.config().check_updates = 1;
+    game.set_port_version("v1.43.0");
+    game.enable_online(
+        [](const std::string& url) -> std::optional<std::string> {
+            if (url == kLatestReleaseUrl) return R"({"tag_name": "v1.44.0", "html_url": "https://example.org/r"})";
+            return R"({"news": [{"date": "2026-11-01T00:00:00Z", "title": "News"}]})";
+        },
+        [](const std::string&) {}, true);
+    game.open_menu();
+    const MainMenu* m = game.menu();
+    CHECK(m && m->has_news());
+    if (!m) return;
+    const FontSet& fonts = game.fonts();
+    // The width of a text in the language in use ("%s": the version).
+    const auto width = [&](const std::string& english) {
+        char text[160];
+        std::snprintf(text, sizeof text, tr(english.c_str()), "1.44.0");
+        return TextWriter(fonts, UpdateDialog::kFont).measure(text).width;
+    };
+    StubOnline online;
+    for (const char* language : {"en", "fr", "de"}) {
+        select_language(language);
+        std::printf("online texts: %s\n", language);
+        const MainMenu::Rect news = m->button(MainMenu::kNews);
+        CHECK(news.x1 - news.x0 + 1 >= width("NEWS") + 30 && news.x0 > 320);
+        const MainMenu::Rect line = m->update_line();
+        CHECK(line.x0 >= 0 && line.x1 < 640 && line.y0 > 380 && line.y1 < 438);
+
+        char title[160];
+        std::snprintf(title, sizeof title, tr("UPDATE TO %s"), "1.44.0");
+        UpdateDialog dialog(fonts, online, title);
+        const int inner = UpdateDialog::kWindowX1 - UpdateDialog::kWindowX0 + 1 - 2 * 12;
+        for (const char* text : {"UPDATE TO %s", "INSTALL IT NOW?", "THE GAME RESTARTS AFTERWARDS", "DOWNLOADING...",
+                                 "RESTARTING...", "INSTALLING...", "UPDATE FAILED", "THE DOWNLOAD FAILED",
+                                 "THE DOWNLOAD IS CORRUPTED", "NO PACKAGE FOR THIS SYSTEM", "THE INSTALLATION FAILED"}) {
+            if (width(text) > inner) std::printf("  too wide: %s\n", tr(text));
+            CHECK(width(text) <= inner);
+        }
+        // The ask step has the most buttons (INSTALL, WEB PAGE, LATER).
+        const int count = static_cast<int>(dialog.buttons().size());
+        CHECK(count == 3);
+        CHECK(dialog.button(0).x0 > UpdateDialog::kWindowX0 + 6 &&
+              dialog.button(count - 1).x1 < UpdateDialog::kWindowX1 - 6);
+        for (int i = 0; i < count; ++i) {
+            const UpdateDialog::Rect r = dialog.button(i);
+            CHECK(r.x1 - r.x0 + 1 >= width(dialog.button_label(dialog.buttons()[static_cast<std::size_t>(i)])) + 20);
+            if (i > 0) CHECK(r.x0 > dialog.button(i - 1).x1);
+        }
+    }
+    select_language("");
+}
+
 // Port addition (GitHub issue #36): the main menu's online question, update
 // notice and news (news_screen.hpp), with a fetch that reads no network.
 void test_online_menu(const std::filesystem::path& data) {
@@ -8360,9 +8435,12 @@ int main(int argc, char** argv) {
     if (argc > 2 && std::string(argv[2]) == "--no-limit") {
         test_credits(data);
         test_no_limit_menu(data);
-    test_online_menu(data);
+        return failures ? 1 : 0;
+    }
+    if (argc > 2 && std::string(argv[2]) == "--online") {
         test_online_menu(data);
         test_self_update_menu(data);
+        test_online_texts_fit(data);
         return failures ? 1 : 0;
     }
     test_load_and_run(data);
@@ -8436,7 +8514,9 @@ int main(int argc, char** argv) {
     test_wall_lasers(data);
     test_end_credits(data);
     test_start_up(data);
+    test_online_menu(data);
     test_self_update_menu(data);
+    test_online_texts_fit(data);
     test_weasel(data);
     test_weasel_native_view(data);
     test_destroyed_clip_leaves_its_slot(data);

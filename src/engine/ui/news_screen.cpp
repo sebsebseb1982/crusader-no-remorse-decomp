@@ -147,7 +147,6 @@ void UpdatesQuestion::mouse_down(int x, int y) {
 
 namespace {
 
-constexpr int kDialogButtonWidth = 132, kDialogButtonGap = 14;
 constexpr int kBarX0 = kAskX0 + 60, kBarX1 = kAskX1 - 60, kBarY0 = kAskLineY - 8, kBarHeight = 18;
 
 }  // namespace
@@ -183,19 +182,27 @@ std::string UpdateDialog::button_label(Action action) const {
 
 // @orig none: port's self-update
 UpdateDialog::Rect UpdateDialog::button(int index) const {
+    const auto width = [&](int i) {
+        const std::string label = button_label(buttons_[static_cast<std::size_t>(i)]);
+        return std::max(kButtonWidth, text_width(*fonts_, kFont, label) + 2 * kButtonPad);
+    };
     const int count = static_cast<int>(buttons_.size());
-    const int total = count * kDialogButtonWidth + (count - 1) * kDialogButtonGap;
-    const int x0 = (kAskX0 + kAskX1 + 1 - total) / 2 + index * (kDialogButtonWidth + kDialogButtonGap);
-    return {x0, kAskButtonY0, x0 + kDialogButtonWidth - 1, kAskButtonY0 + kAskButtonHeight - 1};
+    int total = (count - 1) * kButtonGap, before = index * kButtonGap;
+    for (int i = 0; i < count; ++i) {
+        total += width(i);
+        if (i < index) before += width(i);
+    }
+    const int x0 = (kWindowX0 + kWindowX1 + 1 - total) / 2 + before;
+    return {x0, kAskButtonY0, x0 + width(index) - 1, kAskButtonY0 + kAskButtonHeight - 1};
 }
 
 // @orig none: port's self-update
 void UpdateDialog::draw(Surface8& screen) const {
-    draw_rounded_box(screen, kAskX0, kAskY0, kAskX1, kAskY1, 0, kFrame);
-    draw_rounded_box(screen, kAskX0 + 3, kAskY0 + 3, kAskX1 - 3, kAskY1 - 3, -1, kFrame);
+    draw_rounded_box(screen, kWindowX0, kAskY0, kWindowX1, kAskY1, 0, kFrame);
+    draw_rounded_box(screen, kWindowX0 + 3, kAskY0 + 3, kWindowX1 - 3, kAskY1 - 3, -1, kFrame);
     const auto centred = [&](int y, const std::string& text, std::uint8_t tint) {
-        print_tinted(screen, *fonts_, kFont, (kAskX0 + kAskX1 + 1 - text_width(*fonts_, kFont, text)) / 2, y, text,
-                     tint);
+        print_tinted(screen, *fonts_, kFont, (kWindowX0 + kWindowX1 + 1 - text_width(*fonts_, kFont, text)) / 2, y,
+                     text, tint);
     };
     switch (step_) {
     case Step::kAsk:

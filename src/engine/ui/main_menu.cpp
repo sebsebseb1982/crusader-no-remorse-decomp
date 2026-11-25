@@ -36,10 +36,10 @@ constexpr int kNewsButtonX1 = 597, kNewsButtonY0 = 44, kNewsButtonHeight = 24, k
 constexpr int kBadgeRadius = 10;
 constexpr int kUpdateLineY = 406;  // pen position
 
-// "NEW VERSION x.y.z AVAILABLE", translated.
+// "UPDATE TO x.y.z", translated: an invitation rather than a notice.
 std::string update_text(const std::string& version) {
     char text[160];
-    std::snprintf(text, sizeof text, tr("NEW VERSION %s AVAILABLE"), version.c_str());
+    std::snprintf(text, sizeof text, tr("UPDATE TO %s"), version.c_str());
     return text;
 }
 
@@ -61,12 +61,16 @@ MainMenu::MainMenu(const Resources& res, Shared& shared, bool no_game)
     }
     const int x = kNoLimitCentreX - no_limit_label_.width() / 2;
     no_limit_button_ = {x, kNoLimitTop, x + no_limit_label_.width() - 1, kNoLimitTop + no_limit_label_.height() - 1};
-    if (res_.online && res_.fonts) {
-        const int width = TextWriter(*res_.fonts, kOnlineFont).measure(tr("NEWS")).width + 2 * kNewsButtonPad;
-        news_button_ = {kNewsButtonX1 - width + 1, kNewsButtonY0, kNewsButtonX1, kNewsButtonY0 + kNewsButtonHeight - 1};
-        if (res_.online->ask()) question_ = std::make_unique<UpdatesQuestion>(*res_.fonts);
-    }
+    if (res_.online && res_.fonts && res_.online->ask()) question_ = std::make_unique<UpdatesQuestion>(*res_.fonts);
     if (*selected_ == kNews && !has_news()) select(kOptions);
+}
+
+// @orig none: port's online news. Measured at each call: the language can
+// change while the menu is open (enhancements window).
+MainMenu::Rect MainMenu::news_button() const {
+    if (!res_.fonts) return {};
+    const int width = TextWriter(*res_.fonts, kOnlineFont).measure(tr("NEWS")).width + 2 * kNewsButtonPad;
+    return {kNewsButtonX1 - width + 1, kNewsButtonY0, kNewsButtonX1, kNewsButtonY0 + kNewsButtonHeight - 1};
 }
 
 // @orig none: the buttons' hit test of 1310:001D, with the port's button
@@ -75,7 +79,7 @@ int MainMenu::button_at(int x, int y) const {
         if (buttons_[i].contains(x, y)) return i;
     }
     if (res_.no_limit && no_limit_button_.contains(x, y)) return kNoLimit;
-    if (has_news() && news_button_.contains(x, y)) return kNews;
+    if (has_news() && news_button().contains(x, y)) return kNews;
     return -1;
 }
 
@@ -97,7 +101,7 @@ void MainMenu::draw_online(Surface8& screen) const {
                      update_text(res_.online->new_version()), kGreen);
     }
     if (!has_news()) return;
-    const Rect& r = news_button_;
+    const Rect r = news_button();
     const std::uint8_t tint = *selected_ == kNews ? kGreen : kDimGreen;
     draw_rounded_box(screen, r.x0, r.y0, r.x1, r.y1, -1, tint);
     print_tinted(screen, *res_.fonts, kOnlineFont, r.x0 + kNewsButtonPad, r.y0 + kOnlineTextDrop, tr("NEWS"), tint);

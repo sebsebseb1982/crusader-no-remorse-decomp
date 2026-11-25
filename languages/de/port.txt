@@ -62,7 +62,7 @@ CLICK: ASSIGN A BUTTON   DEL: CLEAR = KLICK: KNOPF ZUWEISEN   ENTF: LOESCHEN
 SAVED GAME = SPIELSTAND
 
 # --- main menu (src/engine/ui/main_menu.cpp)
-NEW VERSION %s AVAILABLE = NEUE VERSION %s VERFUEGBAR
+UPDATE TO %s = AKTUALISIEREN AUF %s
 NEWS = NEUIGKEITEN
 
 # --- online news and updates (src/engine/ui/news_screen.cpp)
