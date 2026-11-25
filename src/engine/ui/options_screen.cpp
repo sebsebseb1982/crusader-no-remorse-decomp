@@ -4,8 +4,10 @@
 #include "engine/audio/audio.hpp"
 #include "engine/ui/gump_keys.hpp"
 
+#include <algorithm>
 #include <string>
 #include <utility>
+#include <vector>
 
 
 namespace crusader {
@@ -75,6 +77,15 @@ constexpr std::uint32_t kRepeatTicks = 10;
 // The controller button (port addition): colours of the quit button's frames.
 constexpr std::uint8_t kButtonColour = 0x75, kButtonFill = 0x34;
 constexpr int kButtonFont = 7;
+constexpr int kButtonIcon = 11, kButtonGap = 6, kButtonMargin = 8;  // "+" icon, gap, margins inside the frame
+// The light running around the button's frame (port addition): its shades,
+// head first, each over kChaserStep pixels of its tail, in the menu palette
+// (MISC.PAL), for the frame at rest and lit.
+constexpr int kChaserStep = 5;
+constexpr std::array<std::uint8_t, 4> kChaser = {0xFF, 0xFE, 0x0C, 0x32};
+constexpr std::array<std::uint8_t, 4> kChaserLit = {0xFF, 0xFE, 0xFE, 0xFF};
+// 5 pixels every 2 ticks (60 per second): a lap in about 2.5 seconds.
+constexpr std::uint32_t kChaserPixels = 5, kChaserTicks = 2;
 
 // Focus outline of each line (13D0:1E62); the quit line has none.
 constexpr std::array<OptionsScreen::Rect, OptionsScreen::kQuitLine> kLineRects = {{
@@ -210,26 +221,75 @@ void OptionsScreen::draw(Surface8& screen) const {
     if (fonts_) draw_pad_button(screen);
 }
 
+namespace {
+
+// The pixels of a frame drawn by draw_rounded_box, clockwise from the top
+// left one, with corners cut over three pixels.
+// @orig none: port-only enhancements button
+std::vector<Point> rounded_box_path(int x0, int y0, int x1, int y1) {
+    constexpr int kInset[3] = {3, 2, 1};
+    const auto inset = [&](int y) {
+        const int d = std::min(y - y0, y1 - y);
+        return d < 3 ? kInset[d] : 0;
+    };
+    std::vector<Point> path;
+    for (int x = x0 + 3; x <= x1 - 3; ++x) path.push_back({x, y0});
+    for (int y = y0 + 1; y < y1; ++y) path.push_back({x1 - inset(y), y});
+    for (int x = x1 - 3; x >= x0 + 3; --x) path.push_back({x, y1});
+    for (int y = y1 - 1; y > y0; --y) path.push_back({x0 + inset(y), y});
+    return path;
+}
+
+// The light running around the frame: brightest at `head`, fading behind it.
+// @orig none: port-only enhancements button
+void draw_chaser(Surface8& screen, const std::vector<Point>& path, std::size_t head,
+                 const std::array<std::uint8_t, 4>& shades) {
+    const std::size_t n = path.size();
+    const std::size_t tail = shades.size() * kChaserStep;
+    for (std::size_t d = 0; d < tail && d < n; ++d) {
+        const Point& p = path[(head + n - d) % n];
+        if (p.x >= 0 && p.y >= 0 && p.x < screen.width && p.y < screen.height) {
+            screen.row(p.y)[p.x] = shades[d / kChaserStep];
+        }
+    }
+}
+
+}  // namespace
+
+// @orig none: port-only enhancements button
+OptionsScreen::Rect OptionsScreen::enhancements_button() const {
+    Rect r = pad_rect_;
+    if (!fonts_) return r;
+    const int text = TextWriter(*fonts_, kButtonFont).measure(tr("ENHANCEMENTS")).width;
+    const int needed = kButtonIcon + kButtonGap + text + 2 * kButtonMargin;
+    r.x0 = std::min(r.x0, r.x1 + 1 - needed);
+    return r;
+}
+
 // The "ameliorations" button: a "+" icon and a text button next to "quit", in
-// its colours (frame, icon and text bright when focused or pressed).
+// its colours (frame, icon and text bright when focused or pressed), with a
+// light running around its frame. It grows to the left (towards the free
+// background) when the language's word is too long for it.
 // @orig none: port-only enhancements button
 void OptionsScreen::draw_pad_button(Surface8& screen) const {
     const bool lit = *focus_ == kPadLine || pad_pressed_;
     const std::uint8_t colour = lit ? kFocusColour : kButtonColour;
-    const Rect& r = pad_rect_;
+    const Rect r = enhancements_button();
     draw_rounded_box(screen, r.x0, r.y0, r.x1, r.y1, kButtonFill, colour);
+    const auto& shades = lit ? kChaserLit : kChaser;
+    const std::vector<Point> path = rounded_box_path(r.x0, r.y0, r.x1, r.y1);
+    draw_chaser(screen, path, (now_ / kChaserTicks * kChaserPixels) % path.size(), shades);
     TextWriter writer(*fonts_, kButtonFont);
     const std::string text = tr("ENHANCEMENTS");
-    constexpr int kIcon = 11, kGap = 6;
     const int width = writer.measure(text).width;
-    const int total = kIcon + kGap + width;
+    const int total = kButtonIcon + kButtonGap + width;
     const int left = r.x0 + (r.x1 - r.x0 + 1 - total) / 2;
-    draw_plus_icon(screen, left, r.y0 + (r.y1 - r.y0 + 1 - kIcon) / 2, kIcon, colour);
+    draw_plus_icon(screen, left, r.y0 + (r.y1 - r.y0 + 1 - kButtonIcon) / 2, kButtonIcon, colour);
     // Drawn on a scratch surface and copied in one colour, as the font has its own.
     constexpr int kPad = 4, kAbove = 32, kHeight = 48;
     Surface8 scratch(width + 2 * kPad, kHeight);
     writer.print(scratch, kPad, kAbove, text);
-    const int x = left + kIcon + kGap, y = r.y0 + 7;  // font 7 hangs from its top
+    const int x = left + kButtonIcon + kButtonGap, y = r.y0 + 7;  // font 7 hangs from its top
     for (int sy = 0; sy < kHeight; ++sy) {
         for (int sx = 0; sx < scratch.width; ++sx) {
             const int dx = x - kPad + sx, dy = y - kAbove + sy;
@@ -320,7 +380,7 @@ void OptionsScreen::mouse_down(int x, int y) {
         return;
     }
     if (closed_ || captured_ >= 0) return;
-    if (fonts_ && pad_rect_.contains(x, y)) {
+    if (fonts_ && enhancements_button().contains(x, y)) {
         pad_pressed_ = true;
         if (*focus_ == kQuitLine) quit_selected_ = false;
         *focus_ = kPadLine;
@@ -347,7 +407,7 @@ void OptionsScreen::mouse_down(int x, int y) {
 // @orig 1310:0151 1310:04CD
 void OptionsScreen::mouse_move(int x, int y) {
     if (enh_ || closed_) return;
-    if (pad_pressed_) pad_pressed_ = pad_rect_.contains(x, y);
+    if (pad_pressed_) pad_pressed_ = enhancements_button().contains(x, y);
     if (captured_ < 0) return;
     const Item& it = widgets_[captured_];
     inside_ = it.rect.contains(x, y);
@@ -360,7 +420,7 @@ void OptionsScreen::mouse_up(int x, int y) {
     if (enh_) return;
     if (pad_pressed_) {  // acts at the release inside, like the quit button
         pad_pressed_ = false;
-        if (pad_rect_.contains(x, y)) open_enhancements();
+        if (enhancements_button().contains(x, y)) open_enhancements();
         return;
     }
     if (closed_ || captured_ < 0) return;

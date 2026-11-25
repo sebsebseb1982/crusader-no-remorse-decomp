@@ -977,7 +977,21 @@ void test_options(const std::filesystem::path& data) {
     o = game.menu()->options();
     CHECK(o->focus() == O::kPadLine && !o->pressed(O::kQuit) && !o->gamepad());
     game.render(screen);
-    CHECK(screen.row(o->enhancements_button().y0)[o->enhancements_button().x0 + 5] == 0x0C);  // outlined
+    {
+        // Outlined, but for a light running around its frame: it moves on.
+        const auto button = o->enhancements_button();
+        const auto frame_pixels = [&] {
+            std::vector<std::uint8_t> row;
+            for (int x = button.x0 + 3; x <= button.x1 - 3; ++x) row.push_back(screen.row(button.y0)[x]);
+            for (int x = button.x0 + 3; x <= button.x1 - 3; ++x) row.push_back(screen.row(button.y1)[x]);
+            return row;
+        };
+        const auto before = frame_pixels();
+        CHECK(std::count(before.begin(), before.end(), std::uint8_t{0x0C}) > static_cast<long>(before.size()) - 30);
+        for (int i = 0; i < 20; ++i) game.update(kFrameUs);
+        game.render(screen);
+        CHECK(frame_pixels() != before);
+    }
     press(game, 0x4D, true);  // right: back to "quit"
     CHECK(o->focus() == O::kQuitLine && o->pressed(O::kQuit));
     press(game, 0x4B, true);

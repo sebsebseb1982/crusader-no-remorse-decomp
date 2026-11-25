@@ -115,7 +115,8 @@ public:
     int focus() const { return *focus_; }
     const EnhancementsScreen* enhancements() const { return enh_.get(); }
     const GamepadScreen* gamepad() const { return enh_ ? enh_->gamepad() : nullptr; }
-    Rect enhancements_button() const { return pad_rect_; }
+    // Widened to the left when its text needs more room (the language's word).
+    Rect enhancements_button() const;
     int sound_step() const { return sound_step_; }
     int music_step() const { return music_step_; }
     // Whether a two-choice widget is chosen, or another widget drawn pressed
@@ -157,7 +158,7 @@ private:
     bool closed_ = false;
     const FontSet* fonts_ = nullptr;
     std::function<void()> vibration_preview_;
-    Rect pad_rect_{352, 318, 503, 339};
+    Rect pad_rect_{352, 318, 503, 339};  // narrowest place; enhancements_button() widens it
     bool pad_pressed_ = false;  // the mouse holds the enhancements button
     int pad_focus_ = 0;         // the controller screen's row, kept between openings
     std::unique_ptr<EnhancementsScreen> enh_;
