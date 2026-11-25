@@ -498,6 +498,9 @@ struct WorldLighting::Box {
     const Decoded* sprite = nullptr;
     int left = 0, top = 0;  // frame rectangle, absolute screen coordinates
     bool mirrored = false;
+    // A character: its sprite turned round the box's vertical axis (box_hides),
+    // not pushed through the whole box.
+    bool actor = false;
 };
 
 // Worker threads kept for the whole run: run(n, f) calls f(0..n-1) spread
@@ -1527,6 +1530,7 @@ void WorldLighting::gather_occluders(const World& world) {
             const int sx = (wx - wy) >> 2, sy = ((wx + wy) >> 3) - item.z;
             b.sprite = &decode(frame);
             b.mirrored = mirrored;
+            b.actor = is_actor(item, info);
             b.left = mirrored ? sx + frame.xoff - (frame.width - 1) : sx - frame.xoff;
             b.top = sy - frame.yoff;
         }
@@ -1569,6 +1573,16 @@ bool WorldLighting::occluded(const Vec3& p, const Vec3& n, ObjId self, std::size
 // inverse_dir): crosses it (ends
 // excluded: a light or a surface touching a box is not hidden by it), cut by
 // its sprite when `sprite_cut`.
+//
+// A thing fills its box: a point of it is solid where its sprite is, the
+// sprite pushed along the view through the box. Not a character: pushed
+// through his box he is a slab as deep as it, his head's pixels higher at its
+// front than his head (a lamp over him threw a blob in front of him, not a
+// disc round his feet; a lamp beside him, a shadow as wide as the box is
+// deep). A character is his sprite turned round the box's vertical axis: a point of
+// the box is solid when the sprite, at the axis and the point's height, is at
+// the point's distance from the axis (on the side the point is, across the
+// view): his shadow is as high as he is, from wherever the light comes.
 // @orig none: port lighting
 bool WorldLighting::box_hides(const Box& b, const Vec3& o, const Vec3& dir, const Vec3& inv, bool sprite_cut) {
     const float os[3] = {o.x, o.y, o.z};
@@ -1584,12 +1598,23 @@ bool WorldLighting::box_hides(const Box& b, const Vec3& o, const Vec3& dir, cons
     }
     if (!sprite_cut || !b.sprite) return true;
     const Decoded& f = *b.sprite;
-    constexpr int kSamples = 5;
-    for (int k = 0; k < kSamples; ++k) {
-        const float t = t0 + (t1 - t0) * (k + 0.5f) / kSamples;
+    // More along a character's segment: he is thinner than his box.
+    const int samples = b.actor ? 8 : 5;
+    const float cx = (b.lo.x + b.hi.x) * 0.5f, cy = (b.lo.y + b.hi.y) * 0.5f;
+    for (int k = 0; k < samples; ++k) {
+        const float t = t0 + (t1 - t0) * (k + 0.5f) / samples;
         const Vec3 q = o + dir * t;
-        const int sx = static_cast<int>(std::floor((q.x - q.y) * 0.25f));
-        const int sy = static_cast<int>(std::floor((q.x + q.y) * 0.125f - q.z / kLightZScale));
+        float qx = q.x, qy = q.y;
+        if (b.actor) {
+            // Across the view by the point's distance from the axis
+            // (lighting space, one screen pixel across is 2 sqrt(2) units).
+            const float across = q.x - cx - (q.y - cy), along = q.x - cx + (q.y - cy);
+            const float r = std::sqrt(across * across + along * along) * 0.5f;
+            qx = cx + (across < 0 ? -r : r);
+            qy = cy - (across < 0 ? -r : r);
+        }
+        const int sx = static_cast<int>(std::floor((qx - qy) * 0.25f));
+        const int sy = static_cast<int>(std::floor((qx + qy) * 0.125f - q.z / kLightZScale));
         const int fx = b.mirrored ? b.left + f.w - 1 - sx : sx - b.left;
         const int fy = sy - b.top;
         if (fx < 0 || fy < 0 || fx >= f.w || fy >= f.h) continue;
@@ -2022,7 +2047,7 @@ bool WorldLighting::shade_gpu(const Surface8& screen, const LightingOptions& opt
             if (const auto it = atlas_.find(b.sprite); it != atlas_.end()) {
                 o[8] = float(it->second.first), o[9] = float(it->second.second);
                 o[10] = float(b.sprite->w), o[11] = float(b.sprite->h);
-                o[12] = float(b.left), o[13] = float(b.top), o[14] = 1.0f;
+                o[12] = float(b.left), o[13] = float(b.top), o[14] = 1.0f, o[15] = b.actor ? 1.0f : 0.0f;
             }
         }
         if (!atlas_full_) break;

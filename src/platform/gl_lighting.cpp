@@ -140,10 +140,21 @@ bool boxHides(int bi, vec4 b0, vec4 b1, vec3 o, vec3 dir, vec3 inv) {
     if ((uFlags & SPRITE_CUT) == 0) return true;
     vec4 at = fetchf(uBoxes, bi * 4 + 2), fr = fetchf(uBoxes, bi * 4 + 3);
     if (fr.z == 0.0) return true;
-    for (int s = 0; s < 5; ++s) {
-        float t = t0 + (t1 - t0) * (float(s) + 0.5) / 5.0;
+    // A character (fr.w): his sprite turned round the box's vertical axis.
+    bool actor = fr.w != 0.0;
+    int samples = actor ? 8 : 5;
+    vec2 c = (b0.xy + b1.xy) * 0.5;
+    for (int s = 0; s < samples; ++s) {
+        float t = t0 + (t1 - t0) * (float(s) + 0.5) / float(samples);
         vec3 q = o + dir * t;
-        int sx = int(floor((q.x - q.y) * 0.25)), sy = int(floor((q.x + q.y) * 0.125 - q.z / K));
+        vec2 qxy = q.xy;
+        if (actor) {
+            float across = q.x - c.x - (q.y - c.y), along = q.x - c.x + (q.y - c.y);
+            float r = sqrt(across * across + along * along) * 0.5;
+            if (across < 0.0) r = -r;
+            qxy = c + vec2(r, -r);
+        }
+        int sx = int(floor((qxy.x - qxy.y) * 0.25)), sy = int(floor((qxy.x + qxy.y) * 0.125 - q.z / K));
         int fx = b1.w != 0.0 ? int(fr.x) + int(at.z) - 1 - sx : sx - int(fr.x);
         int fy = sy - int(fr.y);
         if (fx < 0 || fy < 0 || fx >= int(at.z) || fy >= int(at.w)) continue;
