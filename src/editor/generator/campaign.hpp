@@ -13,6 +13,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -26,6 +27,9 @@ struct GameData {
     std::vector<bool> scripted;  // by shape: a usecode class of that number exists
     std::vector<std::string> class_names;  // by shape: its usecode class name (EUSECODE.FLX entry 1), or empty
     std::vector<Biome> biomes;
+    // By wall shape (walls and posts, 96 high): its frame drawn as a black
+    // frame, for a building's near side; absent when it has none.
+    std::map<std::uint16_t, std::uint8_t> black_frames;
     static GameData load(const std::filesystem::path& data);
 };
 

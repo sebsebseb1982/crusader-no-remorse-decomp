@@ -62,6 +62,17 @@ GameData GameData::load(const std::filesystem::path& data) {
         return result;
     };
     d.biomes = learn_biomes({d.shapes, d.globs, d.maps, d.scripted, is_black});
+    for (std::size_t s = 0; s < d.shapes.size() && s < shapes.count(); ++s) {
+        int axis = 0, length = 0;
+        if (d.scripted[s] || !wall_kind(d.shapes[s], axis, length) || shapes.entry(s).empty()) continue;
+        const Shape shape = Shape::parse(shapes.entry(s), ShapeLayout::World, true);
+        for (std::size_t f = 0; f < shape.frames().size() && f < 32; ++f) {
+            if (is_black({static_cast<std::uint16_t>(s), static_cast<std::uint8_t>(f)})) {
+                d.black_frames[static_cast<std::uint16_t>(s)] = static_cast<std::uint8_t>(f);
+                break;
+            }
+        }
+    }
     return d;
 }
 

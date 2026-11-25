@@ -52,6 +52,11 @@ struct RoomPiece {
     std::int32_t x0 = 0, y0 = 0, x1 = 0, y1 = 0;  // bounding box of its cells (x1, y1 excluded)
     int cols = 0, rows = 0;              // cells of 16 units from (x0, y0)
     std::vector<std::uint8_t> cells;     // walkable cells of the room, rows * cols
+    // Its outline, rows * cols: its inside (cells and what its walls enclose
+    // with them) closed by 48 units, so that a dent narrower than a doorway
+    // (a passage left behind) is taken in; the walls that close the room
+    // follow it, and its floor covers it.
+    std::vector<std::uint8_t> outline;
     std::vector<LevelItem> items;        // at their positions on the original map
     std::vector<Opening> openings;
     std::array<int, kTagCount> tags{};
@@ -65,6 +70,10 @@ struct RoomPiece {
     int border = 0, open_border = 0;
     int low_border = 0;  // border cells closed only by something low (a railing, under 64): a balcony
     int area = 0;                        // walkable cells
+    // Cells of its floor that run past it on the side the camera sees
+    // (south, east): over the void once the room stands alone.
+    int overhang = 0;
+    int unfloored = 0;  // cells of its outline that no floor of it bears
     bool cell(std::int32_t x, std::int32_t y) const;  // a walkable cell of the room at (x, y)
     std::string describe() const;
 };

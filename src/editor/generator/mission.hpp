@@ -7,7 +7,8 @@
 // its furniture, scenery and the designers' own guard posts, kept or
 // thinned out to the step's intensity. Rooms meet as on the original maps:
 // their openings face each other across one line of wall, with a door in
-// it; their other openings are walled up.
+// it; their other openings are walled up. Where a room has no opening on
+// the right side, a door is cut in one of its straight walls.
 //
 // All the rooms of a level come from the source map and the maps that look
 // like it, so that the level keeps one look.

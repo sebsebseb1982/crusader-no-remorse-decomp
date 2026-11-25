@@ -10,6 +10,7 @@
 #include <functional>
 #include <limits>
 #include <map>
+#include <utility>
 
 namespace crusader::editor::gen {
 
@@ -17,6 +18,11 @@ namespace {
 
 constexpr std::int32_t kCell = 16;
 constexpr int kErode = 4;            // cells: passages narrower than 128 units part rooms
+// Floor tiles (256 units) and their quarters (128) of the same look.
+struct FloorQuarter {
+    std::uint16_t whole, part;
+};
+constexpr FloorQuarter kFloorQuarters[] = {{0x014, 0x016}, {0x0CC, 0x0CE}};
 constexpr std::int32_t kHead = 80;   // what stands lower than this over a cell blocks it (the player is 80 high)
 constexpr std::int32_t kStep = 9;    // a floor this far from the storey bears the player
 constexpr std::uint8_t kFamilyGlobEgg = 3;
@@ -78,6 +84,8 @@ std::string RoomPiece::describe() const {
     for (int t = 0; t < kTagCount; ++t) {
         if (tags[t]) s += std::string(", ") + tag_name(t) + " " + std::to_string(tags[t]);
     }
+    if (overhang) s += ", floor past its walls " + std::to_string(overhang);
+    if (unfloored) s += ", cells with no floor " + std::to_string(unfloored);
     return s;
 }
 
@@ -166,6 +174,19 @@ std::vector<RoomPiece> extract_rooms(const GameData& data, int map, std::int32_t
     const std::size_t N = static_cast<std::size_t>(W) * static_cast<std::size_t>(H);
     const std::vector<std::uint8_t>& walk = grid.walk;
     const std::vector<std::uint8_t>& door = grid.door;
+
+    // The cells that a floor tile (256 units) bears: a flat piece over one
+    // is laid on the floor (a hazard stripe, a hatch); elsewhere it is the
+    // floor itself (a smaller piece of floor).
+    std::vector<std::uint8_t> tiled(N);
+    for (const LevelItem& i : items) {
+        const ShapeInfo* s = info(i.shape);
+        if (!s || !is_floor_tile(*s) || i.z < z0 - kStep || i.z > z0 + kStep) continue;
+        const int c1 = i.x / kCell, r1 = i.y / kCell;
+        for (int r = std::max(0, r1 - 15); r <= r1 && r < H; ++r) {
+            for (int c = std::max(0, c1 - 15); c <= c1 && c < W; ++c) tiled[static_cast<std::size_t>(r * W + c)] = 1;
+        }
+    }
 
     // The storey's walls (and doors): the inside of a room stops at them.
     std::vector<std::uint8_t> walls(N);
@@ -402,6 +423,38 @@ std::vector<RoomPiece> extract_rooms(const GameData& data, int map, std::int32_t
             const std::size_t k = static_cast<std::size_t>((r - b.r0) * room.cols + (c - b.c0));
             return room.cells[k] || enclosed[k];
         };
+        // The outline: the inside, dilated then eroded by kClose cells.
+        {
+            constexpr int kClose = 3;
+            const int mc = room.cols + 2 * kClose, mr = room.rows + 2 * kClose;
+            std::vector<std::uint8_t> grown(static_cast<std::size_t>(mc * mr));
+            for (int r = 0; r < mr; ++r) {
+                for (int c = 0; c < mc; ++c) {
+                    bool any = false;
+                    for (int a = -kClose; a <= kClose && !any; ++a) {
+                        for (int e = -kClose; e <= kClose && !any; ++e) any = within(b.r0 + r - kClose + a, b.c0 + c - kClose + e);
+                    }
+                    grown[static_cast<std::size_t>(r * mc + c)] = any;
+                }
+            }
+            room.outline.assign(room.cells.size(), 0);
+            for (int r = 0; r < room.rows; ++r) {
+                for (int c = 0; c < room.cols; ++c) {
+                    bool all = true;
+                    for (int a = -kClose; a <= kClose && all; ++a) {
+                        for (int e = -kClose; e <= kClose && all; ++e) {
+                            const int r2 = r + kClose + a, c2 = c + kClose + e;
+                            all = r2 >= 0 && c2 >= 0 && r2 < mr && c2 < mc && grown[static_cast<std::size_t>(r2 * mc + c2)];
+                        }
+                    }
+                    const std::size_t k = static_cast<std::size_t>(r * room.cols + c);
+                    room.outline[k] = all || room.cells[k] || enclosed[k];
+                }
+            }
+        }
+        auto outlined = [&](int r, int c) {
+            return in_box(r, c) && room.outline[static_cast<std::size_t>((r - b.r0) * room.cols + (c - b.c0))];
+        };
         // Each item of the storey near the room, and whether it goes with it.
         struct Candidate {
             std::size_t item = 0;
@@ -463,7 +516,15 @@ std::vector<RoomPiece> extract_rooms(const GameData& data, int map, std::int32_t
             // A flat piece that is no floor tile (a hazard stripe, a hatch, a
             // grating) lies within the room or stays: past its wall, it
             // would hang over the void.
-            if (support && !is_floor_tile(*s)) cd.take = cd.close && cd.take;
+            if (support && !is_floor_tile(*s)) {
+                bool laid = true;  // on a floor tile all over
+                for (int r = r0; r <= r1 && laid; ++r) {
+                    for (int c = c0; c <= c1 && laid; ++c) {
+                        laid = r >= 0 && c >= 0 && r < H && c < W && tiled[static_cast<std::size_t>(r * W + c)];
+                    }
+                }
+                if (laid) cd.take = cd.close && cd.take;
+            }
             cd.furniture = s && !wall && !support && s->footpad_z > 0 && i.shape != kShapeMonster &&
                            i.shape != kShapeTriggerEgg && i.shape != kShapeTeleportEgg && i.shape != kShapeMonsterEgg;
             if (s) {
@@ -521,6 +582,38 @@ std::vector<RoomPiece> extract_rooms(const GameData& data, int map, std::int32_t
             if (!cd.take) continue;
             const LevelItem& i = items[cd.item];
             const ShapeInfo* s = info(i.shape);
+            // A floor tile that runs past the room (where its neighbour was)
+            // would hang over the void: when the tile has a quarter of the
+            // same look (concrete 0x14 / 0x16, green tiles 0xCC / 0xCE), it
+            // is laid again as its quarters within the room.
+            if (s && is_floor_tile(*s)) {
+                std::uint16_t quarter = 0;
+                for (const auto& [whole, part] : kFloorQuarters) {
+                    if (i.shape == whole) quarter = part;
+                }
+                const int c1 = i.x / kCell, r1 = i.y / kCell;
+                bool past = false;
+                for (int r = r1 - 15; r <= r1 && !past; ++r) {
+                    for (int c = c1 - 15; c <= c1 && !past; ++c) past = !borders(r, c);
+                }
+                if (quarter && past) {
+                    for (int a = 0; a < 2; ++a) {
+                        for (int e = 0; e < 2; ++e) {
+                            bool inner = false;
+                            for (int r = r1 - 8 * e - 7; r <= r1 - 8 * e && !inner; ++r) {
+                                for (int c = c1 - 8 * a - 7; c <= c1 - 8 * a && !inner; ++c) inner = outlined(r, c);
+                            }
+                            if (!inner) continue;
+                            LevelItem q = i;
+                            q.shape = quarter;
+                            q.x = i.x - 128 * a;
+                            q.y = i.y - 128 * e;
+                            room.items.push_back(q);
+                        }
+                    }
+                    continue;
+                }
+            }
             room.items.push_back(i);
             if (i.shape == kShapeMonster && i.frame == 0) ++room.npcs;
             // Furniture: what stands in the room (not its walls, nor what
@@ -568,6 +661,42 @@ std::vector<RoomPiece> extract_rooms(const GameData& data, int map, std::int32_t
             }
         }
         if (room.openings.empty()) continue;
+        // The floor taken that runs past the room on the side the camera
+        // sees (south, east): past the black frame of its near walls, it
+        // would lie over the void.
+        for (const LevelItem& i : room.items) {
+            const ShapeInfo* s = info(i.shape);
+            if (!s || !s->is(ShapeInfo::kSolid) || s->footpad_z > 2 || !s->footpad_x || !s->footpad_y) continue;
+            const std::int32_t top = i.z + s->footpad_z * 8;
+            if (top < z0 - kStep || top > z0 + kStep) continue;
+            const int c1 = i.x / kCell, r1 = i.y / kCell;
+            for (int r = r1 - s->footpad_y + 1; r <= r1; ++r) {
+                for (int c = c1 - s->footpad_x + 1; c <= c1; ++c) {
+                    if (outlined(r, c) || outlined(r - 1, c) || outlined(r, c - 1) || outlined(r - 1, c - 1)) continue;
+                    bool seen = false;  // the room lies north or west of it
+                    for (int t = 2; t <= 16 && !seen; ++t) seen = outlined(r - t, c) || outlined(r, c - t);
+                    room.overhang += seen;
+                }
+            }
+        }
+        // The outline's cells that no floor taken bears (where the room was
+        // open on the storey below, or its floor belonged to a neighbour).
+        {
+            std::vector<std::uint8_t> floored(room.cells.size());
+            for (const LevelItem& i : room.items) {
+                const ShapeInfo* s = info(i.shape);
+                if (!s || !s->is(ShapeInfo::kSolid) || s->footpad_z > 2) continue;
+                const std::int32_t top = i.z + s->footpad_z * 8;
+                if (top < z0 - kStep || top > z0 + kStep) continue;
+                const int c1 = i.x / kCell, r1 = i.y / kCell;
+                for (int r = r1 - std::max(1, int{s->footpad_y}) + 1; r <= r1; ++r) {
+                    for (int c = c1 - std::max(1, int{s->footpad_x}) + 1; c <= c1; ++c) {
+                        if (in_box(r, c)) floored[static_cast<std::size_t>((r - b.r0) * room.cols + (c - b.c0))] = 1;
+                    }
+                }
+            }
+            for (std::size_t k = 0; k < floored.size(); ++k) room.unfloored += room.outline[k] && !floored[k];
+        }
         // Links (quality low) of scripted objects that stay within the room.
         for (const LevelItem& i : room.items) {
             const std::uint8_t link = i.quality_low();

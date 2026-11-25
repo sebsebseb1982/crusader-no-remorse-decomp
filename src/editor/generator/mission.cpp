@@ -447,7 +447,7 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
         const RoomPiece& piece = *p.piece;
         for (int row = 0; row < piece.rows; ++row) {
             for (int col = 0; col < piece.cols; ++col) {
-                if (!piece.cells[static_cast<std::size_t>(row * piece.cols + col)]) continue;
+                if (!piece.outline[static_cast<std::size_t>(row * piece.cols + col)]) continue;
                 const int gr = (piece.y0 + p.dy) / kCell + row, gc = (piece.x0 + p.dx) / kCell + col;
                 occupied[static_cast<std::size_t>(gr * kGridCells + gc)] = v;
             }
@@ -457,7 +457,7 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
         const RoomPiece& piece = *p.piece;
         for (int row = 0; row < piece.rows; ++row) {
             for (int col = 0; col < piece.cols; ++col) {
-                if (!piece.cells[static_cast<std::size_t>(row * piece.cols + col)]) continue;
+                if (!piece.outline[static_cast<std::size_t>(row * piece.cols + col)]) continue;
                 const int gr = (piece.y0 + p.dy) / kCell + row, gc = (piece.x0 + p.dx) / kCell + col;
                 for (int dr = -1; dr <= 1; ++dr) {
                     for (int dc = -1; dc <= 1; ++dc) {
@@ -736,9 +736,11 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
                     }
                 }
             }
-            auto in_room = [&](int rr, int cc) {  // room cells, from (0, 0)
+            // Its outline (pieces.hpp): a dent narrower than a doorway is
+            // walled straight across its mouth, not round its sides.
+            auto in_room = [&](int rr, int cc) {
                 return rr >= 0 && cc >= 0 && rr < piece.rows && cc < piece.cols &&
-                       piece.cells[static_cast<std::size_t>(rr * piece.cols + cc)];
+                       piece.outline[static_cast<std::size_t>(rr * piece.cols + cc)];
             };
             const int dr[4] = {-1, 0, 1, 0}, dc[4] = {0, 1, 0, -1};  // N E S W
             for (int d = 0; d < 4; ++d) {
@@ -1105,6 +1107,120 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
         }
     }
 
+    // A room's near walls (south, east) with nothing past them show the
+    // black frame that the designers drew on a building's near side, not a
+    // face to the void (a room whose neighbour on its map stayed behind).
+    {
+        const std::map<std::uint16_t, std::uint8_t>& black = data.black_frames;
+        auto outlined = [&](int gr, int gc) {
+            return gr >= 0 && gc >= 0 && gr < kGridCells && gc < kGridCells &&
+                   occupied[static_cast<std::size_t>(gr * kGridCells + gc)];
+        };
+        std::vector<std::uint8_t> bare(level.items.size());  // a post with no black frame, facing the void
+        for (std::size_t q = 0; q < level.items.size(); ++q) {
+            LevelItem& i = level.items[q];
+            if (i.shape >= data.shapes.size() || i.z > 24) continue;  // (some rooms' walls stand on a 16-unit step)
+            const auto it = black.find(i.shape);
+            if (it != black.end() && i.frame == it->second) continue;
+            const ShapeInfo& sh = data.shapes[i.shape];
+            int axis = 0, length = 0;
+            if (!wall_kind(sh, axis, length)) continue;
+            const int wc1 = i.x / kCell, wr1 = i.y / kCell, wc0 = wc1 - sh.footpad_x + 1, wr0 = wr1 - sh.footpad_y + 1;
+            auto facing = [&](bool along_x) {
+                // The room on its far side (north or west), nothing within
+                // 48 units on its near side.
+                bool room = false, clear = true;
+                for (int t = along_x ? wc0 : wr0; t <= (along_x ? wc1 : wr1); ++t) {
+                    room = room || (along_x ? outlined(wr0 - 1, t) : outlined(t, wc0 - 1));
+                    for (int k = 1; k <= 3; ++k) clear = clear && !(along_x ? outlined(wr1 + k, t) : outlined(t, wc1 + k));
+                }
+                return room && clear;
+            };
+            const bool post = sh.footpad_x == 1 && sh.footpad_y == 1;
+            if (!(post ? (facing(true) || facing(false)) : facing(axis == kAlongX))) continue;
+            if (it != black.end()) {
+                i.frame = it->second;
+                continue;
+            }
+            // A shape with no black frame (a lattice panel, a pillar of the
+            // face that the next room saw): the biome's black frame of the
+            // same length in its place, else nothing.
+            const Piece& front = biome.walls[kFront][post ? kAlongX : axis][length];
+            const auto fb = front.valid() ? black.find(front.shape) : black.end();
+            if (fb != black.end() && fb->second == front.frame) {
+                i.shape = front.shape;
+                i.frame = front.frame;
+            } else if (post) {
+                bare[q] = 1;
+            }
+        }
+        for (std::size_t q = level.items.size(); q-- > 0;) {
+            if (bare[q]) level.items.erase(level.items.begin() + static_cast<std::ptrdiff_t>(q));
+        }
+    }
+
+    // Floor past the rooms (a tile of 256 or 128 units under a room's border
+    // runs on where its neighbour was): black tiles (BLACK8, 128 units, laid
+    // a unit above the floor, at any 16-unit place) hide it, as the void
+    // round a building, without touching a room.
+    std::string mask_note;
+    {
+        constexpr std::uint16_t kShapeBlack8 = 0x003;
+        const int span = 128 / kCell;
+        std::set<std::pair<int, int>> over;  // floor cells past the rooms
+        for (const LevelItem& i : level.items) {
+            if (i.shape >= data.shapes.size()) continue;
+            const ShapeInfo& sh = data.shapes[i.shape];
+            if (!sh.is(ShapeInfo::kSolid) || sh.footpad_z > 0 || i.z > 8 || !sh.footpad_x || !sh.footpad_y) continue;
+            const int fc1 = i.x / kCell, fr1 = i.y / kCell;
+            for (int fr = fr1 - sh.footpad_y + 1; fr <= fr1; ++fr) {
+                for (int fc = fc1 - sh.footpad_x + 1; fc <= fc1; ++fc) {
+                    bool near = false;  // a room's outline, or the line of its walls
+                    for (int a = -1; a <= 1 && !near; ++a) {
+                        for (int e = -1; e <= 1 && !near; ++e) {
+                            const int gr = fr + a, gc = fc + e;
+                            near = gr >= 0 && gc >= 0 && gr < kGridCells && gc < kGridCells &&
+                                   occupied[static_cast<std::size_t>(gr * kGridCells + gc)];
+                        }
+                    }
+                    if (!near) over.insert({fr, fc});
+                }
+            }
+        }
+        auto free_square = [&](int sr0, int sc0) {  // no room nor its wall line under it
+            for (int sr = sr0 - 1; sr <= sr0 + span; ++sr) {
+                for (int sc = sc0 - 1; sc <= sc0 + span; ++sc) {
+                    if (sr < 0 || sc < 0 || sr >= kGridCells || sc >= kGridCells) return false;
+                    if (occupied[static_cast<std::size_t>(sr * kGridCells + sc)]) return false;
+                }
+            }
+            return true;
+        };
+        std::set<std::pair<int, int>> hidden;
+        int masks = 0;
+        for (const auto& [orow, ocol] : over) {
+            if (hidden.count({orow, ocol})) continue;
+            // A square that holds the cell, the nearest to its top left.
+            bool laid = false;
+            for (int a = 0; a < span && !laid; ++a) {
+                for (int e = 0; e < span && !laid; ++e) {
+                    const int br0 = orow - a, bc0 = ocol - e;
+                    if (!free_square(br0, bc0)) continue;
+                    LevelItem black = make_item(kShapeBlack8, 0, (bc0 + span) * kCell - 1, (br0 + span) * kCell - 1, 1);
+                    level.items.push_back(black);
+                    for (int rr = br0; rr < br0 + span; ++rr) {
+                        for (int cc = bc0; cc < bc0 + span; ++cc) hidden.insert({rr, cc});
+                    }
+                    laid = true;
+                    ++masks;
+                }
+            }
+        }
+        char t[96];
+        std::snprintf(t, sizeof t, "  floor past the rooms: %zu cells, %d black tiles over it", over.size(), masks);
+        mask_note = t;
+    }
+
     // Tidying up what the cutting left: what stands on no floor, and what
     // hangs on no wall (a sign, a poster, a lamp whose wall stayed on the
     // original map).
@@ -1212,6 +1328,7 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
                   options.seed, options.source_map, sources.c_str(), r.rooms.size(), r.locks.size(),
                   level.record_count(), tidied);
     r.notes.push_back(note);
+    r.notes.push_back(mask_note);
     for (std::size_t k = 0; k < n; ++k) {
         int guards = 0;
         for (const LevelItem& i : level.items) {
