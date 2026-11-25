@@ -842,6 +842,100 @@ void check_seed(const std::filesystem::path& data, const gen::GameData& game_dat
         }
     }
 
+    // Steam: the jet at a door hurts the player who walks into it (a
+    // damaging shape hits what moves into it); turned, its valve shuts it:
+    // the jet is gone and the same walk hurts no more. Without the guards
+    // nor the guns (`calm`).
+    for (const gen::Steam& st : level.steams) {
+        auto game = std::make_unique<Game>(data, test_saves(data), calm);
+        game->set_start(levels[0].map, 0x1E);
+        game->new_game(1);
+        World& w = game->world();
+        run_frames(*game, 120);
+        ObjId jet = 0, valve = 0;
+        w.for_each([&](const Item& i) {
+            if (i.parent != 0 || (i.quality & 0xFF) != st.number) return;
+            if (i.shape == 0x511) jet = i.id;
+            if (i.shape == 0x030) valve = i.id;
+        });
+        CHECK(jet && valve);
+        if (!jet || !valve) continue;
+        if (std::getenv("NO_LIGHT")) game->config().lighting = false;  // TEMP
+        if (std::getenv("MOVE_BOX")) {  // TEMP
+            w.for_each([&](const Item& i) {
+                if (i.shape == 0x500 && (i.quality & 0xFF) == st.number) std::printf("    box %d\n", i.id);
+            });
+            ObjId box = 0;
+            w.for_each([&](const Item& i) { if (i.shape == 0x500 && (i.quality & 0xFF) == st.number) box = i.id; });
+            if (box) w.move_item(box, st.jet.x - 100, st.jet.y, 0);
+        }
+        if (const char* shift = std::getenv("SHIFT_JET")) {  // TEMP
+            const int d = std::atoi(shift);
+            w.move_item(jet, st.jet.x + (st.along_x ? 0 : d), st.jet.y + (st.along_x ? d : 0), 0);
+        }
+        // From the room's side of the jet, a walk through it toward the door.
+        constexpr std::uint8_t kUp = 0x48;
+        auto walk_through = [&](int frames) {
+            const int far = std::getenv("FROM_D") ? std::atoi(std::getenv("FROM_D")) : 64;  // TEMP
+            const gen::Spot from = st.along_x ? gen::Spot{st.jet.x - 16, st.jet.y + far, 0}
+                                              : gen::Spot{st.jet.x + far, st.jet.y - 16, 0};
+            w.teleport(1, from.x, from.y, 0, w.current_map());
+            w.set_npc_word(1, 0x00, 200);
+            run_frames(*game, 10);
+            if (!shots_dir.empty() && frames > 0) {
+                for (int q = 0; q < 4; ++q) {
+                    Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+                    RenderStats rs;
+                    game->render(screen, &rs);
+                    std::printf("    render: %zu candidates, %zu drawn, %zu cycle edges\n", rs.candidates, rs.drawn, rs.cycle_edges);
+                    for (const auto& [x, y] : rs.cycle_samples) std::printf("      cut: 0x%X (%d,%d,%d) before 0x%X (%d,%d,%d)\n", x->shape, x->x, x->y, x->z, y->shape, y->x, y->y, y->z);
+                    write_png(shots_dir / ("seed" + std::to_string(seed) + "-steam0" + std::to_string(q) + ".png"), screen,
+                              game->palette());
+                    if (const Item* jj = w.get(jet)) std::printf("    jet frame %d flags %04x at (%d, %d, %d) on screen %d, player (%d, %d, %d) along_x %d\n", jj->frame, jj->flags, jj->x, jj->y, jj->z, w.is_partly_on_screen(*jj), w.get(1)->x, w.get(1)->y, w.get(1)->z, st.along_x);
+                    run_frames(*game, 7);
+                }
+            }
+            if (auto rec = w.npc_record(1); !rec.empty()) rec[npc::kDirection] = st.along_x ? 0 : 12;
+            game->key(kUp, true, true, 0);
+            bool hurt = false;
+            for (int f = 0; f < frames && !hurt; ++f) {
+                game->update(kFrameUs);
+                hurt = w.is_dead(1) || w.npc_hp(1) < 200;
+            }
+            game->key(kUp, true, false, 0);
+            return hurt;
+        };
+        const bool hurt = walk_through(60);
+        std::printf("  steam at the door of rooms %d and %d: %s\n", level.links[static_cast<std::size_t>(st.link)].a,
+                    level.links[static_cast<std::size_t>(st.link)].b, hurt ? "hurts the player" : "DOES NOT HURT");
+        CHECK(hurt);
+        if (!shots_dir.empty()) {
+            Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+            game->render(screen);
+            write_png(shots_dir / ("seed" + std::to_string(seed) + "-steam.png"), screen, game->palette());
+        }
+        // The valve (seen from a step toward the camera), from beside its block.
+        if (!shots_dir.empty()) {
+            w.teleport(1, st.front.x + 112, st.front.y + 112, 0, w.current_map());
+            run_frames(*game, 10);
+            Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+            game->render(screen);
+            write_png(shots_dir / ("seed" + std::to_string(seed) + "-valve.png"), screen, game->palette());
+        }
+        w.teleport(1, st.front.x, st.front.y, 0, w.current_map());
+        w.set_npc_word(1, 0x00, 200);
+        run_frames(*game, 10);
+        use_item(w, valve);
+        run_frames(*game, 150);
+        const Item* j = w.get(jet);
+        const bool gone = !j || j->shape != 0x511;
+        const bool off = gone && !walk_through(60);
+        std::printf("  valve turned (frame %d): the steam %s\n", w.get(valve) ? int{w.get(valve)->frame} : -1,
+                    off ? "is off" : gone ? "IS GONE BUT STILL HURTS" : "STILL BLOWS");
+        CHECK(off);
+        CHECK(game->machine().faults().empty());
+    }
+
     // The exit teleporter: to the next level's start.
     {
         auto game = play("exit");
@@ -877,6 +971,27 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (!have_test_saves(data)) return 1;
+    if (const char* probe = std::getenv("PROBE_STEAM")) {  // TEMP
+        Game game(data, test_saves(data));
+        game.set_start(1, 0x1E);
+        game.new_game(1);
+        World& w = game.world();
+        for (int k = 0; k < 6; ++k) {
+            run_frames(game, 60);
+            game.key(0x01, false, true, 0);
+            run_frames(game, 2);
+            game.key(0x01, false, false, 0);
+        }
+        run_frames(game, 120);
+        w.teleport(1, 27887 + 16, 28255 + 96, 0, w.current_map());
+        for (int q = 0; q < 3; ++q) {
+            run_frames(game, 9);
+            Surface8 screen(Game::kScreenWidth, Game::kScreenHeight);
+            game.render(screen);
+            write_png(std::filesystem::path(probe) / ("orig" + std::to_string(q) + ".png"), screen, game.palette());
+        }
+        return 0;
+    }
     const std::uint32_t first = argc > 2 ? static_cast<std::uint32_t>(std::stoul(argv[2])) : 1;
     const std::uint32_t count = argc > 3 ? static_cast<std::uint32_t>(std::stoul(argv[3])) : 6;
     for (int i = 4; i + 1 < argc; ++i) {

@@ -29,7 +29,7 @@ namespace crusader::editor::gen {
 
 constexpr const char* kGeneratorName = "Crusader: No Limit";
 // Raised whenever a seed would give another level than before.
-constexpr int kGeneratorVersion = 16;  // 2: locks; 3: storeys and lifts; 4: guards; 5: missions; 6: rooms cut by footprint, closed; 7: rooms cut by their inside, heaps whole; 8: doors cut in walls, floor quarters; 9: room outlines; 10: black frames, black tiles over the floor past the rooms; 11: every near wall shape; 12: mission plans; 13: square rooms; 14: cameras call reinforcements; 15: alarm boxes; 16: wall guns armed, their panels
+constexpr int kGeneratorVersion = 17;  // 2: locks; 3: storeys and lifts; 4: guards; 5: missions; 6: rooms cut by footprint, closed; 7: rooms cut by their inside, heaps whole; 8: doors cut in walls, floor quarters; 9: room outlines; 10: black frames, black tiles over the floor past the rooms; 11: every near wall shape; 12: mission plans; 13: square rooms; 14: cameras call reinforcements; 15: alarm boxes; 16: wall guns armed, their panels; 17: steam at a door, its valve
 constexpr const char* kManifestFile = "NOLIMIT.JSON";
 
 struct ManifestLevel {

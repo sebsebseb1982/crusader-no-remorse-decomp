@@ -149,6 +149,20 @@ struct Turret {
     std::uint8_t link = 0;
 };
 
+// Missions: a jet of steam at a door, on the side of its wall that the
+// camera sees, that hurts who walks into it (STEAM2, a damaging shape), and
+// the valve that shuts it, on a pipe block of a room reached before the
+// door (docs/GENERATEUR.md, "Steam").
+struct Steam {
+    int link = 0;        // in Result::links: the passage
+    int room = 0;        // the jet's room
+    int valve_room = 0;
+    Spot jet, valve;     // item positions
+    Spot front;          // where the player stands to turn the valve
+    std::uint8_t number = 0;  // the link (quality low) of jet, STEAMBOX and valve
+    bool along_x = true;      // the door's wall: along x (the jet south of it), else along y (east of it)
+};
+
 struct Result {
     Level level;
     int biome = 0;
@@ -161,6 +175,7 @@ struct Result {
     // (their link is the camera's); they are not there before.
     std::vector<Guard> reinforcements;
     std::vector<Turret> turrets;
+    std::vector<Steam> steams;
     int storeys = 1;
     int start_room = 0, exit_room = 0;
     Spot start, exit;  // the arrival egg; the exit pad's centre

@@ -10,6 +10,7 @@
 #include <deque>
 #include <functional>
 #include <map>
+#include <optional>
 #include <set>
 #include <tuple>
 
@@ -29,8 +30,10 @@ constexpr std::uint16_t kShapeTelepad = 0x1DB;
 constexpr std::uint8_t kDoorEggType = 0x0A, kDoorEggZone = 0x44, kExitZone = 0x22;
 constexpr std::uint8_t kTriggerOff = 7;
 constexpr std::uint8_t kTriggerEquip = 6;  // map number bits: action 2 (equip), bit 2
+constexpr std::uint8_t kTriggerState1 = 8;  // map number bit 3: acts in state 1 (a valve turned back)
 constexpr std::uint16_t kShapeAlarmBox = 0x477;
 constexpr std::uint16_t kShapePanelNS = 0x0A1, kShapePanelEW = 0x0A2;  // PANELNS, PANELEW: use calls TRIGGER
+constexpr std::uint16_t kShapePipeBlock = 0x03C;  // a valve stands on it
 constexpr int kFirstLink = 32;
 
 bool is_door_shape(std::uint16_t s) {
@@ -404,6 +407,13 @@ std::string check_walkable(const Result& r, const GameData& data, int* failed_ro
             return "the gun panel of room " + std::to_string(t.room) + " cannot be walked to";
         }
     }
+    // Each valve that shuts a jet of steam.
+    for (const Steam& s : r.steams) {
+        if (!reached(s.front)) {
+            if (failed_room) *failed_room = s.valve_room;
+            return "the steam valve of room " + std::to_string(s.valve_room) + " cannot be walked to";
+        }
+    }
     // With its card door shut, the room behind it must be out of reach (no
     // other way round, through rooms that ended up side by side).
     for (const Lock& lock : r.locks) {
@@ -658,6 +668,9 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
 
     // The rooms, their items moved, thinned out and relinked.
     int next_link = kFirstLink;
+    // By room: where a valve can stand on a pipe block of its own (the
+    // block, the player's spot in front of it), for the steam.
+    std::vector<std::vector<std::pair<LevelItem, Spot>>> valve_spots(n);
     std::vector<std::uint8_t> alarm_link(n, 0);  // by room: the link of its cameras and the guards they call
     int next_card = options.first_card;
     Level& level = r.level;
@@ -795,20 +808,21 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
         std::uint8_t gun_link = 0;
         LevelItem panel;
         Spot panel_front;
-        if (gun_shape && next_link < 250) {
-            // Spots: the middle of a straight wall piece of the room's north
-            // wall (PANELNS) or west wall (PANELEW), the faces the camera
-            // sees, with the room walkable 3 cells deep in front of it, and
-            // nothing else hanging or standing there.
-            auto floor_cell = [](std::int32_t v) { return v >= 0 ? v / kCell : -((-v + kCell - 1) / kCell); };
-            auto inside = [&](int row, int col) {
-                return row >= 0 && col >= 0 && row < piece.rows && col < piece.cols &&
-                       piece.outline[static_cast<std::size_t>(row * piece.cols + col)];
-            };
-            auto walkable = [&](int row, int col) {
-                return piece.cell(piece.x0 + col * kCell, piece.y0 + row * kCell);
-            };
-            std::vector<std::pair<LevelItem, Spot>> spots;
+        // Spots on the middle of a straight wall piece of the room's north
+        // wall (along x) or west wall, the faces the camera sees, for what
+        // hangs on it or stands against it `depth` cells deep and `half`
+        // cells to each side of the middle: the wall's cells out of the
+        // room, the room walkable 3 cells deep in front of the thing, and
+        // nothing else hanging or standing there (`make` gives the thing at
+        // the wall's far corner, along_x, the middle's far edge).
+        auto floor_cell = [](std::int32_t v) { return v >= 0 ? v / kCell : -((-v + kCell - 1) / kCell); };
+        auto inside = [&](int row, int col) {
+            return row >= 0 && col >= 0 && row < piece.rows && col < piece.cols &&
+                   piece.outline[static_cast<std::size_t>(row * piece.cols + col)];
+        };
+        auto walkable_cell = [&](int row, int col) { return piece.cell(piece.x0 + col * kCell, piece.y0 + row * kCell); };
+        auto wall_spots = [&](int half, int depth, std::int32_t above, auto make) {
+            std::vector<std::pair<LevelItem, Spot>> found;
             for (const LevelItem& w : piece.items) {
                 const ShapeInfo* s = w.shape < data.shapes.size() ? &data.shapes[w.shape] : nullptr;
                 int axis = 0, length = 0;
@@ -819,41 +833,65 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
                 const bool along_x = axis == kAlongX;
                 const int c1 = floor_cell(w.x - piece.x0), r1 = floor_cell(w.y - piece.y0);
                 const int c0 = c1 - s->footpad_x + 1, r0 = r1 - s->footpad_y + 1;
-                const int mid = along_x ? (c0 + c1 + 1) / 2 : (r0 + r1 + 1) / 2;  // the panel: cells mid - 1, mid
+                const int mid = along_x ? (c0 + c1 + 1) / 2 : (r0 + r1 + 1) / 2;  // cells mid - half .. mid + half - 1
+                if (half > 1 && (mid - half < (along_x ? c0 : r0) || mid + half - 1 > (along_x ? c1 : r1))) continue;
                 bool clear = true;
-                for (int t = mid - 1; t <= mid && clear; ++t) {
+                for (int t = mid - half; t <= mid + half - 1 && clear; ++t) {
                     // The wall's cell out of the room, the room south (east) of it.
                     clear = along_x ? !inside(r1, t) : !inside(t, c1);
-                    for (int d = 1; d <= 3 && clear; ++d) clear = along_x ? walkable(r1 + d, t) : walkable(t, c1 + d);
+                    for (int d = 1; d <= depth + 3 && clear; ++d) {
+                        clear = along_x ? walkable_cell(r1 + d, t) : walkable_cell(t, c1 + d);
+                    }
                 }
-                // Seen: a near wall (east of a panel on the north wall, south
+                // Seen: a near wall (east of a thing on the north wall, south
                 // of one on the west wall), as high as the room, hides what
                 // stands less than about 112 units behind it at its height:
-                // the room goes on 8 cells past the panel.
-                for (int d = 1; d <= 8 && clear; ++d) clear = along_x ? inside(r1 + 1, mid + d) : inside(mid + d, c1 + 1);
+                // the room goes on 8 cells past it.
+                for (int d = half; d < half + 8 && clear; ++d) {
+                    clear = along_x ? inside(r1 + 1, mid + d) : inside(mid + d, c1 + 1);
+                }
                 if (!clear) continue;
-                const std::int32_t px = along_x ? piece.x0 + (mid + 1) * kCell - 1 : piece.x0 + (c1 + 2) * kCell - 1;
-                const std::int32_t py = along_x ? piece.y0 + (r1 + 2) * kCell - 1 : piece.y0 + (mid + 1) * kCell - 1;
-                const std::int32_t pz = piece.z + 40;
-                LevelItem pn = make_item(along_x ? kShapePanelNS : kShapePanelEW, 0, px, py, pz);
-                const ShapeInfo& ps = data.shapes[pn.shape];
-                const std::int32_t bx0 = px - ps.footpad_x * kCell, by0 = py - ps.footpad_y * kCell;
+                const std::int32_t wall_far = along_x ? piece.y0 + (r1 + 1) * kCell - 1 : piece.x0 + (c1 + 1) * kCell - 1;
+                const std::int32_t edge = (along_x ? piece.x0 : piece.y0) + (mid + half) * kCell - 1;
+                const auto [thing, front] = make(along_x, wall_far, edge);
+                const ShapeInfo& ts = data.shapes[thing.shape];
+                const std::int32_t tx0 = thing.x - ts.footpad_x * kCell, ty0 = thing.y - ts.footpad_y * kCell;
+                const std::int32_t tz0 = thing.z, tz1 = thing.z + ts.footpad_z * 8 + above;  // and room above it
                 bool free = true;
                 for (const LevelItem& o : piece.items) {
                     const ShapeInfo* os = o.shape < data.shapes.size() ? &data.shapes[o.shape] : nullptr;
                     if (!os || &o == &w || o.z + os->footpad_z * 8 <= piece.z + kStepDown) continue;
                     const std::int32_t ox0 = o.x - std::max(1, int{os->footpad_x}) * kCell;
                     const std::int32_t oy0 = o.y - std::max(1, int{os->footpad_y}) * kCell;
-                    if (ox0 < px && bx0 < o.x && oy0 < py && by0 < o.y && o.z < pz + ps.footpad_z * 8 &&
-                        pz < o.z + std::max(1, int{os->footpad_z}) * 8) {
+                    if (ox0 < thing.x && tx0 < o.x && oy0 < thing.y && ty0 < o.y && o.z < tz1 &&
+                        tz0 < o.z + std::max(1, int{os->footpad_z}) * 8) {
                         free = false;
                         break;
                     }
                 }
-                if (!free) continue;
-                const Spot front = along_x ? Spot{px + 8, py + 64, 0} : Spot{px + 64, py + 8, 0};
-                spots.push_back({pn, front});
+                // What stands on the floor (`above` > 0) must not hide behind
+                // anything taller than it in front of it, toward the camera
+                // (a wall of the room's own inside, a machine).
+                for (const LevelItem& o : piece.items) {
+                    if (!free || above == 0) break;
+                    const ShapeInfo* os = o.shape < data.shapes.size() ? &data.shapes[o.shape] : nullptr;
+                    if (!os || os->is(ShapeInfo::kEditor) || &o == &w || o.z + os->footpad_z * 8 <= tz1 - above + 16) continue;
+                    const std::int32_t ox0 = o.x - os->footpad_x * kCell, oy0 = o.y - os->footpad_y * kCell;
+                    free = !(ox0 < thing.x + 112 && tx0 < o.x && oy0 < thing.y + 112 && ty0 < o.y);
+                }
+                if (free) found.push_back({thing, front});
             }
+            return found;
+        };
+        if (gun_shape && next_link < 250) {
+            // The panel: on the wall, 16 units out from its line, 40 up.
+            std::vector<std::pair<LevelItem, Spot>> spots =
+                wall_spots(1, 0, 0, [&](bool along_x, std::int32_t wall_far, std::int32_t edge) {
+                    const std::int32_t px = along_x ? edge : wall_far + 16, py = along_x ? wall_far + 16 : edge;
+                    LevelItem pn = make_item(along_x ? kShapePanelNS : kShapePanelEW, 0, px, py, piece.z + 40);
+                    const Spot front = along_x ? Spot{px + 8, py + 64, 0} : Spot{px + 64, py + 8, 0};
+                    return std::pair{pn, front};
+                });
             // Away from the guns (192 units at least) when the room allows it,
             // as the designers put them: the player crosses their fire.
             std::vector<std::pair<LevelItem, Spot>> away;
@@ -870,6 +908,23 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
                 panel_front = front;
                 gun_link = static_cast<std::uint8_t>(next_link++);
             }
+        }
+        // Valve spots: a pipe block (64 x 64 x 32) against the north wall
+        // (frame 2) or the west wall (frame 1), as the designers' lone
+        // blocks stand, the valve on it (docs/GENERATEUR.md, "Steam").
+        for (auto [block, front] : wall_spots(2, 4, 64, [&](bool along_x, std::int32_t wall_far, std::int32_t edge) {
+                 const std::int32_t bx = along_x ? edge : wall_far + 64, by = along_x ? wall_far + 64 : edge;
+                 LevelItem b = make_item(kShapePipeBlock, along_x ? 2 : 1, bx, by, piece.z);
+                 const Spot f = along_x ? Spot{bx - 8, by + 48, 0} : Spot{bx + 48, by - 8, 0};
+                 return std::pair{b, f};
+             })) {
+            if (gun_link && std::abs(block.x - 32 - panel.x) + std::abs(block.y - 32 - panel.y) < 128) continue;
+            block.x += p.dx;
+            block.y += p.dy;
+            block.z -= piece.z;
+            front.x += p.dx;
+            front.y += p.dy;
+            valve_spots[k].push_back({block, front});
         }
         for (const LevelItem& src : piece.items) {
             if (in_cut(src)) continue;
@@ -1368,6 +1423,195 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
         }
     }
 
+    // Steam (docs/GENERATEUR.md, "Steam"): a jet at a door, on the side of
+    // its wall that the camera sees (in front of the door, or just past
+    // it), where the player walks through; the valve that shuts it on a
+    // pipe block of a room reached before the door, as the designers set
+    // theirs: a valve (frame 0) on the block's top, 16 units in from its
+    // far corner, that acts in state 1 (turned back: equip the STEAMBOX of
+    // its link with 1, the steam on), with the TRIGGER item 0x4B1 on it
+    // that acts in state 0 (turned: equip with 0, the steam off).
+    {
+        const WalkGrid grid = walk_grid(level.items, data, 0);
+        auto walkable = [&](int row, int col) {
+            return row >= 0 && col >= 0 && row < grid.H && col < grid.W &&
+                   grid.walk[static_cast<std::size_t>(row * grid.W + col)];
+        };
+        // Where the player's box fits (check_walkable's margin).
+        auto player_fits = [&](const Spot& at) {
+            const int row = (at.y - 24) / kCell, col = (at.x - 24) / kCell;
+            for (int dr = -1; dr <= 2; ++dr) {
+                for (int dc = -1; dc <= 2; ++dc) {
+                    if (!walkable(row + dr, col + dc)) return false;
+                }
+            }
+            return true;
+        };
+        auto in_room = [&](std::size_t q, std::int32_t x, std::int32_t y) {
+            return placed[q].piece->cell(x - placed[q].dx, y - placed[q].dy);
+        };
+        auto room_at = [&](std::int32_t x, std::int32_t y) {
+            for (std::size_t q = 0; q < n; ++q) {
+                if (in_room(q, x, y)) return static_cast<int>(q);
+            }
+            return -1;
+        };
+        // What stands over a rectangle of the floor, under `height` (the
+        // editor's markers, floors and what hangs higher aside).
+        auto stands_over = [&](std::int32_t x0, std::int32_t y0, std::int32_t x1, std::int32_t y1, std::int32_t z0,
+                               std::int32_t height, const LevelItem* except) {
+            for (const LevelItem& i : level.items) {
+                if (&i == except || i.shape >= data.shapes.size()) continue;
+                const ShapeInfo& s = data.shapes[i.shape];
+                const bool marker = s.is(ShapeInfo::kEditor);
+                if (marker && i.shape != kShapeMonster) continue;
+                const std::int32_t top = i.z + s.footpad_z * 8;
+                if (!marker && (top <= z0 + kStepDown || i.z >= z0 + height)) continue;
+                const std::int32_t margin = marker ? 48 : 0;  // a guard's post: the guard's width
+                if (i.x - s.footpad_x * kCell < x1 + margin && x0 - margin <= i.x && i.y - s.footpad_y * kCell < y1 + margin &&
+                    y0 - margin <= i.y) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        // Seen: nothing taller than `height` stands within 112 units in
+        // front of a rectangle, toward the camera (south and east), as a
+        // room's near wall does, drawn as a black frame.
+        auto hidden = [&](std::int32_t x0, std::int32_t y0, std::int32_t x1, std::int32_t y1, std::int32_t height,
+                          const LevelItem* except) {
+            for (const LevelItem& i : level.items) {
+                if (&i == except || i.shape >= data.shapes.size()) continue;
+                const ShapeInfo& s = data.shapes[i.shape];
+                if (s.is(ShapeInfo::kEditor) || i.z + s.footpad_z * 8 <= height) continue;
+                if (i.x - s.footpad_x * kCell < x1 + 112 && x0 <= i.x && i.y - s.footpad_y * kCell < y1 + 112 && y0 <= i.y) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        constexpr std::uint16_t kShapeSteam = 0x511, kShapeSteamBox = 0x500, kShapeValve = 0x030;
+        constexpr std::uint16_t kShapeTrigger = 0x4B1;
+        constexpr std::int32_t kJet = 80;  // STEAM2: 5 x 5 x 10 (80 x 80 x 80)
+        struct Option {
+            int link, room, valve_room;
+            bool along_x;
+            Spot jet, block, front;
+            std::optional<LevelItem> new_block;  // a pipe block of its own, to stand on
+        };
+        std::vector<Option> options_found;
+        for (std::size_t k = 1; k < n; ++k) {
+            const Joint& j = joints[k];
+            if (steps[k].locked || k - 1 >= r.links.size()) continue;
+            const bool along_x = j.along_x();
+            // The jet: centred on the door, against the wall's face or a
+            // little off it (the walls beside a doorway may be thicker).
+            std::int32_t x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+            int room = -1;
+            bool clear = false;
+            for (std::int32_t off = 0; off <= 48 && !clear; off += kCell) {
+                const std::int32_t a0 = j.centre - kJet / 2, face = j.line + kUnitW + off;
+                x0 = along_x ? a0 : face;
+                y0 = along_x ? face : a0;
+                x1 = x0 + kJet;
+                y1 = y0 + kJet;
+                room = room_at((x0 + x1) / 2, (y0 + y1) / 2);
+                if (room <= 0) break;  // the arrival room stays calm
+                clear = true;
+                for (std::int32_t y = y0; y < y1 && clear; y += kCell) {
+                    for (std::int32_t x = x0; x < x1 && clear; x += kCell) {
+                        clear = walkable(y / kCell, x / kCell) && in_room(static_cast<std::size_t>(room), x, y);
+                    }
+                }
+                clear = clear && !stands_over(x0, y0, x1, y1, 0, 80, nullptr) && !hidden(x0, y0, x1, y1, 80, nullptr);
+            }
+            if (!clear) continue;
+            auto by_jet = [&](std::int32_t bx0, std::int32_t by0, std::int32_t bx1, std::int32_t by1) {
+                return bx0 <= x1 + 64 && x0 - 64 <= bx1 && by0 <= y1 + 64 && y0 - 64 <= by1;
+            };
+            // The valve: on a free pipe block of the nearest room before
+            // the door (the door's parent, else the room before it), else
+            // on a block of its own against a wall of it.
+            int q = j.parent;
+            for (int up = 0; up < 2 && q >= 0; ++up, q = q > 0 ? joints[static_cast<std::size_t>(q)].parent : -1) {
+                bool found = false;
+                for (const LevelItem& b : level.items) {
+                    if (b.shape != kShapePipeBlock || b.z > kStepDown) continue;
+                    const ShapeInfo& s = data.shapes[b.shape];
+                    const std::int32_t bx0 = b.x - s.footpad_x * kCell + 1, by0 = b.y - s.footpad_y * kCell + 1;
+                    if (!in_room(static_cast<std::size_t>(q), (bx0 + b.x) / 2, (by0 + b.y) / 2)) continue;
+                    if (by_jet(bx0, by0, b.x, b.y)) continue;
+                    const std::int32_t top = b.z + s.footpad_z * 8;
+                    if (stands_over(bx0, by0, b.x + 1, b.y + 1, top - kStepDown - 1, 48, &b) ||
+                        hidden(bx0, by0, b.x + 1, b.y + 1, top + 16, &b)) {
+                        continue;
+                    }
+                    // Where the player turns it: beside the block, the
+                    // camera's side first.
+                    const std::int32_t cx = (bx0 + b.x) / 2, cy = (by0 + b.y) / 2;
+                    const Spot fronts[] = {{cx + 24, b.y + 1 + 48, 0}, {b.x + 1 + 48, cy + 24, 0},
+                                           {cx + 24, by0 - 16, 0}, {bx0 - 16, cy + 24, 0}};
+                    for (const Spot& f : fronts) {
+                        if (!player_fits(f)) continue;
+                        options_found.push_back({static_cast<int>(k - 1), room, q, along_x, {x1 - 1, y1 - 1, 0},
+                                                 {b.x, b.y, top}, f, std::nullopt});
+                        found = true;
+                        break;
+                    }
+                    if (found) break;
+                }
+                for (const auto& [b, f] : valve_spots[static_cast<std::size_t>(q)]) {
+                    if (found) break;
+                    const std::int32_t bx0 = b.x - 63, by0 = b.y - 63;
+                    if (by_jet(bx0, by0, b.x, b.y) || stands_over(bx0, by0, b.x + 1, b.y + 1, 0, 48, nullptr) ||
+                        !player_fits(f)) {
+                        continue;
+                    }
+                    options_found.push_back({static_cast<int>(k - 1), room, q, along_x, {x1 - 1, y1 - 1, 0},
+                                             {b.x, b.y, b.z + 32}, f, b});
+                    found = true;
+                }
+                if (found) break;
+            }
+        }
+        if (!options_found.empty() && next_link < 250) {
+            // A room's own block first, as the designers set theirs.
+            std::vector<Option> own;
+            for (const Option& o : options_found) {
+                if (!o.new_block) own.push_back(o);
+            }
+            if (!own.empty()) options_found = std::move(own);
+            const Option& o = options_found[static_cast<std::size_t>(rng.below(static_cast<int>(options_found.size())))];
+            Steam st;
+            st.link = o.link;
+            st.room = o.room;
+            st.valve_room = o.valve_room;
+            st.along_x = o.along_x;
+            st.number = static_cast<std::uint8_t>(next_link++);
+            st.jet = o.jet;
+            st.valve = {o.block.x - 16, o.block.y - 16, o.block.z};
+            st.front = o.front;
+            if (o.new_block) level.items.push_back(*o.new_block);
+            LevelItem jet = make_item(kShapeSteam, 0, st.jet.x, st.jet.y, st.jet.z);
+            jet.quality = st.number;
+            level.items.push_back(jet);
+            LevelItem box = make_item(kShapeSteamBox, 0, st.jet.x, st.jet.y, st.jet.z);
+            box.quality = st.number;
+            level.items.push_back(box);
+            LevelItem valve = make_item(kShapeValve, 0, st.valve.x, st.valve.y, st.valve.z);
+            set_trigger_target(valve, kShapeSteamBox);
+            valve.map_number = static_cast<std::uint8_t>(valve.map_number | kTriggerEquip | kTriggerState1);
+            valve.quality = static_cast<std::uint16_t>(1 << 8 | st.number);
+            level.items.push_back(valve);
+            LevelItem off = make_item(kShapeTrigger, 0, st.valve.x, st.valve.y, st.valve.z + 4);
+            set_trigger_target(off, kShapeSteamBox);
+            off.map_number = static_cast<std::uint8_t>(off.map_number | kTriggerEquip);
+            off.quality = st.number;
+            level.items.push_back(off);
+            r.steams.push_back(st);
+        }
+    }
+
     // A room's near walls (south, east) with nothing past them show the
     // black frame that the designers drew on a building's near side, not a
     // face to the void (a room whose neighbour on its map stayed behind).
@@ -1618,6 +1862,11 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
                       armed ? (", " + std::to_string(armed) + " gun(s) armed, a panel").c_str() : "",
                       steps[k].locked ? ", behind a card door" : "");
         r.notes.push_back(note);
+    }
+    for (const Steam& st : r.steams) {
+        const Link& l = r.links[static_cast<std::size_t>(st.link)];
+        r.notes.push_back("  steam at the door of rooms " + std::to_string(l.a) + " and " + std::to_string(l.b) +
+                          ", in room " + std::to_string(st.room) + ", its valve in room " + std::to_string(st.valve_room));
     }
     return r;
 }
