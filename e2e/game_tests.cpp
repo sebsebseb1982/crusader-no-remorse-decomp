@@ -1039,6 +1039,10 @@ void test_options(const std::filesystem::path& data) {
         game.mouse_button(false, dz.x0 + 5, dz.y0 + 5);
         CHECK(ps.dead_zone == PadSettings::kDefaultDeadZone - 1);
         game.render(screen);
+        // Issue #34: the ">" of the text, at the left of the wide value box, goes forward.
+        game.mouse_button(true, dz.x0 + 8 + 70, dz.y0 + 5);
+        game.mouse_button(false, dz.x0 + 8 + 70, dz.y0 + 5);
+        CHECK(ps.dead_zone == PadSettings::kDefaultDeadZone);
         CHECK(screen.row(pad->row_rect(G::kDeadZoneRow).y0)[pad->row_rect(G::kDeadZoneRow).x0 + 5] == 0x0C);
         // "Par defaut" resets everything; "retour" closes the screen, not the options.
         const auto reset = pad->row_rect(G::kDefaultRow);

@@ -23,8 +23,8 @@
 // Keys, as the options screen: up / '8' and down / '2' change row; left / '4'
 // and right / '6' change the stick rows; Enter binds, resets on "par defaut"
 // and closes on "retour"; Escape closes. Mouse: pressing a row focuses it, and
-// binds on an action row; on the stick rows the left half of the value goes
-// back and the right half forward. The controller drives the screen through
+// binds on an action row; on the stick rows the "<" half of the value text goes
+// back and the ">" half forward. The controller drives the screen through
 // the arrows, A (Enter) and B (Escape) while it is not waiting.
 
 #include "core/font.hpp"
@@ -72,6 +72,7 @@ public:
 
 private:
     void change(int row, int delta);  // the stick rows; delta: -1, +1
+    std::string stick_value(int row) const;  // "< 3 / 5 >"
     void activate(int row);           // Enter, or a press on a row
     void print(Surface8& screen, int x, int y, const std::string& text, int tint) const;
 

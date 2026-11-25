@@ -36,6 +36,15 @@ GamepadScreen::Rect GamepadScreen::value_rect(int row) const {
     return {kValueX0, r.y0, r.x1, r.y1};
 }
 
+// "< 3 / 5 >", the value of a stick row.
+// @orig none: port-only gamepad screen
+std::string GamepadScreen::stick_value(int row) const {
+    const PadSettings& pad = config_->pad;
+    const int level = row == kAimRow ? pad.aim : pad.dead_zone + 1;
+    const int levels = row == kAimRow ? PadSettings::kAimLevels : PadSettings::kDeadZoneLevels;
+    return "< " + std::to_string(level) + " / " + std::to_string(levels) + " >";
+}
+
 // Text in one colour: the font is drawn on a scratch surface, then its
 // pixels are copied in `tint`. A negative tint keeps the font's own colours.
 // @orig none: port-only gamepad screen
@@ -88,10 +97,10 @@ void GamepadScreen::draw(Surface8& screen) const {
                                            : tr(kPadButtonLabels[button]);
         } else if (row == kAimRow) {
             label = tr("AIM SPEED");
-            value = "< " + std::to_string(pad.aim) + " / " + std::to_string(PadSettings::kAimLevels) + " >";
+            value = stick_value(row);
         } else if (row == kDeadZoneRow) {
             label = tr("DEAD ZONE");
-            value = "< " + std::to_string(pad.dead_zone + 1) + " / " + std::to_string(PadSettings::kDeadZoneLevels) + " >";
+            value = stick_value(row);
         } else {
             label = row == kDefaultRow ? tr("DEFAULTS") : tr("BACK");
         }
@@ -187,8 +196,10 @@ void GamepadScreen::mouse_down(int x, int y) {
         *focus_ = row;
         if (row == kAimRow || row == kDeadZoneRow) {
             if (value_rect(row).contains(x, y)) {
-                const Rect v = value_rect(row);
-                change(row, x < (v.x0 + v.x1) / 2 ? -1 : 1);
+                // The text is left-aligned in the wide value box: the "<" and
+                // ">" are told apart by the middle of the text, not of the box.
+                const int text_width = TextWriter(*fonts_, kFont).measure(stick_value(row)).width;
+                change(row, x < kValueX0 + 8 + text_width / 2 ? -1 : 1);
             }
         } else if (row >= kDefaultRow) {
             activate(row);
