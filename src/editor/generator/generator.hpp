@@ -146,6 +146,9 @@ struct Result {
     std::vector<Lock> locks;  // in the order they are met on the way to the exit
     std::vector<Lift> lifts;
     std::vector<Guard> guards;
+    // Missions: guards that a room's camera calls when it sees the player
+    // (their link is the camera's); they are not there before.
+    std::vector<Guard> reinforcements;
     int storeys = 1;
     int start_room = 0, exit_room = 0;
     Spot start, exit;  // the arrival egg; the exit pad's centre

@@ -659,6 +659,84 @@ void check_seed(const std::filesystem::path& data, const gen::GameData& game_dat
         CHECK(silent_rooms * 5 <= guarded_rooms);
     }
 
+    // Cameras: the guards a room's camera calls are not there when the
+    // player comes in, and come when the camera sees him (in front of it,
+    // into the room).
+    {
+        std::set<int> rooms;
+        for (const gen::Guard& g : level.reinforcements) rooms.insert(g.room);
+        for (const int room_index : rooms) {
+            auto game = std::make_unique<Game>(data, test_saves(data), mod);
+            game->set_start(levels[0].map, 0x1E);
+            game->new_game(3);
+            World& w = game->world();
+            run_frames(*game, 120);
+            auto called_near = [&](const gen::Guard& g, const std::set<ObjId>* besides) {
+                for (ObjId id = 2; id <= 0xFF; ++id) {
+                    const Item* a = w.get(id);
+                    if (!a || (besides && besides->count(id))) continue;
+                    if (std::abs(a->x - g.place.x) <= 160 && std::abs(a->y - g.place.y) <= 160) return true;
+                }
+                return false;
+            };
+            std::vector<const gen::Guard*> calls;
+            for (const gen::Guard& g : level.reinforcements) {
+                if (g.room == room_index) calls.push_back(&g);
+            }
+            // Not there from the start (no NPC on its post).
+            for (const gen::Guard* g : calls) {
+                bool on_post = false;
+                for (ObjId id = 2; id <= 0xFF; ++id) {
+                    const Item* a = w.get(id);
+                    on_post = on_post || (a && std::abs(a->x - g->place.x) <= 24 && std::abs(a->y - g->place.y) <= 24);
+                }
+                CHECK(!on_post);
+            }
+            const gen::Spot in = gen::entry(level, room_index);
+            w.teleport(1, in.x, in.y, in.z, w.current_map());
+            run_frames(*game, 120);
+            // The room's own guards, there on coming in.
+            std::set<ObjId> there;
+            for (ObjId id = 2; id <= 0xFF; ++id) {
+                const Item* a = w.get(id);
+                if (!a) continue;
+                bool own = false;
+                for (const gen::Guard& g : level.guards) {
+                    own = own || (std::abs(a->x - g.place.x) <= 24 && std::abs(a->y - g.place.y) <= 24);
+                }
+                if (own) there.insert(id);
+            }
+            // In front of each of the room's cameras, by its link.
+            std::vector<World::Point> cameras;
+            w.for_each([&](const Item& i) {
+                if (i.parent != 0 || (i.quality & 0xFF) != calls.front()->link) return;
+                const std::string& cls = i.shape < game_data.class_names.size() ? game_data.class_names[i.shape] : "";
+                if (cls.rfind("CAMERA", 0) == 0) cameras.push_back({i.x, i.y, i.z});
+            });
+            CHECK(!cameras.empty());
+            int came = 0;
+            for (const World::Point& c : cameras) {
+                // Round it, nearer then farther, on the room's floor.
+                bool done = false;
+                for (const int r : {160, 288}) {
+                    for (const auto& d : {std::pair{0, 1}, std::pair{1, 0}, std::pair{1, 1}, std::pair{-1, 1},
+                                          std::pair{1, -1}, std::pair{0, -1}, std::pair{-1, 0}, std::pair{-1, -1}}) {
+                        if (done) break;
+                        w.teleport(1, c.x + d.first * r, c.y + d.second * r, in.z, w.current_map());
+                        run_frames(*game, 60);
+                        done = std::all_of(calls.begin(), calls.end(),
+                                           [&](const gen::Guard* g) { return called_near(*g, &there); });
+                    }
+                }
+            }
+            for (const gen::Guard* g : calls) came += called_near(*g, &there);
+            std::printf("  room %d: camera(s) %zu, %d guard(s) of %zu called\n", room_index, cameras.size(), came,
+                        calls.size());
+            CHECK(came == static_cast<int>(calls.size()));
+            CHECK(game->machine().faults().empty());
+        }
+    }
+
     // The exit teleporter: to the next level's start.
     {
         auto game = play("exit");

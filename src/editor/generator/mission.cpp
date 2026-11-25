@@ -28,6 +28,7 @@ constexpr std::uint16_t kShapeCardNS = 0x31D, kShapeCardEW = 0x31E, kShapeKeycar
 constexpr std::uint16_t kShapeTelepad = 0x1DB;
 constexpr std::uint8_t kDoorEggType = 0x0A, kDoorEggZone = 0x44, kExitZone = 0x22;
 constexpr std::uint8_t kTriggerOff = 7;
+constexpr std::uint8_t kTriggerEquip = 6;  // map number bits: action 2 (equip), bit 2
 constexpr int kFirstLink = 32;
 
 bool is_door_shape(std::uint16_t s) {
@@ -648,6 +649,7 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
 
     // The rooms, their items moved, thinned out and relinked.
     int next_link = kFirstLink;
+    std::vector<std::uint8_t> alarm_link(n, 0);  // by room: the link of its cameras and the guards they call
     int next_card = options.first_card;
     Level& level = r.level;
     for (std::size_t k = 0; k < n; ++k) {
@@ -731,7 +733,18 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
             if (in_cut(src)) continue;
             LevelItem i = src;
             const std::string cls = name(i.shape);
-            if (i.shape == kShapeMonster) {
+            const bool camera = starts(cls, "CAMERANS") || starts(cls, "CAMERAEW") || starts(cls, "CAMERACO");
+            if (camera) {
+                // A camera of the room's walls: on seeing the player, it calls
+                // the room's reinforcements (TRIGGER on their MONSTER places:
+                // equip, which brings the NPC in), whatever it called on its map.
+                if (!alarm_link[k] && next_link < 250) alarm_link[k] = static_cast<std::uint8_t>(next_link++);
+                if (!alarm_link[k]) continue;
+                // (Quality high 0: TRIGGER reads it, a camera's own may hold it back.)
+                i.quality = alarm_link[k];
+                set_trigger_target(i, kShapeMonster);
+                i.map_number = static_cast<std::uint8_t>((i.map_number & 0xE0) | kTriggerEquip);
+            } else if (i.shape == kShapeMonster) {
                 // A kind goes with a kept place of its link within 64 units.
                 const bool kept = std::any_of(places.begin(), places.end(), [&](const LevelItem* pl) {
                     return pl->quality_low() == i.quality_low() && std::abs(pl->x - i.x) <= 64 &&
@@ -1107,7 +1120,10 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
     for (std::size_t k = 0; k < n; ++k) {
         int have = static_cast<int>(std::count_if(r.guards.begin(), r.guards.end(),
                                                   [&](const Guard& g) { return g.room == static_cast<int>(k); }));
-        if (have >= steps[k].min_guards) continue;
+        // A room with a camera: two guards it calls (the second from
+        // difficulty 2), waiting off the map until it sees the player.
+        const int calls = alarm_link[k] ? 2 : 0;
+        if (have >= steps[k].min_guards && !calls) continue;
         const Spot in = k == 0 ? r.start : entry(r, static_cast<int>(k));
         std::vector<Spot> taken_spots{in, r.start, {r.exit.x + 56, r.exit.y + 56, 0}};
         for (const Lock& lock : r.locks) taken_spots.push_back(lock.key);
@@ -1153,6 +1169,35 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
             level.items.push_back(post);
             level.items.push_back(kind);
             r.guards.push_back(g);
+            const Spot placed_at = g.place;
+            std::erase_if(free, [&](const Spot& s) { return dist2(s, placed_at) < 112 * 112; });
+        }
+        for (int c = 0; c < calls && !free.empty(); ++c) {
+            // The farthest from the doorway: they come from the back.
+            std::size_t pick = 0;
+            for (std::size_t q = 1; q < free.size(); ++q) {
+                if (dist2(free[q], in) > dist2(free[pick], in)) pick = q;
+            }
+            Guard g;
+            g.room = static_cast<int>(k);
+            g.place = free[pick];
+            g.npc_type = map_fighter;
+            g.min_difficulty = 1 + c;
+            const std::int32_t dx = in.x - g.place.x, dy = in.y - g.place.y;
+            const int sx = dx > std::abs(dy) / 2 ? 1 : dx < -std::abs(dy) / 2 ? -1 : 0;
+            const int sy = dy > std::abs(dx) / 2 ? 1 : dy < -std::abs(dx) / 2 ? -1 : 0;
+            constexpr int kDir[3][3] = {{7, 6, 5}, {0, 0, 4}, {1, 2, 3}};  // [sx + 1][sy + 1]
+            g.direction = kDir[sx + 1][sy + 1];
+            g.link = alarm_link[k];
+            auto [post, kind] = make_monster_pair(g.place.x, g.place.y, 0, g.npc_type, g.link);
+            MonsterPair m = read_monster_pair(post, kind);
+            m.direction = g.direction;
+            m.min_difficulty = g.min_difficulty;
+            m.on_enter = false;  // called by the camera
+            write_monster_pair(post, kind, m);
+            level.items.push_back(post);
+            level.items.push_back(kind);
+            r.reinforcements.push_back(g);
             const Spot placed_at = g.place;
             std::erase_if(free, [&](const Spot& s) { return dist2(s, placed_at) < 112 * 112; });
         }
@@ -1398,9 +1443,12 @@ Result build_mission(const GameData& data, const std::vector<MissionStep>& steps
             if (i.shape == kShapeMonster && i.frame == 0 && i.x >= b.x0 && i.x < b.x1 && i.y >= b.y0 && i.y < b.y1) ++guards;
         }
         const Rect b = placed[k].box();
-        std::snprintf(note, sizeof note, "  %d %-22s at (%d..%d, %d..%d): %s, %d guard(s)%s", static_cast<int>(k),
+        const int called = static_cast<int>(std::count_if(r.reinforcements.begin(), r.reinforcements.end(),
+                                                          [&](const Guard& g) { return g.room == static_cast<int>(k); }));
+        std::snprintf(note, sizeof note, "  %d %-22s at (%d..%d, %d..%d): %s, %d guard(s)%s%s", static_cast<int>(k),
                       purpose_name(steps[k].purpose), b.x0, b.x1, b.y0, b.y1, placed[k].piece->describe().c_str(),
-                      guards, steps[k].locked ? ", behind a card door" : "");
+                      guards - called, called ? (", camera calling " + std::to_string(called)).c_str() : "",
+                      steps[k].locked ? ", behind a card door" : "");
         r.notes.push_back(note);
     }
     return r;
