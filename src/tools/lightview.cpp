@@ -108,6 +108,9 @@ std::vector<CeilingLight> load_ceiling(std::size_t map, const std::filesystem::p
     return parse_ceiling_lights(*doc, ceiling_light_kinds());
 }
 
+// The time spent lighting (shade), for --bench.
+std::uint64_t g_shade_ticks = 0;
+
 // Draws the world around `camera`, lit, into `argb` (kW x kH).
 void render(const World& world, ShapeCache& shapes, const XformTable& xform, const Palette& palette,
             WorldLighting& lighting, const Camera& camera, View3D& v, const std::vector<PointLight>& lights,
@@ -134,7 +137,9 @@ void render(const World& world, ShapeCache& shapes, const XformTable& xform, con
         if (auto p = lighting.light_spot(mouse->first, mouse->second, mouse_height))
             extra.push_back({*p, scaled(mouse_color, 1.6f), 900});
     }
+    const auto t0 = SDL_GetPerformanceCounter();
     lighting.shade(world, screen, palette, v.opt, extra, argb.data());
+    g_shade_ticks += SDL_GetPerformanceCounter() - t0;
     if (v.opt.yaw != 0 || v.opt.pitch != 0) lighting.reproject(world, camera, v.opt, argb.data());
 }
 
@@ -310,16 +315,20 @@ int main(int argc, char** argv) {
                        kLightColors[color], argb);
             }
             const auto t0 = SDL_GetPerformanceCounter();
+            g_shade_ticks = 0;
             for (int k = 0; k < bench; ++k)
                 render(*world, shapes, xform, palette, lighting, camera, v, lights, mouse, mouse_height,
                        kLightColors[color], argb);
-            if (bench > 1)
-                std::printf("%.1f ms per frame\n",
-                            1000.0 * (SDL_GetPerformanceCounter() - t0) / SDL_GetPerformanceFrequency() / bench);
+            if (bench > 1) {
+                const double freq = double(SDL_GetPerformanceFrequency());
+                std::printf("%.1f ms per frame, %.2f ms of it lighting\n",
+                            1000.0 * double(SDL_GetPerformanceCounter() - t0) / freq / bench,
+                            1000.0 * double(g_shade_ticks) / freq / bench);
+            }
             for (const auto& [px, py] : probes) lighting.probe(*world, px, py);
             write_png_argb(png, argb);
             std::printf("map %zu camera (%d, %d): %zu lights, %zu puffs, %s -> %s\n", map, camera.x, camera.y,
-                        lighting.lights().size(), lighting.puff_count(), lighting.used_gpu() ? "GPU" : "CPU",
+                        lighting.lights().size(), lighting.puffs_shown().size(), lighting.used_gpu() ? "GPU" : "CPU",
                         png.c_str());
             return 0;
         }

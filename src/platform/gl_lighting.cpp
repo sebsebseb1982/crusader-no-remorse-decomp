@@ -54,10 +54,10 @@ uniform highp sampler2D uPalette;
 uniform highp sampler2D uItems;
 uniform highp sampler2D uLights;
 uniform highp sampler2D uBoxes;
-uniform highp isampler2D uLightBoxes;
+uniform highp isampler2D uTiles;
 uniform highp sampler2D uPuffs;
 uniform highp sampler2D uAtlas;
-uniform int uViewX, uViewY, uWidth, uHeight, uLightCount, uPuffCount, uFlags;
+uniform int uViewX, uViewY, uWidth, uHeight, uFlags, uTilesX;
 uniform float uAmbient, uTime;
 out vec4 outColor;
 
@@ -67,6 +67,7 @@ const vec3 RIGHT = vec3(0.7071, -0.7071, 0.0);
 const vec3 UP = vec3(-0.3536, -0.3536, 0.8660);
 const vec3 RAY_STEP = vec3(0.5, 0.5, K / 8.0);
 const int SHADOWS = 1, SPRITE_CUT = 2, BUMP = 4, SMOKE = 8;
+const int TILE = 32, TILE_HEADER = 6;  // LitFrame::kTile, kTileHeader
 const vec3 LIQUID_TINT = vec3(0.35, 1.0, 0.15);
 const float LIQUID_GLOW = 2.0;
 const float LIQUID_DIM = 0.9;  // kLiquidDim
@@ -78,6 +79,8 @@ vec3 lin(uint c) { return pow(srgb(c), vec3(2.2)); }
 float lum(uint c) { vec3 l = lin(c); return sqrt(l.r * 0.3 + l.g * 0.59 + l.b * 0.11); }
 uint screenAt(ivec2 q) { return texelFetch(uScreen, q, 0).r; }
 uint codeAt(ivec2 q) { return texelFetch(uCode, q, 0).r; }
+// The tiles' lists (LitFrame::tiles).
+int tileAt(int i) { return texelFetch(uTiles, ivec2(i & 1023, i >> 10), 0).r; }
 
 // Bump: the luminance of a neighbour of the same item.
 float neighbour(ivec2 q, uint code, float own) {
@@ -167,8 +170,7 @@ bool occluded(vec3 p, vec3 n, float self, vec3 lpos, float lowner, int first, in
     vec3 o = p + n * 3.0;
     vec3 dir = lpos - o, inv = inverseDir(dir);
     for (int k = 0; k < count; ++k) {
-        int i = first + k;
-        int bi = texelFetch(uLightBoxes, ivec2(i & 1023, i >> 10), 0).r;
+        int bi = tileAt(first + k);
         vec4 b0 = fetchf(uBoxes, bi * 4), b1 = fetchf(uBoxes, bi * 4 + 1);
         if (b0.w == self || b0.w == lowner) continue;
         if (boxHides(bi, b0, b1, o, dir, inv)) return true;
@@ -200,37 +202,39 @@ bool beamMeets(vec3 lo, vec3 hi, vec3 o, vec3 c, vec2 a) {
 }
 
 // The share of light l that p sees (seen_share in lighting.cpp): a spread
-// source (L5.xy its half sizes) by AREA_SAMPLES points of it.
+// source (L5.xy its half sizes) by AREA_SAMPLES points of it; its occluders
+// are the tile's list from `first`, `count` of them.
 const int AREA_SAMPLES = 12, AREA_FIRST = 4;  // kAreaSamples, kAreaFirst
-float seenShare(vec3 p, vec3 n, float self, int l, vec4 L0, float lowner, vec4 L2, float jitter) {
-    vec4 L5 = fetchf(uLights, l * 6 + 5);
-    if (L5.x <= 0.0 && L5.y <= 0.0) return occluded(p, n, self, L0.xyz, lowner, int(L2.x), int(L2.y)) ? 0.0 : 1.0;
-    int first = int(L2.x), count = int(L2.y);
+// From o to point k of a spread source (L0 its centre, L5.xy its half sizes),
+// an R2 sequence turned by the pixel's jitter. Found again at each use, not
+// kept in arrays: those took registers enough to slow the shader down.
+vec3 sampleDir(int k, vec3 o, vec4 L0, vec4 L5, float jitter) {
+    float u = fract(jitter + float(k) * 0.7548776662);
+    float v = fract(jitter * 0.618034 + float(k) * 0.5698402910);
+    return L0.xyz + vec3((2.0 * u - 1.0) * L5.x, (2.0 * v - 1.0) * L5.y, 0.0) - o;
+}
+float seenShare(vec3 p, vec3 n, float self, int l, vec4 L0, float lowner, int first, int count, float jitter) {
     if (count == 0) return 1.0;
+    vec4 L5 = fetchf(uLights, l * 6 + 5);
+    if (L5.x <= 0.0 && L5.y <= 0.0) return occluded(p, n, self, L0.xyz, lowner, first, count) ? 0.0 : 1.0;
     vec3 o = p + n * 3.0;
-    vec3 dirs[AREA_SAMPLES], invs[AREA_SAMPLES];
-    for (int k = 0; k < AREA_SAMPLES; ++k) {
-        float u = fract(jitter + float(k) * 0.7548776662);
-        float v = fract(jitter * 0.618034 + float(k) * 0.5698402910);
-        dirs[k] = L0.xyz + vec3((2.0 * u - 1.0) * L5.x, (2.0 * v - 1.0) * L5.y, 0.0) - o;
-        invs[k] = inverseDir(dirs[k]);
-    }
-    bool hidden[AREA_SAMPLES];
-    for (int k = 0; k < AREA_SAMPLES; ++k) hidden[k] = false;
+    uint hidden = 0u;  // by bit, the points found hidden
     int nhidden = 0;
     // The first AREA_FIRST points, then the others only where those disagree.
     for (int pass = 0; pass < 2; ++pass) {
         int k0 = pass == 0 ? 0 : AREA_FIRST, k1 = pass == 0 ? AREA_FIRST : AREA_SAMPLES;
         int found = 0;
         for (int j = 0; j < count; ++j) {
-            int i = first + j;
-            int bi = texelFetch(uLightBoxes, ivec2(i & 1023, i >> 10), 0).r;
+            int bi = tileAt(first + j);
             vec4 b0 = fetchf(uBoxes, bi * 4), b1 = fetchf(uBoxes, bi * 4 + 1);
             if (b0.w == self || b0.w == lowner) continue;
             if (!beamMeets(b0.xyz, b1.xyz, o, L0.xyz, L5.xy)) continue;
             for (int k = k0; k < k1; ++k) {
-                if (hidden[k] || !boxHides(bi, b0, b1, o, dirs[k], invs[k])) continue;
-                hidden[k] = true;
+                uint bit = 1u << uint(k);
+                if ((hidden & bit) != 0u) continue;
+                vec3 dir = sampleDir(k, o, L0, L5, jitter);
+                if (!boxHides(bi, b0, b1, o, dir, inverseDir(dir))) continue;
+                hidden |= bit;
                 ++found;
             }
             if (found == k1 - k0) break;
@@ -285,24 +289,31 @@ float spotOf(vec4 L2, vec4 L3, vec3 to, float dist) {
     return smoothstep(L3.w, L2.w, -dot(to, L3.xyz) / max(dist, 1e-3));
 }
 
-// The ambient light at p, lowered round the liquids (liquid_dim in lighting.cpp).
-float ambientAt(vec3 p) {
+// How much light l lowers the ambient light at p (liquid_dim in lighting.cpp).
+float dimOf(int l, vec3 p) {
+    float dim = fetchf(uLights, l * 6 + 4).z;
+    if (dim <= 0.0) return 0.0;
+    vec4 L0 = fetchf(uLights, l * 6);
+    vec3 to = L0.xyz - p;
+    float f = 1.0 - dot(to, to) / (L0.w * L0.w);
+    return f > 0.0 ? dim * smoothstep(0.0, 0.5, f) : 0.0;
+}
+
+// The ambient light at p, lowered round the liquids, by the `count` lights
+// of a list of uTiles from `first`, `stride` ints apart (those reaching p).
+float ambientIn(vec3 p, int first, int count, int stride) {
     float most = 0.0;
-    for (int l = 0; l < uLightCount; ++l) {
-        float dim = fetchf(uLights, l * 6 + 4).z;
-        if (dim <= 0.0) continue;
-        vec4 L0 = fetchf(uLights, l * 6);
-        vec3 to = L0.xyz - p;
-        float f = 1.0 - dot(to, to) / (L0.w * L0.w);
-        if (f > 0.0) most = max(most, dim * smoothstep(0.0, 0.5, f));
-    }
+    for (int k = 0; k < count; ++k) most = max(most, dimOf(tileAt(first + k * stride), p));
     return uAmbient * (1.0 - LIQUID_DIM * most);
 }
 
-vec3 lightAt(vec3 p) {
-    float a = ambientAt(p);
+// The light at p, without shadows, of the `count` lights of uTiles from
+// `first` (those reaching p).
+vec3 lightAt(vec3 p, int first, int count) {
+    float a = ambientIn(p, first, count, 1);
     vec3 light = vec3(a, a * 1.02, a * 1.12);
-    for (int l = 0; l < uLightCount; ++l) {
+    for (int k = 0; k < count; ++k) {
+        int l = tileAt(first + k);
         vec4 L0 = fetchf(uLights, l * 6), L1 = fetchf(uLights, l * 6 + 1);
         vec4 L2 = fetchf(uLights, l * 6 + 2), L3 = fetchf(uLights, l * 6 + 3);
         vec3 to = L0.xyz - p;
@@ -314,12 +325,14 @@ vec3 lightAt(vec3 p) {
     return light;
 }
 
-// The lamps' glow over a pixel (halo_over in lighting.cpp).
-vec3 haloOver(vec3 colour, ivec2 pix, bool clip, float surfaceS, float self, bool billboard) {
+// The lamps' glow over a pixel (halo_over in lighting.cpp): the `count`
+// lights of uTiles from `first` (those of its tile).
+vec3 haloOver(vec3 colour, ivec2 pix, bool clip, float surfaceS, float self, bool billboard, int first, int count) {
     float sx = float(uViewX + pix.x) + 0.5, sy = float(uViewY + pix.y) + 0.5;
     vec3 A = vec3(2.0 * sx, -2.0 * sx, -sy * K);
     float bb = dot(RAY_STEP, RAY_STEP);
-    for (int l = 0; l < uLightCount; ++l) {
+    for (int h = 0; h < count; ++h) {
+        int l = tileAt(first + h);
         vec4 L4 = fetchf(uLights, l * 6 + 4);
         if (L4.x <= 0.0) continue;
         vec4 L0 = fetchf(uLights, l * 6), L1 = fetchf(uLights, l * 6 + 1);
@@ -340,14 +353,16 @@ vec3 haloOver(vec3 colour, ivec2 pix, bool clip, float surfaceS, float self, boo
     return colour;
 }
 
-// The puffs (far to near) over a pixel; with clip, only in front of its surface.
-vec3 smokeOver(vec3 colour, ivec2 pix, bool clip, float surfaceS) {
+// The puffs (far to near) over a pixel, the `count` of uTiles from `first`
+// (those of its tile); with clip, only in front of its surface.
+vec3 smokeOver(vec3 colour, ivec2 pix, bool clip, float surfaceS, int first, int count) {
     float sx = float(uViewX + pix.x) + 0.5, sy = float(uViewY + pix.y) + 0.5;
     vec3 A = vec3(2.0 * sx, -2.0 * sx, -sy * K);
     float bb = dot(RAY_STEP, RAY_STEP);
     float stepLength = sqrt(bb);
-    for (int i = 0; i < uPuffCount; ++i) {
-        vec4 q0 = fetchf(uPuffs, i * 3), q1 = fetchf(uPuffs, i * 3 + 1), q2 = fetchf(uPuffs, i * 3 + 2);
+    for (int j = 0; j < count; ++j) {
+        int i = tileAt(first + j);
+        vec4 q0 = fetchf(uPuffs, i * 4), q1 = fetchf(uPuffs, i * 4 + 1), q2 = fetchf(uPuffs, i * 4 + 2);
         vec3 d = A - q0.xyz;
         float mid = -dot(RAY_STEP, d) / bb;
         vec3 e = d + RAY_STEP * mid;
@@ -357,9 +372,12 @@ vec3 smokeOver(vec3 colour, ivec2 pix, bool clip, float surfaceS) {
         float s0 = mid - half_, s1 = mid + half_;
         if (clip) s0 = max(s0, surfaceS);
         if (s1 <= s0) continue;
+        // The lights reaching the puff.
+        vec4 q3 = fetchf(uPuffs, i * 4 + 3);
+        int lights = int(q3.x), nlights = int(q3.y);
         // A liquid's steam is thin and small: lit as at its centre.
         bool steam = q2.z > 0.0;
-        vec3 centreLight = steam ? lightAt(q0.xyz) : vec3(0.0);
+        vec3 centreLight = steam ? lightAt(q0.xyz, lights, nlights) : vec3(0.0);
         int steps = steam ? 4 : 8;
         float ds = (s1 - s0) / float(steps);
         float len = ds * stepLength;
@@ -373,7 +391,7 @@ vec3 smokeOver(vec3 colour, ivec2 pix, bool clip, float surfaceS) {
             if (sigma <= 0.0) continue;
             float keep = exp(-sigma * len);
             vec3 glow = vec3(1.0, 0.45, 0.12) * (q1.y * q1.y * 2.5 * shape) + LIQUID_TINT * (q2.z * shape);
-            vec3 radiance = (steam ? centreLight : lightAt(p)) * q1.z + glow;
+            vec3 radiance = (steam ? centreLight : lightAt(p, lights, nlights)) * q1.z + glow;
             colour = colour * keep + radiance * (1.0 - keep);
         }
     }
@@ -390,6 +408,8 @@ void main() {
         outColor = vec4(o.b, o.g, o.r, 1.0);
         return;
     }
+    // The pixel's tile: its lights, halos and puffs (LitFrame::tiles).
+    int head = ((pix.y / TILE) * uTilesX + pix.x / TILE) * TILE_HEADER;
     vec3 col;
     vec3 p = vec3(0.0), n = vec3(0.0, 0.0, 1.0);
     bool lit = code < 0xFFF0u;
@@ -402,11 +422,14 @@ void main() {
         vec4 b = fetchf(uItems, int(code) * 4 + 1);
         float self = b.w;
         bool liquid = (int(b.z) & 4) != 0;
+        // The lights reaching the pixel's tile.
+        int entry = tileAt(head), entries = tileAt(head + 1);
         // The liquid itself is the light: its ambient stays.
-        float a = liquid ? uAmbient : ambientAt(p);
+        float a = liquid ? uAmbient : ambientIn(p, entry, entries, 3);
         vec3 light = vec3(a, a * 1.02, a * 1.12);
         float jitter = jitterAt(pix);
-        for (int l = 0; l < uLightCount; ++l) {
+        for (int e = entry; e < entry + entries * 3; e += 3) {
+            int l = tileAt(e);
             vec4 L0 = fetchf(uLights, l * 6), L1 = fetchf(uLights, l * 6 + 1), L2 = fetchf(uLights, l * 6 + 2);
             vec4 L3 = fetchf(uLights, l * 6 + 3);
             if (liquid && L2.z > 0.5) continue;
@@ -421,7 +444,7 @@ void main() {
             float f = 1.0 - d2 / r2;
             float w = ndl * f * f * cone;
             if ((uFlags & SHADOWS) != 0) {
-                w *= seenShare(p, n, self, l, L0, L1.w, L2, jitter);
+                w *= seenShare(p, n, self, l, L0, L1.w, tileAt(e + 1), tileAt(e + 2), jitter);
                 if (w <= 0.0) continue;
             }
             light += L1.rgb * w;
@@ -431,8 +454,8 @@ void main() {
         if (liquid) col += lin(c) * LIQUID_TINT * (LIQUID_GLOW * liquidGlow(p, uTime));
     }
     vec4 own = lit ? fetchf(uItems, int(code) * 4 + 1) : vec4(0.0, 0.0, 0.0, -1.0);
-    col = haloOver(col, pix, lit, p.x + p.y, own.w, (int(own.z) & 1) != 0);
-    if ((uFlags & SMOKE) != 0 && uPuffCount > 0) col = smokeOver(col, pix, lit, p.x + p.y);
+    col = haloOver(col, pix, lit, p.x + p.y, own.w, (int(own.z) & 1) != 0, tileAt(head + 2), tileAt(head + 3));
+    if ((uFlags & SMOKE) != 0) col = smokeOver(col, pix, lit, p.x + p.y, tileAt(head + 4), tileAt(head + 5));
     vec3 o = pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2));
     outColor = vec4(o.b, o.g, o.r, 1.0);
 }
@@ -491,11 +514,11 @@ struct GlLighting::Impl {
     GLuint program = 0, vao = 0, fbo = 0, target = 0;
     int target_w = 0, target_h = 0;
     // Textures, by unit.
-    enum Unit { kScreen, kCode, kPalette, kItems, kLights, kBoxes, kLightBoxes, kPuffs, kAtlas, kUnits };
+    enum Unit { kScreen, kCode, kPalette, kItems, kLights, kBoxes, kTiles, kPuffs, kAtlas, kUnits };
     GLuint tex[kUnits] = {};
     int tex_w[kUnits] = {}, tex_h[kUnits] = {};
-    GLint u_view_x = -1, u_view_y = -1, u_width = -1, u_height = -1, u_lights = -1, u_puffs = -1, u_flags = -1,
-          u_ambient = -1, u_time = -1;
+    GLint u_view_x = -1, u_view_y = -1, u_width = -1, u_height = -1, u_flags = -1,
+          u_ambient = -1, u_time = -1, u_tiles_x = -1;
     std::vector<float> scratch;
     std::vector<std::int32_t> scratch_int;
 
@@ -562,17 +585,16 @@ struct GlLighting::Impl {
         }
         UseProgram(program);
         const char* samplers[kUnits] = {"uScreen", "uCode",   "uPalette", "uItems", "uLights",
-                                        "uBoxes",  "uLightBoxes", "uPuffs", "uAtlas"};
+                                        "uBoxes",  "uTiles",   "uPuffs",   "uAtlas"};
         for (int i = 0; i < kUnits; ++i) Uniform1i(GetUniformLocation(program, samplers[i]), i);
         u_view_x = GetUniformLocation(program, "uViewX");
         u_view_y = GetUniformLocation(program, "uViewY");
         u_width = GetUniformLocation(program, "uWidth");
         u_height = GetUniformLocation(program, "uHeight");
-        u_lights = GetUniformLocation(program, "uLightCount");
-        u_puffs = GetUniformLocation(program, "uPuffCount");
         u_flags = GetUniformLocation(program, "uFlags");
         u_ambient = GetUniformLocation(program, "uAmbient");
         u_time = GetUniformLocation(program, "uTime");
+        u_tiles_x = GetUniformLocation(program, "uTilesX");
         GenVertexArrays(1, &vao);
         GenFramebuffers(1, &fbo);
         GenTextures(kUnits, tex);
@@ -711,7 +733,7 @@ bool GlLighting::shade(const LitFrame& f, std::uint32_t* argb) {
     g.upload_floats(Impl::kItems, f.items);
     g.upload_floats(Impl::kLights, f.lights);
     g.upload_floats(Impl::kBoxes, f.boxes);
-    g.upload_ints(Impl::kLightBoxes, f.light_boxes);
+    g.upload_ints(Impl::kTiles, f.tiles);
     g.upload_floats(Impl::kPuffs, f.puffs);
     g.ActiveTexture(kTexture0 + Impl::kAtlas);
     g.BindTexture(kTexture2D, g.tex[Impl::kAtlas]);
@@ -737,8 +759,7 @@ bool GlLighting::shade(const LitFrame& f, std::uint32_t* argb) {
     g.Uniform1i(g.u_view_y, f.view_top);
     g.Uniform1i(g.u_width, f.width);
     g.Uniform1i(g.u_height, f.height);
-    g.Uniform1i(g.u_lights, static_cast<GLint>(f.lights.size() / 24));
-    g.Uniform1i(g.u_puffs, static_cast<GLint>(f.puffs.size() / 12));
+    g.Uniform1i(g.u_tiles_x, f.tiles_x);
     g.Uniform1i(g.u_flags, (o.shadows ? 1 : 0) | (o.sprite_shadows ? 2 : 0) | (o.bump ? 4 : 0) | (o.smoke ? 8 : 0));
     g.Uniform1f(g.u_ambient, o.ambient);
     g.Uniform1f(g.u_time, f.time);

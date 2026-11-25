@@ -38,6 +38,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -158,14 +159,24 @@ struct LitFrame {
     // 16 floats an item: box (x_left, x, y_far, y), (z, z_top, flags, id),
     // atlas rectangle (x, y, w, h), frame rectangle (left, top, 0, 0) on screen.
     std::vector<float> items;
-    // 24 floats a light: position, radius; colour, owner; first and count of its occluders, liquid,
+    // 24 floats a light: position, radius; colour, owner; 0, 0, liquid,
     // spot cos_inner; spot direction (zero: all round), cos_outer; halo, halo gain, dim, 0;
     // source half sizes x, y (zero: a point), 0, 0.
     std::vector<float> lights;
     // 16 floats a box: lo, owner; hi, mirrored; atlas rectangle; sprite left, top, has sprite.
     std::vector<float> boxes;
-    std::vector<std::int32_t> light_boxes;  // occluder indices, per light ranges
-    // 12 floats a puff (PuffState: centre, radius, density, heat, grey, seed, time, feature, emit), far to near.
+    // By kTile x kTile tile of the screen (tiles_x a row), what shade_cpu
+    // keeps for it too: the lights that reach its points with, for each, the
+    // occluders between; the lamps whose halo shows over it; the puffs over
+    // it. kTileHeader ints a tile: first and count of its entries (three
+    // ints each: light, first occluder, occluders), of its halos (a light
+    // each), of its puffs (a puff each, far to near). Then the lists, and the
+    // lights reaching each puff.
+    static constexpr int kTile = 32, kTileHeader = 6;
+    int tiles_x = 0;
+    std::vector<std::int32_t> tiles;
+    // 16 floats a puff (PuffState: centre, radius, density, heat, grey, seed, time, feature, emit, 0;
+    // first and count of the lights reaching it in `tiles`, 0, 0), far to near.
     std::vector<float> puffs;
     // Sprites to add to the atlas: RGBA, R opaque, G / B the silhouette normal + 128.
     struct Upload {
@@ -251,6 +262,20 @@ private:
     struct Decoded;
     struct Box;
     class Pool;
+    // The lights reaching a tile of the screen and, for each, the occluders
+    // that can stand between (tile_lights); kept from frame to frame for
+    // their memory.
+    struct TileLights {
+        std::vector<std::uint32_t> ids;
+        std::vector<std::uint32_t> ends;  // by light: one past its last occluder in `boxes`
+        std::vector<std::uint32_t> boxes;
+        std::vector<std::uint32_t> halos;  // the lamps whose halo shows over it
+        std::vector<std::uint32_t> puffs;  // the puffs over it, far to near
+        std::span<const std::uint32_t> occluders(std::size_t k) const {
+            const std::uint32_t first = k ? ends[k - 1] : 0;
+            return {boxes.data() + first, ends[k] - first};
+        }
+    };
 
     const Decoded& decode(const ShapeFrame& frame);
     const Decoded& decoded(const ShapeFrame* frame) const { return *decoded_.at(frame); }
@@ -271,18 +296,21 @@ private:
     bool on_surface(const Vec3& p) const;
     void puff_states(std::vector<PuffState>& out) const;
     bool occluded(const Vec3& p, const Vec3& n, ObjId self, std::size_t light, bool sprite_cut,
-                  const std::vector<std::uint32_t>& boxes, const Vec3* at = nullptr) const;
+                  std::span<const std::uint32_t> boxes, const Vec3* at = nullptr) const;
     static bool box_hides(const Box& b, const Vec3& o, const Vec3& dir, const Vec3& inv, bool sprite_cut);
     float seen_share(const Vec3& p, const Vec3& n, ObjId self, std::size_t light, bool sprite_cut,
-                     const std::vector<std::uint32_t>& boxes, float jitter) const;
+                     std::span<const std::uint32_t> boxes, float jitter) const;
     Vec3 shade_point(int c, const Vec3& p, const Vec3& n, ObjId self, const LightingOptions& opt,
-                     const std::vector<std::uint32_t>& tile_lights,
-                     const std::vector<std::vector<std::uint32_t>>* tile_boxes, bool liquid = false,
+                     const std::vector<std::uint32_t>& ids, const TileLights* tile, bool liquid = false,
                      float jitter = 0.5f) const;
     Vec3 halo_over(Vec3 colour, int px, int py, bool clip, float surface_s, ObjId self, bool billboard,
                    const std::vector<std::uint32_t>& ids) const;
     Vec3 smoke_over(Vec3 colour, int px, int py, bool clip, float surface_s, const LightingOptions& opt,
                     const std::vector<std::uint32_t>& puffs) const;
+    void tile_lights(int x0, int y0, int x1, int y1, bool computed, const LightingOptions& opt,
+                     TileLights& out) const;
+    void screen_discs();
+    void tile_overlays(int x0, int y0, int x1, int y1, TileLights& out) const;
     void shade_cpu(const Surface8& screen, const LightingOptions& opt, std::uint32_t* argb);
     bool shade_gpu(const Surface8& screen, const LightingOptions& opt, std::uint32_t* argb);
     void atlas_place(const Decoded& d, LitFrame& frame);
@@ -319,6 +347,9 @@ private:
     std::vector<PointLight> lights_;
     std::vector<Box> boxes_;
     std::vector<std::vector<std::uint32_t>> per_light_;
+    // By tile of the last shade (shade_cpu's or shade_gpu's), kept from frame
+    // to frame for their memory.
+    std::vector<TileLights> tiles_;
     std::vector<std::uint32_t> lit_;  // last shaded picture, for reproject
 
     // Liquids around the view: their surface box (lighting space), steam or not.
@@ -335,6 +366,12 @@ private:
     std::vector<PuffState> puff_now_;  // far to near
     // By puff of puff_now_: the lights whose reach meets it (shade_cpu).
     std::vector<std::vector<std::uint32_t>> puff_lights_;
+    // Screen circles (absolute screen coordinates) of the puffs of puff_now_
+    // and of the lights' halos (radius 0: none), for the tiles (screen_discs).
+    struct Disc {
+        float x, y, r;
+    };
+    std::vector<Disc> puff_discs_, halo_discs_;
     std::unordered_map<ObjId, std::uint16_t> sprites_seen_;  // sprite item -> shape
     // A leak's hole by shape << 16 | frame << 8 | whole frame (hole()).
     mutable std::unordered_map<std::uint32_t, std::optional<std::pair<float, float>>> holes_;
