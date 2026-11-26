@@ -18,7 +18,9 @@ constexpr const char* kBackupList = ".update-backup.txt";
 constexpr std::uint64_t kMaxPackage = 128u << 20;  // bytes, the archive as downloaded
 
 bool ends_with(std::string_view text, std::string_view end) {
-    return text.size() >= end.size() && text.substr(text.size() - end.size()) == end;
+    // Not substr() == end: inlined into pick_archive, GCC 11 loses the size check and warns of a
+    // memcmp bound of -1 (-Wstringop-overread).
+    return text.size() >= end.size() && std::equal(end.rbegin(), end.rend(), text.rbegin());
 }
 
 std::vector<std::string> split(std::string_view text, char separator) {
