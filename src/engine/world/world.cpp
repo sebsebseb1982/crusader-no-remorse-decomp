@@ -675,6 +675,16 @@ ObjId World::create(std::uint16_t shape, std::uint8_t frame) {
     return id;
 }
 
+// @orig none: port-only sprite items (the original's sprites are not items)
+ObjId World::create_sprite(std::uint16_t shape, std::uint16_t frame) {
+    const ObjId id = create(shape, 0);
+    if (Item* item = get(id)) {
+        item->sprite_only = true;
+        item->frame = frame;
+    }
+    return id;
+}
+
 void World::detach(Item& item) {
     if (Item* parent = get(item.parent)) std::erase(parent->contents, item.id);
     item.parent = 0;
@@ -965,7 +975,7 @@ void World::set_frame(Item& item, std::uint16_t frame) {
         item.frame = frame;
         npcs_[item.id * kNpcRecordSize + 0x0F] = static_cast<std::uint8_t>(frame >> 8);
     } else {
-        item.frame = frame & 0xFF;
+        item.frame = item.sprite_only ? frame : frame & 0xFF;
     }
 }
 

@@ -68,11 +68,8 @@ void SpriteProcess::on_added() {
         return;
     }
     raise_overlay(world_, shape_, at_);
-    sprite_ = world_.create(shape_, static_cast<std::uint8_t>(frame_));
-    if (Item* item = world_.get(sprite_)) {
-        item->sprite_only = true;
-        world_.pop_to_coords(at_.x, at_.y, at_.z);
-    }
+    sprite_ = world_.create_sprite(shape_, static_cast<std::uint16_t>(frame_));
+    if (sprite_) world_.pop_to_coords(at_.x, at_.y, at_.z);
 }
 
 // @orig 1140:04E2
